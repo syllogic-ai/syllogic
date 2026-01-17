@@ -100,7 +100,7 @@ flowchart TB
 | Framework | FastAPI | Async, OpenAPI docs |
 | Language | Python 3.11+ | Type hints throughout |
 | ORM | SQLAlchemy 2.0 | Reads/writes to shared schema |
-| Migrations | Alembic | Synced with Drizzle schema |
+| Migrations | Drizzle (frontend) | Schema managed by Drizzle, SQLAlchemy mirrors it |
 | Job Queue | Celery + Redis | Scheduled tasks, background jobs |
 | Bank Integration | GoCardless (Nordigen) | Open banking API |
 

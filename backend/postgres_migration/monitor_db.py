@@ -1,6 +1,7 @@
 """
 Streamlit app for monitoring the database.
-Run with: streamlit run monitor_db.py
+Run with: streamlit run postgres_migration/monitor_db.py
+(From the backend directory)
 """
 import streamlit as st
 import pandas as pd

@@ -154,6 +154,7 @@ def create_transactions(db: Session, accounts: list[Account], categories: list[C
             # 70% from checking, 30% from credit
             account = checking if random.random() > 0.3 else credit
 
+            category_id_value = category.id if category else None
             transaction = Transaction(
                 user_id=user_id,
                 account_id=account.id,
@@ -162,7 +163,8 @@ def create_transactions(db: Session, accounts: list[Account], categories: list[C
                 currency="EUR",
                 description=template["description"],
                 merchant=template["merchant"],
-                category_system_id=category.id if category else None,  # Use category_system_id for AI-assigned
+                category_id=category_id_value,  # Set category_id equal to category_system_id
+                category_system_id=category_id_value,  # Use category_system_id for AI-assigned
                 booked_at=date.replace(
                     hour=random.randint(8, 22),
                     minute=random.randint(0, 59),
@@ -175,6 +177,7 @@ def create_transactions(db: Session, accounts: list[Account], categories: list[C
         salary_date = (now - timedelta(days=30 * month_offset)).replace(day=25)
         if salary_date <= now:
             salary_cat = next((c for c in income_categories if c.name == "Salary"), None)
+            salary_category_id = salary_cat.id if salary_cat else None
             transactions.append(
                 Transaction(
                     user_id=user_id,
@@ -184,7 +187,8 @@ def create_transactions(db: Session, accounts: list[Account], categories: list[C
                     currency="EUR",
                     description="SALARY PAYMENT - EMPLOYER BV",
                     merchant="Employer BV",
-                    category_system_id=salary_cat.id if salary_cat else None,
+                    category_id=salary_category_id,  # Set category_id equal to category_system_id
+                    category_system_id=salary_category_id,
                     booked_at=salary_date.replace(hour=9, minute=0),
                 )
             )
@@ -194,6 +198,7 @@ def create_transactions(db: Session, accounts: list[Account], categories: list[C
         days_ago = random.randint(0, 90)
         date = now - timedelta(days=days_ago)
         freelance_cat = next((c for c in income_categories if c.name == "Freelance"), None)
+        freelance_category_id = freelance_cat.id if freelance_cat else None
         transactions.append(
             Transaction(
                 user_id=user_id,
@@ -203,7 +208,8 @@ def create_transactions(db: Session, accounts: list[Account], categories: list[C
                 currency="EUR",
                 description="FREELANCE PROJECT PAYMENT",
                 merchant="Various Client",
-                category_system_id=freelance_cat.id if freelance_cat else None,
+                category_id=freelance_category_id,  # Set category_id equal to category_system_id
+                category_system_id=freelance_category_id,
                 booked_at=date.replace(
                     hour=random.randint(9, 17),
                     minute=random.randint(0, 59),
