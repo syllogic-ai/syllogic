@@ -15,16 +15,21 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        extra = "ignore"  # Allow extra fields in .env file
 
 
 settings = Settings()
 
-# Use psycopg3 driver
+# Configure database URL
 db_url = settings.database_url
 if db_url.startswith("postgresql://"):
     db_url = db_url.replace("postgresql://", "postgresql+psycopg://", 1)
 
-engine = create_engine(db_url)
+# SQLite needs check_same_thread=False for FastAPI
+if db_url.startswith("sqlite"):
+    engine = create_engine(db_url, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(db_url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()

@@ -1,7 +1,7 @@
 from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 
 
@@ -121,3 +121,100 @@ class AccountSummary(BaseModel):
     name: str
     account_type: str
     balance: Decimal
+
+
+# Transaction Input/Output Schemas
+class TransactionInput(BaseModel):
+    """Input transaction for categorization."""
+    description: Optional[str] = None
+    merchant: Optional[str] = None
+    amount: Decimal
+
+
+class TransactionResult(BaseModel):
+    """Result of categorization for a single transaction."""
+    description: Optional[str]
+    merchant: Optional[str]
+    amount: Decimal
+    category_name: Optional[str] = None
+    category_id: Optional[UUID] = None
+    method: str  # 'override', 'deterministic', 'llm', or 'none'
+    confidence_score: Optional[float] = None
+    matched_keywords: Optional[List[str]] = None
+    tokens_used: Optional[int] = None
+    cost_usd: Optional[float] = None
+
+
+class UserOverride(BaseModel):
+    """User override for a specific transaction pattern."""
+    description: Optional[str] = None
+    merchant: Optional[str] = None
+    amount: Optional[Decimal] = None
+    category_name: str  # Required: the category to use for matching transactions
+
+
+class BatchCategorizationRequest(BaseModel):
+    """Request for batch categorization."""
+    transactions: List[TransactionInput]
+    use_llm: bool = True
+    user_overrides: Optional[List[UserOverride]] = None  # User-defined category overrides
+    additional_instructions: Optional[List[str]] = None  # User guidance for categorization
+
+
+class BatchCategorizationResponse(BaseModel):
+    """Response for batch categorization."""
+    results: List[TransactionResult]
+    total_transactions: int
+    categorized_count: int
+    deterministic_count: int
+    llm_count: int
+    uncategorized_count: int
+    total_tokens_used: int
+    total_cost_usd: float
+    llm_errors: Optional[List[str]] = None  # List of LLM error messages
+    llm_warnings: Optional[List[str]] = None  # List of LLM warning messages
+
+
+# Production categorization schemas
+class CategorizeTransactionRequest(BaseModel):
+    """Request to categorize a single transaction."""
+    description: Optional[str] = None
+    merchant: Optional[str] = None
+    amount: Decimal
+    transaction_type: Optional[str] = None  # 'debit' or 'credit'
+    use_llm: bool = True
+    user_overrides: Optional[List[UserOverride]] = None  # User-defined category overrides
+    additional_instructions: Optional[List[str]] = None  # User guidance for categorization
+
+
+class CategorizeTransactionResponse(BaseModel):
+    """Response for single transaction categorization."""
+    category_id: Optional[UUID] = None
+    category_name: Optional[str] = None
+    method: str  # 'override', 'deterministic', 'llm', or 'none'
+    confidence_score: Optional[float] = None
+    matched_keywords: Optional[List[str]] = None
+    tokens_used: Optional[int] = None
+    cost_usd: Optional[float] = None
+
+
+class BatchCategorizeRequest(BaseModel):
+    """Request to categorize multiple transactions."""
+    transactions: List[TransactionInput]
+    use_llm: bool = True
+    user_overrides: Optional[List[UserOverride]] = None  # User-defined category overrides (applies to all transactions)
+    additional_instructions: Optional[List[str]] = None  # User guidance for categorization (applies to all transactions)
+
+
+class BatchCategorizeResponse(BaseModel):
+    """Response for batch transaction categorization."""
+    results: List[TransactionResult]
+    total_transactions: int
+    categorized_count: int
+    deterministic_count: int
+    llm_count: int
+    uncategorized_count: int
+    total_tokens_used: int
+    total_cost_usd: float
+    llm_errors: Optional[List[str]] = None
+    llm_warnings: Optional[List[str]] = None
