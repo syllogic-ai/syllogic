@@ -1,16 +1,33 @@
 """
 Seed script to populate the database with dummy data.
-Run with: python seed_data.py
+Run with: python postgres_migration/seed_data.py (from the backend directory)
+Or: cd backend && python postgres_migration/seed_data.py
+
+This script:
+1. Creates a system user (if not exists)
+2. Creates sample accounts, categories, and transactions (last 90 days)
+3. Sets user's functional currency to EUR
+4. Syncs exchange rates from external API for the transaction date range
 """
 
+import sys
+from pathlib import Path
+
+# Add parent directory to path so we can import app modules
+# This allows running from either backend/ or backend/postgres_migration/
+backend_dir = Path(__file__).parent.parent
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
+
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.database import engine, SessionLocal, Base
 from app.models import Account, Category, Transaction, User
 from app.db_helpers import get_or_create_system_user
+from app.services.exchange_rate_service import ExchangeRateService
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -24,7 +41,6 @@ def create_accounts(db: Session, user_id: str) -> list[Account]:
             account_type="checking",
             institution="Revolut",
             currency="EUR",
-            balance_current=Decimal("3245.67"),
         ),
         Account(
             user_id=user_id,
@@ -32,7 +48,6 @@ def create_accounts(db: Session, user_id: str) -> list[Account]:
             account_type="savings",
             institution="Revolut",
             currency="EUR",
-            balance_current=Decimal("15000.00"),
         ),
         Account(
             user_id=user_id,
@@ -40,7 +55,20 @@ def create_accounts(db: Session, user_id: str) -> list[Account]:
             account_type="credit",
             institution="Visa",
             currency="EUR",
-            balance_current=Decimal("-892.45"),
+        ),
+        Account(
+            user_id=user_id,
+            name="USD Checking",
+            account_type="checking",
+            institution="Revolut",
+            currency="USD",
+        ),
+        Account(
+            user_id=user_id,
+            name="GBP Account",
+            account_type="checking",
+            institution="Revolut",
+            currency="GBP",
         ),
     ]
 
@@ -95,8 +123,8 @@ def create_transactions(db: Session, accounts: list[Account], categories: list[C
     expense_categories = [c for c in categories if c.category_type == "expense"]
     income_categories = [c for c in categories if c.category_type == "income"]
 
-    # Transaction templates
-    expense_templates = [
+    # Transaction templates - EUR transactions
+    expense_templates_eur = [
         {"description": "LIDL", "merchant": "Lidl", "category": "Groceries", "amount_range": (15, 120)},
         {"description": "ALBERT HEIJN", "merchant": "Albert Heijn", "category": "Groceries", "amount_range": (20, 150)},
         {"description": "JUMBO SUPERMARKET", "merchant": "Jumbo", "category": "Groceries", "amount_range": (25, 100)},
@@ -111,12 +139,35 @@ def create_transactions(db: Session, accounts: list[Account], categories: list[C
         {"description": "RESTAURANT", "merchant": None, "category": "Dining Out", "amount_range": (20, 80)},
         {"description": "CAFE DE WERELD", "merchant": "Cafe de Wereld", "category": "Dining Out", "amount_range": (10, 40)},
         {"description": "MCDONALDS", "merchant": "McDonalds", "category": "Dining Out", "amount_range": (8, 20)},
-        {"description": "AMAZON", "merchant": "Amazon", "category": "Shopping", "amount_range": (15, 200)},
         {"description": "ZALANDO", "merchant": "Zalando", "category": "Shopping", "amount_range": (30, 150)},
         {"description": "H&M", "merchant": "H&M", "category": "Shopping", "amount_range": (20, 100)},
         {"description": "APOTHEEK", "merchant": "Pharmacy", "category": "Healthcare", "amount_range": (5, 50)},
         {"description": "HUISARTS", "merchant": "Doctor", "category": "Healthcare", "amount_range": (20, 100)},
         {"description": "RENT PAYMENT", "merchant": "Landlord", "category": "Housing", "amount_range": (1200, 1200)},
+    ]
+
+    # USD transaction templates (for Amazon, online purchases, etc.)
+    expense_templates_usd = [
+        {"description": "AMAZON.COM", "merchant": "Amazon", "category": "Shopping", "amount_range": (20, 250)},
+        {"description": "AMAZON PRIME", "merchant": "Amazon", "category": "Subscriptions", "amount_range": (10, 15)},
+        {"description": "UBER EATS", "merchant": "Uber Eats", "category": "Dining Out", "amount_range": (15, 60)},
+        {"description": "STARBUCKS", "merchant": "Starbucks", "category": "Dining Out", "amount_range": (5, 15)},
+        {"description": "APPLE STORE", "merchant": "Apple", "category": "Shopping", "amount_range": (50, 500)},
+        {"description": "GOOGLE PLAY", "merchant": "Google", "category": "Subscriptions", "amount_range": (5, 20)},
+        {"description": "AIRBNB", "merchant": "Airbnb", "category": "Housing", "amount_range": (80, 300)},
+        {"description": "HOTEL BOOKING", "merchant": "Booking.com", "category": "Housing", "amount_range": (100, 400)},
+    ]
+
+    # GBP transaction templates (UK transactions)
+    expense_templates_gbp = [
+        {"description": "TESCO STORE", "merchant": "Tesco", "category": "Groceries", "amount_range": (15, 100)},
+        {"description": "SAINSBURYS", "merchant": "Sainsbury's", "category": "Groceries", "amount_range": (20, 120)},
+        {"description": "TUBE FARE", "merchant": "TFL", "category": "Transport", "amount_range": (3, 15)},
+        {"description": "LONDON BUS", "merchant": "TFL", "category": "Transport", "amount_range": (2, 5)},
+        {"description": "PRET A MANGER", "merchant": "Pret", "category": "Dining Out", "amount_range": (5, 15)},
+        {"description": "BOOTS PHARMACY", "merchant": "Boots", "category": "Healthcare", "amount_range": (5, 50)},
+        {"description": "ASOS", "merchant": "ASOS", "category": "Shopping", "amount_range": (30, 150)},
+        {"description": "JOHN LEWIS", "merchant": "John Lewis", "category": "Shopping", "amount_range": (50, 300)},
     ]
 
     income_templates = [
@@ -125,9 +176,11 @@ def create_transactions(db: Session, accounts: list[Account], categories: list[C
         {"description": "DIVIDEND PAYMENT", "merchant": "Broker", "category": "Investment Income", "amount_range": (50, 200)},
     ]
 
-    checking = accounts[0]
-    savings = accounts[1]
-    credit = accounts[2]
+    checking_eur = accounts[0]
+    savings_eur = accounts[1]
+    credit_eur = accounts[2]
+    checking_usd = accounts[3]
+    checking_gbp = accounts[4]
 
     now = datetime.now()
     transactions = []
@@ -141,7 +194,24 @@ def create_transactions(db: Session, accounts: list[Account], categories: list[C
         num_expenses = random.randint(3, 7) if is_weekend else random.randint(2, 5)
 
         for _ in range(num_expenses):
-            template = random.choice(expense_templates)
+            # 70% EUR, 20% USD, 10% GBP transactions
+            currency_roll = random.random()
+            if currency_roll < 0.7:
+                # EUR transactions
+                template = random.choice(expense_templates_eur)
+                account = checking_eur if random.random() > 0.3 else credit_eur
+                currency = "EUR"
+            elif currency_roll < 0.9:
+                # USD transactions (online purchases, subscriptions)
+                template = random.choice(expense_templates_usd)
+                account = checking_usd
+                currency = "USD"
+            else:
+                # GBP transactions (UK purchases)
+                template = random.choice(expense_templates_gbp)
+                account = checking_gbp
+                currency = "GBP"
+
             amount = -round(random.uniform(*template["amount_range"]), 2)
 
             # Find category
@@ -151,16 +221,13 @@ def create_transactions(db: Session, accounts: list[Account], categories: list[C
             if random.random() > 0.8:
                 category = None
 
-            # 70% from checking, 30% from credit
-            account = checking if random.random() > 0.3 else credit
-
             category_id_value = category.id if category else None
             transaction = Transaction(
                 user_id=user_id,
                 account_id=account.id,
                 transaction_type="debit",
                 amount=Decimal(str(amount)),
-                currency="EUR",
+                currency=currency,  # Use account's currency
                 description=template["description"],
                 merchant=template["merchant"],
                 category_id=category_id_value,  # Set category_id equal to category_system_id
@@ -172,7 +239,7 @@ def create_transactions(db: Session, accounts: list[Account], categories: list[C
             )
             transactions.append(transaction)
 
-    # Monthly salary (on the 25th of each month)
+    # Monthly salary (on the 25th of each month) - EUR
     for month_offset in range(3):
         salary_date = (now - timedelta(days=30 * month_offset)).replace(day=25)
         if salary_date <= now:
@@ -181,7 +248,7 @@ def create_transactions(db: Session, accounts: list[Account], categories: list[C
             transactions.append(
                 Transaction(
                     user_id=user_id,
-                    account_id=checking.id,
+                    account_id=checking_eur.id,
                     transaction_type="credit",
                     amount=Decimal(str(round(random.uniform(3500, 4500), 2))),
                     currency="EUR",
@@ -193,7 +260,31 @@ def create_transactions(db: Session, accounts: list[Account], categories: list[C
                 )
             )
 
-    # Some freelance income
+    # Some USD freelance income (international clients)
+    for _ in range(3):
+        days_ago = random.randint(0, 90)
+        date = now - timedelta(days=days_ago)
+        freelance_cat = next((c for c in income_categories if c.name == "Freelance"), None)
+        freelance_category_id = freelance_cat.id if freelance_cat else None
+        transactions.append(
+            Transaction(
+                user_id=user_id,
+                account_id=checking_usd.id,
+                transaction_type="credit",
+                amount=Decimal(str(round(random.uniform(500, 2000), 2))),
+                currency="USD",
+                description="FREELANCE PROJECT - US CLIENT",
+                merchant="US Client Inc",
+                category_id=freelance_category_id,
+                category_system_id=freelance_category_id,
+                booked_at=date.replace(
+                    hour=random.randint(9, 17),
+                    minute=random.randint(0, 59),
+                ),
+            )
+        )
+
+    # Some EUR freelance income
     for _ in range(5):
         days_ago = random.randint(0, 90)
         date = now - timedelta(days=days_ago)
@@ -202,7 +293,7 @@ def create_transactions(db: Session, accounts: list[Account], categories: list[C
         transactions.append(
             Transaction(
                 user_id=user_id,
-                account_id=checking.id,
+                account_id=checking_eur.id,
                 transaction_type="credit",
                 amount=Decimal(str(round(random.uniform(500, 2000), 2))),
                 currency="EUR",
@@ -217,12 +308,80 @@ def create_transactions(db: Session, accounts: list[Account], categories: list[C
             )
         )
 
+    # Some GBP income (UK client)
+    for _ in range(2):
+        days_ago = random.randint(0, 90)
+        date = now - timedelta(days=days_ago)
+        freelance_cat = next((c for c in income_categories if c.name == "Freelance"), None)
+        freelance_category_id = freelance_cat.id if freelance_cat else None
+        transactions.append(
+            Transaction(
+                user_id=user_id,
+                account_id=checking_gbp.id,
+                transaction_type="credit",
+                amount=Decimal(str(round(random.uniform(400, 1500), 2))),
+                currency="GBP",
+                description="FREELANCE PROJECT - UK CLIENT",
+                merchant="UK Client Ltd",
+                category_id=freelance_category_id,
+                category_system_id=freelance_category_id,
+                booked_at=date.replace(
+                    hour=random.randint(9, 17),
+                    minute=random.randint(0, 59),
+                ),
+            )
+        )
+
     # Add all transactions
     for txn in transactions:
         db.add(txn)
 
     db.commit()
     print(f"Created {len(transactions)} transactions")
+
+
+def sync_exchange_rates(db: Session, start_date: date, end_date: date) -> None:
+    """
+    Sync exchange rates for the given date range.
+    This fetches rates from the external API and stores them in the database.
+    """
+    print(f"\nSyncing exchange rates from {start_date} to {end_date}...")
+    try:
+        exchange_service = ExchangeRateService(db)
+        result = exchange_service.sync_exchange_rates(start_date=start_date, end_date=end_date)
+        
+        # Log full result for debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Exchange rate sync result: {result}")
+        
+        print(f"✓ Exchange rates synced successfully!")
+        print(f"  - Dates processed: {result.get('dates_processed', 0)}")
+        print(f"  - Total rates stored: {result.get('total_rates_stored', 0)}")
+        
+        # Handle different return value formats
+        if 'base_currencies' in result:
+            print(f"  - Base currencies: {', '.join(result.get('base_currencies', []))}")
+        if 'target_currencies' in result:
+            print(f"  - Target currencies: {', '.join(result.get('target_currencies', []))}")
+        if 'currencies' in result:
+            print(f"  - Currencies: {', '.join(result.get('currencies', []))}")
+        if 'failed_batches' in result and result.get('failed_batches', 0) > 0:
+            print(f"  - Failed batches: {result.get('failed_batches', 0)}")
+            
+    except KeyError as e:
+        import traceback
+        print(f"⚠ Warning: Failed to sync exchange rates - KeyError: {e}")
+        print(f"  Error details:")
+        traceback.print_exc()
+        print("  You can sync rates later using: POST /api/exchange-rates/sync")
+    except Exception as e:
+        import traceback
+        print(f"⚠ Warning: Failed to sync exchange rates: {e}")
+        print(f"  Error type: {type(e).__name__}")
+        print(f"  Error details:")
+        traceback.print_exc()
+        print("  You can sync rates later using: POST /api/exchange-rates/sync")
 
 
 def clear_data(db: Session, user_id: str) -> None:
@@ -255,7 +414,19 @@ def seed():
         print("Creating transactions...")
         create_transactions(db, accounts, categories, user_id)
 
-        print("\nSeeding complete!")
+        # Set user's functional currency (default to EUR)
+        if not user.functional_currency:
+            user.functional_currency = "EUR"
+            db.commit()
+            print(f"✓ Set user functional currency to: EUR")
+
+        # Sync exchange rates from January 2024 to today
+        # This covers all historical transactions and provides rates for future use
+        end_date = date.today()
+        start_date = date(2024, 1, 1)  # Start from January 1, 2024
+        sync_exchange_rates(db, start_date, end_date)
+
+        print("\n✅ Seeding complete!")
         print(f"Total accounts: {db.query(Account).filter(Account.user_id == user_id).count()}")
         print(f"Total categories: {db.query(Category).filter(Category.user_id == user_id).count()}")
         print(f"Total transactions: {db.query(Transaction).filter(Transaction.user_id == user_id).count()}")

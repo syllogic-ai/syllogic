@@ -321,7 +321,9 @@ def get_account_balances(
                 ).scalar() or 0
                 balance = float(transactions_in_period)
             else:
-                balance = float(account.balance_current) - float(transactions_after)
+                # Use functional_balance instead of balance_current
+                balance = float(account.functional_balance) if account.functional_balance else 0.0
+                balance = balance - float(transactions_after)
         elif from_date:
             # Calculate balance change during period (from from_date to now)
             balance_query = db.query(func.sum(Transaction.amount)).filter(
@@ -343,7 +345,7 @@ def get_account_balances(
             if category_id or uncategorized:
                 balance = float(balance_change)
             else:
-                balance = float(account.balance_current)
+                balance = float(account.functional_balance) if account.functional_balance else 0.0
         elif category_id:
             # Category filter only: show net change for transactions in that category
             balance = db.query(func.sum(Transaction.amount)).filter(

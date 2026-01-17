@@ -15,7 +15,6 @@ class AccountData(BaseModel):
     account_type: str  # checking, savings, credit
     institution: str
     currency: str
-    balance_current: Optional[Decimal] = None
     balance_available: Optional[Decimal] = None
     metadata: dict = {}
 

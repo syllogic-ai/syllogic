@@ -1,12 +1,22 @@
 """
 Script to reset the database by dropping all tables and recreating them.
 WARNING: This will delete all data!
+Run with: python postgres_migration/reset_database.py (from the backend directory)
+Or: cd backend && python postgres_migration/reset_database.py
 """
+import sys
+from pathlib import Path
+
+# Add parent directory to path so we can import app modules
+backend_dir = Path(__file__).parent.parent
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
+
 from sqlalchemy import inspect, text
 from app.database import engine, Base
 from app.models import (
     User, Account, Category, Transaction,
-    CategorizationRule, BankConnection
+    CategorizationRule, BankConnection, ExchangeRate
 )
 
 def reset_database():

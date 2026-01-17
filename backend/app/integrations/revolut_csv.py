@@ -97,33 +97,10 @@ class RevolutCSVAdapter(BankAdapter):
                     account_type="checking",
                     institution="Revolut",
                     currency=currency,
-                    balance_current=None,  # Will be updated below
                     metadata={'source': 'csv_import'}
                 )
             
-            # Extract balance from Balance column (use the latest/most recent balance)
-            balance_str = row.get('Balance') or row.get('balance', '')
-            if balance_str:
-                try:
-                    # Parse balance, removing any currency symbols and whitespace
-                    balance_clean = str(balance_str).replace(',', '').strip()
-                    # Remove currency symbols if present
-                    balance_clean = re.sub(r'[^\d.-]', '', balance_clean)
-                    if balance_clean:
-                        balance_value = Decimal(balance_clean)
-                        # Update balance if this row has a more recent date or if balance wasn't set yet
-                        if accounts[account_key].balance_current is None:
-                            accounts[account_key].balance_current = balance_value
-                        else:
-                            # Keep the latest balance (assuming rows are in chronological order, last one wins)
-                            accounts[account_key].balance_current = balance_value
-                except (ValueError, Exception):
-                    pass  # Ignore parsing errors
-        
-        # Set default balance to 0 if not found in CSV
-        for account in accounts.values():
-            if account.balance_current is None:
-                account.balance_current = Decimal('0')
+            # Note: balance_current removed - balances are now calculated via functional_balance
         
         # Return accounts if found, otherwise return empty list (don't create default)
         return list(accounts.values())

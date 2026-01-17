@@ -38,8 +38,9 @@ class Account(Base):
     currency = Column(String(3), default="EUR")
     provider = Column(String(50), nullable=True)  # gocardless, manual
     external_id = Column(String(255), nullable=True)  # Provider's account ID
-    balance_current = Column(Numeric(15, 2), default=Decimal("0"))
     balance_available = Column(Numeric(15, 2), nullable=True)
+    starting_balance = Column(Numeric(15, 2), default=Decimal("0"))  # Starting balance for calculation
+    functional_balance = Column(Numeric(15, 2), nullable=True)  # Calculated balance (sum of transactions + starting_balance)
     is_active = Column(Boolean, default=True)
     last_synced_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -101,6 +102,7 @@ class Transaction(Base):
     transaction_type = Column(String(20))  # debit, credit
     amount = Column(Numeric(15, 2), nullable=False)
     currency = Column(String(3), default="EUR")
+    functional_amount = Column(Numeric(15, 2), nullable=True)  # Amount converted to user's functional currency
     description = Column(Text)
     merchant = Column(String(255))
     category_id = Column(UUID(as_uuid=True), ForeignKey("categories.id"), nullable=True, index=True)  # User-overridden category
@@ -170,6 +172,30 @@ class BankConnection(Base):
     user = relationship("User", back_populates="bank_connections")
 
 
+class ExchangeRate(Base):
+    """
+    Exchange rate model for currency conversion.
+    Stores daily exchange rates between base currencies and target currencies (EUR, USD).
+    """
+    __tablename__ = "exchange_rates"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    date = Column(DateTime, nullable=False, index=True)  # Date of the exchange rate
+    base_currency = Column(String(3), nullable=False, index=True)  # Source currency (transaction currency)
+    target_currency = Column(String(3), nullable=False, index=True)  # Target currency (EUR or USD)
+    rate = Column(Numeric(18, 8), nullable=False)  # Exchange rate (how many target currency = 1 base currency)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Indexes and constraints
+    __table_args__ = (
+        Index("idx_exchange_rates_date", "date"),
+        Index("idx_exchange_rates_base", "base_currency"),
+        Index("idx_exchange_rates_target", "target_currency"),
+        UniqueConstraint("date", "base_currency", "target_currency", name="exchange_rates_date_base_target"),
+    )
+
+
 # ============================================================================
 # BetterAuth Tables (minimal models for foreign key relationships)
 # ============================================================================
@@ -187,6 +213,7 @@ class User(Base):
     email = Column(Text, unique=True, nullable=False)
     email_verified = Column(Boolean, default=False)
     image = Column(Text, nullable=True)
+    functional_currency = Column(String(3), default="EUR")  # User's functional currency for reporting
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

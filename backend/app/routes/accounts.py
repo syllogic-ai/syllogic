@@ -191,7 +191,6 @@ def get_all_accounts_debug(
             "currency": account.currency,
             "provider": account.provider,
             "external_id": account.external_id,
-            "balance_current": float(account.balance_current) if account.balance_current else 0,
             "balance_available": float(account.balance_available) if account.balance_available else None,
             "is_active": account.is_active,
             "transaction_count": transaction_count,
@@ -310,14 +309,12 @@ def restore_seed_accounts(
             "account_type": "savings",
             "institution": "Revolut",
             "currency": "EUR",
-            "balance_current": Decimal("15000.00"),
         },
         {
             "name": "Credit Card",
             "account_type": "credit",
             "institution": "Visa",
             "currency": "EUR",
-            "balance_current": Decimal("-892.45"),
         },
     ]
     

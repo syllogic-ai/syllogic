@@ -50,8 +50,7 @@ class SyncService:
                 existing_account.institution = account_data.institution
                 existing_account.currency = account_data.currency
                 # Only update balance if provided from CSV (not None), otherwise keep existing or calculate later
-                if account_data.balance_current is not None:
-                    existing_account.balance_current = account_data.balance_current
+                # balance_current removed - use functional_balance instead
                 existing_account.balance_available = account_data.balance_available
                 existing_account.is_active = True
                 synced_accounts.append(existing_account)
@@ -66,7 +65,6 @@ class SyncService:
                     currency=account_data.currency,
                     provider=provider,
                     external_id=account_data.external_id,
-                    balance_current=0,  # Will be recalculated from transactions
                     balance_available=account_data.balance_available,
                 )
                 self.db.add(new_account)
@@ -209,16 +207,25 @@ class SyncService:
             total_created += created
             total_updated += updated
         
-        # After syncing transactions, update account balance from sum of all transactions
+        # After syncing transactions, update functional_balance from sum of all transactions
         # This ensures the balance is always accurate based on the transactions in the database
         from sqlalchemy import func
+        from decimal import Decimal
         for account in accounts:
             # Calculate balance from sum of all transactions for this account
-            balance_sum = self.db.query(func.sum(Transaction.amount)).filter(
+            transaction_sum_result = self.db.query(func.sum(Transaction.amount)).filter(
                 Transaction.user_id == self.user_id,
                 Transaction.account_id == account.id
-            ).scalar() or 0
-            account.balance_current = balance_sum
+            ).scalar()
+            
+            if transaction_sum_result is None:
+                transaction_sum = Decimal("0")
+            else:
+                transaction_sum = Decimal(str(transaction_sum_result))
+            
+            # Calculate functional_balance = sum(transactions) + starting_balance
+            starting_balance = account.starting_balance or Decimal("0")
+            account.functional_balance = transaction_sum + starting_balance
             self.db.commit()
         
         return {

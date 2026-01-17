@@ -11,7 +11,6 @@ class AccountBase(BaseModel):
     account_type: str
     institution: Optional[str] = None
     currency: str = "EUR"
-    balance_current: Decimal = Decimal("0")
 
 
 class AccountCreate(AccountBase):
