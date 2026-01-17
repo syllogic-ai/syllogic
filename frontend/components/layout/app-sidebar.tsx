@@ -7,6 +7,7 @@ import {
   RiSettings3Line,
   RiLogoutBoxLine,
   RiWalletLine,
+  RiWallet3Line,
   RiArrowUpDownLine,
 } from "@remixicon/react";
 import { signOut, useSession } from "@/lib/auth-client";
@@ -41,6 +42,11 @@ const navItems = [
     title: "Transactions",
     href: "/transactions",
     icon: RiExchangeLine,
+  },
+  {
+    title: "Assets",
+    href: "/assets",
+    icon: RiWallet3Line,
   },
   {
     title: "Settings",

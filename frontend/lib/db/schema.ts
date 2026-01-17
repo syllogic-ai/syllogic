@@ -24,6 +24,10 @@ export const users = pgTable("users", {
   email: text("email").unique().notNull(),
   emailVerified: boolean("email_verified").default(false),
   image: text("image"),
+  onboardingStatus: varchar("onboarding_status", { length: 20 }).default("pending"), // pending, step_1, step_2, step_3, completed
+  onboardingCompletedAt: timestamp("onboarding_completed_at"),
+  functionalCurrency: char("functional_currency", { length: 3 }).default("EUR"),
+  profilePhotoPath: text("profile_photo_path"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -114,6 +118,8 @@ export const categories = pgTable(
     categoryType: varchar("category_type", { length: 20 }).default("expense"), // expense, income, transfer
     color: varchar("color", { length: 7 }), // Hex color
     icon: varchar("icon", { length: 50 }), // Remix icon name
+    description: text("description"),
+    categorizationInstructions: text("categorization_instructions"),
     isSystem: boolean("is_system").default(false),
     createdAt: timestamp("created_at").defaultNow(),
   },
@@ -186,6 +192,33 @@ export const bankConnections = pgTable("bank_connections", {
   expiresAt: timestamp("expires_at"),
 });
 
+export const csvImports = pgTable(
+  "csv_imports",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    accountId: uuid("account_id")
+      .references(() => accounts.id, { onDelete: "cascade" })
+      .notNull(),
+    fileName: varchar("file_name", { length: 255 }).notNull(),
+    filePath: text("file_path"),
+    status: varchar("status", { length: 20 }).default("pending"), // pending, mapping, previewing, importing, completed, failed
+    columnMapping: jsonb("column_mapping"),
+    totalRows: integer("total_rows"),
+    importedRows: integer("imported_rows"),
+    duplicatesFound: integer("duplicates_found"),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at").defaultNow(),
+    completedAt: timestamp("completed_at"),
+  },
+  (table) => [
+    index("idx_csv_imports_user").on(table.userId),
+    index("idx_csv_imports_account").on(table.accountId),
+  ]
+);
+
 // ============================================================================
 // Relations
 // ============================================================================
@@ -198,6 +231,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   transactions: many(transactions),
   categorizationRules: many(categorizationRules),
   bankConnections: many(bankConnections),
+  csvImports: many(csvImports),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -220,6 +254,7 @@ export const accountsRelations = relations(accounts, ({ one, many }) => ({
     references: [users.id],
   }),
   transactions: many(transactions),
+  csvImports: many(csvImports),
 }));
 
 export const categoriesRelations = relations(categories, ({ one, many }) => ({
@@ -276,6 +311,17 @@ export const bankConnectionsRelations = relations(bankConnections, ({ one }) => 
   }),
 }));
 
+export const csvImportsRelations = relations(csvImports, ({ one }) => ({
+  user: one(users, {
+    fields: [csvImports.userId],
+    references: [users.id],
+  }),
+  account: one(accounts, {
+    fields: [csvImports.accountId],
+    references: [accounts.id],
+  }),
+}));
+
 // ============================================================================
 // Type Exports
 // ============================================================================
@@ -300,3 +346,6 @@ export type NewCategorizationRule = typeof categorizationRules.$inferInsert;
 
 export type BankConnection = typeof bankConnections.$inferSelect;
 export type NewBankConnection = typeof bankConnections.$inferInsert;
+
+export type CsvImport = typeof csvImports.$inferSelect;
+export type NewCsvImport = typeof csvImports.$inferInsert;

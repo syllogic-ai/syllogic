@@ -1,0 +1,516 @@
+Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance
+Deposit,Current,2025-09-01 20:13:31,2025-09-01 20:13:32,Apple Pay deposit by *4555,300.00,0.00,EUR,COMPLETED,424.98
+Transfer,Current,2025-09-01 20:13:44,2025-09-01 20:13:44,Transfer to Revolut user,-250.00,0.00,EUR,COMPLETED,174.98
+Transfer,Current,2025-09-01 20:13:53,2025-09-01 20:13:53,Transfer to ALIKI DESPOINA ATHANASIADOU,-10.00,0.00,EUR,COMPLETED,164.98
+Card Payment,Current,2025-08-31 10:31:19,2025-09-02 16:19:35,OVpay,-1.71,0.00,EUR,COMPLETED,163.27
+Transfer,Current,2025-09-04 10:59:18,2025-09-04 11:49:42,To Picnic BV,-2.99,0.00,EUR,COMPLETED,160.28
+Exchange,Current,2025-09-04 16:49:04,2025-09-04 16:49:04,Transfer to Revolut Digital Assets Europe Ltd,-1.50,0.00,EUR,COMPLETED,158.78
+Exchange,Current,2025-09-04 18:36:22,2025-09-04 18:36:22,Transfer to Revolut Digital Assets Europe Ltd,-1.00,0.00,EUR,COMPLETED,157.78
+Card Payment,Current,2025-09-04 16:49:04,2025-09-05 11:01:24,Albert Heijn,-4.25,0.00,EUR,COMPLETED,153.53
+Card Payment,Current,2025-09-04 18:36:22,2025-09-05 14:57:31,A Beautiful Mess,-12.50,0.00,EUR,COMPLETED,141.03
+Exchange,Current,2025-09-06 20:14:34,2025-09-06 20:14:34,Transfer to Revolut Digital Assets Europe Ltd,-0.66,0.00,EUR,COMPLETED,140.37
+Exchange,Current,2025-09-06 23:06:48,2025-09-06 23:06:48,Transfer to Revolut Digital Assets Europe Ltd,-1.06,0.00,EUR,COMPLETED,139.31
+Exchange,Current,2025-09-07 21:45:58,2025-09-07 21:45:58,Transfer to Revolut Digital Assets Europe Ltd,-0.90,0.00,EUR,COMPLETED,138.41
+Transfer,Current,2025-09-08 08:57:02,2025-09-08 08:57:03,Transfer from Revolut user,11.50,0.00,EUR,COMPLETED,149.91
+Transfer,Current,2025-09-08 08:57:45,2025-09-08 08:57:45,Transfer from ILIAS TRIPODIS,6.50,0.00,EUR,COMPLETED,156.41
+Card Payment,Current,2025-09-06 20:14:34,2025-09-08 11:40:17,OVpay,-1.67,0.00,EUR,COMPLETED,154.74
+Card Payment,Current,2025-09-06 23:06:48,2025-09-08 11:40:19,OVpay,-1.47,0.00,EUR,COMPLETED,153.27
+Card Payment,Current,2025-09-07 21:45:58,2025-09-08 12:19:14,Albert Heijn,-2.55,0.00,EUR,COMPLETED,150.72
+Exchange,Current,2025-09-09 10:30:45,2025-09-09 10:30:45,Transfer to Revolut Digital Assets Europe Ltd,-0.70,0.00,EUR,COMPLETED,150.02
+Transfer,Current,2025-09-09 16:15:14,2025-09-09 16:15:14,Transfer from Revolut user,22.00,0.00,EUR,COMPLETED,172.02
+Transfer,Current,2025-09-09 18:31:12,2025-09-10 02:54:18,To Picnic BV,-9.64,0.00,EUR,COMPLETED,162.38
+Transfer,Current,2025-09-09 16:10:25,2025-09-10 02:57:46,To Picnic,-40.65,0.00,EUR,COMPLETED,121.73
+Card Payment,Current,2025-09-09 10:30:44,2025-09-10 11:47:34,The Social Hub,-4.65,0.00,EUR,COMPLETED,117.08
+Exchange,Current,2025-09-12 04:50:13,2025-09-12 04:50:13,Transfer to Revolut Digital Assets Europe Ltd,-0.02,0.00,EUR,COMPLETED,117.06
+Card Payment,Current,2025-09-12 04:50:13,2025-09-12 15:18:31,Apple,-2.99,0.00,EUR,COMPLETED,114.07
+Exchange,Current,2025-09-13 08:29:25,2025-09-13 08:29:25,Transfer to Revolut Digital Assets Europe Ltd,-0.10,0.00,EUR,COMPLETED,113.97
+Exchange,Current,2025-09-13 11:29:43,2025-09-13 11:29:43,Transfer to Revolut Digital Assets Europe Ltd,-0.80,0.00,EUR,COMPLETED,113.17
+Exchange,Current,2025-09-14 12:17:47,2025-09-14 12:17:47,Transfer to Revolut Digital Assets Europe Ltd,-1.00,0.00,EUR,COMPLETED,112.17
+Exchange,Current,2025-09-14 12:28:01,2025-09-14 12:28:01,Transfer to Revolut Digital Assets Europe Ltd,-1.14,0.00,EUR,COMPLETED,111.03
+Card Payment,Current,2025-09-13 10:49:10,2025-09-14 13:28:37,The Social Hub,-8.60,0.00,EUR,COMPLETED,102.43
+Deposit,Current,2025-09-14 18:26:08,2025-09-14 18:26:09,Apple Pay deposit by *4555,150.00,0.00,EUR,COMPLETED,252.43
+Transfer,Current,2025-09-14 18:26:17,2025-09-14 18:26:18,Transfer to Revolut user,-50.00,0.00,EUR,COMPLETED,202.43
+Transfer,Current,2025-09-14 15:49:00,2025-09-15 03:13:47,To Dimitriou Lazopoulou via Tikkie,-15.00,0.00,EUR,COMPLETED,187.43
+Card Payment,Current,2025-09-14 12:17:46,2025-09-15 15:37:03,Coffee & Coconuts,-13.50,0.00,EUR,COMPLETED,173.93
+Card Payment,Current,2025-09-13 08:29:24,2025-09-15 15:47:01,Amazon,-28.95,0.00,EUR,COMPLETED,144.98
+Card Payment,Current,2025-09-14 12:28:01,2025-09-16 14:16:46,OVpay,-1.43,0.00,EUR,COMPLETED,143.55
+Exchange,Current,2025-09-17 19:33:07,2025-09-17 19:33:07,Transfer to Revolut Digital Assets Europe Ltd,-0.02,0.00,EUR,COMPLETED,143.53
+Card Payment,Current,2025-09-17 19:33:06,2025-09-18 16:12:00,Google,-19.99,0.00,EUR,COMPLETED,123.54
+Exchange,Current,2025-09-19 10:08:38,2025-09-19 10:08:38,Transfer to Revolut Digital Assets Europe Ltd,-0.80,0.00,EUR,COMPLETED,122.74
+Transfer,Current,2025-09-20 00:16:40,2025-09-20 00:16:40,Transfer to Revolut user,-50.00,0.00,EUR,COMPLETED,72.74
+Card Payment,Current,2025-09-19 10:08:37,2025-09-20 09:54:32,The Social Hub,-9.60,0.00,EUR,COMPLETED,63.14
+Transfer,Current,2025-09-21 14:40:40,2025-09-21 14:40:41,Transfer to Revolut user,-50.00,0.00,EUR,COMPLETED,13.14
+Exchange,Current,2025-09-21 16:07:27,2025-09-21 16:07:27,Transfer to Revolut Digital Assets Europe Ltd,-1.00,0.00,EUR,COMPLETED,12.14
+Card Payment,Current,2025-09-21 16:07:26,2025-09-22 16:54:25,YORMA'S,-2.50,0.00,EUR,COMPLETED,9.64
+Deposit,Current,2025-09-22 19:00:33,2025-09-22 19:00:34,Apple Pay deposit by *4555,100.00,0.00,EUR,COMPLETED,109.64
+Transfer,Current,2025-09-22 19:00:41,2025-09-22 19:00:42,Transfer to Revolut user,-50.00,0.00,EUR,COMPLETED,59.64
+Exchange,Current,2025-09-23 11:32:08,2025-09-23 11:32:08,Transfer to Revolut Digital Assets Europe Ltd,-1.90,0.00,EUR,COMPLETED,57.74
+Transfer,Current,2025-09-23 21:46:17,2025-09-23 21:46:17,To EUR Pro,-20.00,0.00,EUR,COMPLETED,37.74
+Card Payment,Current,2025-09-23 11:32:08,2025-09-24 10:40:10,The Social Hub,-9.05,0.00,EUR,COMPLETED,28.69
+Exchange,Current,2025-09-24 17:00:28,2025-09-24 17:00:28,Transfer to Revolut Digital Assets Europe Ltd,-0.02,0.00,EUR,COMPLETED,28.67
+Card Payment,Current,2025-09-24 17:00:27,2025-09-25 04:00:41,Apple,-5.99,0.00,EUR,COMPLETED,22.68
+Deposit,Current,2025-09-25 19:49:05,2025-09-25 19:49:06,Apple Pay deposit by *4555,50.00,0.00,EUR,COMPLETED,72.68
+Transfer,Current,2025-09-25 19:51:38,2025-09-26 02:57:09,To Nespresso,-46.10,0.00,EUR,COMPLETED,26.58
+Exchange,Current,2025-09-26 07:48:23,2025-09-26 07:48:23,Transfer to Revolut Digital Assets Europe Ltd,-0.30,0.00,EUR,COMPLETED,26.28
+Deposit,Current,2025-09-26 18:15:52,2025-09-26 18:15:53,Apple Pay deposit by *4555,1000.00,0.00,EUR,COMPLETED,1026.28
+Transfer,Current,2025-09-26 18:16:09,2025-09-26 18:16:10,Transfer to Revolut user,-200.00,0.00,EUR,COMPLETED,826.28
+Exchange,Current,2025-09-26 20:32:57,2025-09-26 20:32:57,Transfer to Revolut Digital Assets Europe Ltd,-1.44,0.00,EUR,COMPLETED,824.84
+Transfer,Current,2025-09-26 23:14:28,2025-09-26 23:14:28,Transfer to ALIKI DESPOINA ATHANASIADOU,-27.00,0.00,EUR,COMPLETED,797.84
+Transfer,Current,2025-09-26 23:21:12,2025-09-26 23:21:12,Transfer from ILIAS TRIPODIS,35.00,0.00,EUR,COMPLETED,832.84
+Exchange,Current,2025-09-26 23:36:20,2025-09-26 23:36:20,Transfer to Revolut Digital Assets Europe Ltd,-1.46,0.00,EUR,COMPLETED,831.38
+Exchange,Current,2025-09-27 10:29:53,2025-09-27 10:29:53,Transfer to Revolut Digital Assets Europe Ltd,-1.90,0.00,EUR,COMPLETED,829.48
+Charge,Current,2025-09-28 07:33:42,2025-09-28 07:33:42,Premium plan fee,0.00,9.99,EUR,COMPLETED,819.49
+Card Payment,Current,2025-09-27 10:29:52,2025-09-28 15:07:47,The Social Hub,-9.05,0.00,EUR,COMPLETED,810.44
+Card Payment,Current,2025-09-26 20:32:57,2025-09-28 15:53:42,OVpay,-3.28,0.00,EUR,COMPLETED,807.16
+Card Payment,Current,2025-09-26 23:36:20,2025-09-28 15:53:51,OVpay,-3.27,0.00,EUR,COMPLETED,803.89
+Exchange,Current,2025-09-28 16:17:27,2025-09-28 16:17:27,Transfer to Revolut Digital Assets Europe Ltd,-0.02,0.00,EUR,COMPLETED,803.87
+Transfer,Current,2025-09-28 19:42:53,2025-09-28 19:42:54,Transfer to Revolut user,-700.00,0.00,EUR,COMPLETED,103.87
+Card Payment,Current,2025-09-28 16:17:27,2025-09-29 17:10:28,Apple,-2.99,0.00,EUR,COMPLETED,100.88
+Exchange,Current,2025-09-29 18:51:15,2025-09-29 18:51:15,Transfer to Revolut Digital Assets Europe Ltd,-1.60,0.00,EUR,COMPLETED,99.28
+Transfer,Current,2025-09-30 12:43:37,2025-09-30 12:43:37,To EUR Pro,-20.00,0.00,EUR,COMPLETED,79.28
+Exchange,Current,2025-09-30 13:44:54,2025-09-30 13:44:54,Transfer to Revolut Digital Assets Europe Ltd,-1.00,0.00,EUR,COMPLETED,78.28
+Card Payment,Current,2025-09-26 07:48:22,2025-09-30 14:38:08,Skroutz,-14.85,0.00,EUR,COMPLETED,63.43
+Card Payment,Current,2025-09-29 18:51:15,2025-09-30 15:17:10,SPAR Food & Fuel,-4.20,0.00,EUR,COMPLETED,59.23
+Transfer,Current,2025-09-30 20:44:57,2025-09-30 20:44:57,Transfer from Revolut user,50.00,0.00,EUR,COMPLETED,109.23
+Rev Payment,Current,2025-10-01 10:39:33,2025-10-01 10:39:33,www.skroutz.gr*Nea Ionia,-10.01,0.00,EUR,COMPLETED,99.22
+Card Payment,Current,2025-09-30 13:44:54,2025-10-01 12:01:12,Albert Heijn,-10.50,0.00,EUR,COMPLETED,88.72
+Transfer,Current,2025-10-01 14:21:01,2025-10-01 14:21:01,To EUR Pro,-20.00,0.00,EUR,COMPLETED,68.72
+Exchange,Current,2025-10-02 21:27:20,2025-10-02 21:27:20,Transfer to Revolut Digital Assets Europe Ltd,-0.04,0.00,EUR,COMPLETED,68.68
+Card Payment,Current,2025-10-02 21:27:19,2025-10-03 13:04:25,Skroutz,-5.98,0.00,EUR,COMPLETED,62.70
+Exchange,Current,2025-10-04 13:45:58,2025-10-04 13:45:58,Transfer to Revolut Digital Assets Europe Ltd,-0.60,0.00,EUR,COMPLETED,62.10
+Transfer,Current,2025-10-04 16:27:50,2025-10-04 16:27:50,Transfer to ILIAS TRIPODIS,-9.00,0.00,EUR,COMPLETED,53.10
+Transfer,Current,2025-10-04 16:28:22,2025-10-04 16:28:22,Transfer from ILIAS TRIPODIS,9.00,0.00,EUR,COMPLETED,62.10
+Card Payment,Current,2025-10-04 13:45:57,2025-10-05 11:37:53,Coffeecompany,-3.70,0.00,EUR,COMPLETED,58.40
+Transfer,Current,2025-10-05 14:22:17,2025-10-05 14:22:18,Transfer to Revolut user,-58.00,0.00,EUR,COMPLETED,0.40
+Deposit,Current,2025-10-05 17:47:07,2025-10-05 17:47:09,Apple Pay deposit by *4555,100.00,0.00,EUR,COMPLETED,100.40
+Transfer,Current,2025-10-05 17:47:26,2025-10-05 17:47:26,To EUR Pro,-100.00,0.00,EUR,COMPLETED,0.40
+Transfer,Current,2025-10-05 17:48:05,2025-10-05 17:48:06,Transfer from ALIKI DESPOINA ATHANASIADOU,190.00,0.00,EUR,COMPLETED,190.40
+Transfer,Current,2025-10-05 17:52:45,2025-10-05 17:52:45,To EUR Pro,-120.00,0.00,EUR,COMPLETED,70.40
+Transfer,Current,2025-10-06 16:41:46,2025-10-07 03:05:23,To HOBBY ART TRADE SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ,-43.42,0.00,EUR,COMPLETED,26.98
+Exchange,Current,2025-10-07 11:17:34,2025-10-07 11:17:34,Transfer to Revolut Digital Assets Europe Ltd,-1.60,0.00,EUR,COMPLETED,25.38
+Card Payment,Current,2025-10-07 11:17:34,2025-10-08 11:48:10,The Social Hub,-9.20,0.00,EUR,COMPLETED,16.18
+Deposit,Current,2025-10-08 12:05:36,2025-10-08 12:05:38,Apple Pay deposit by *4555,30.00,0.00,EUR,COMPLETED,46.18
+Transfer,Current,2025-10-08 12:05:48,2025-10-08 12:05:48,To EUR Pro,-30.00,0.00,EUR,COMPLETED,16.18
+Transfer,Current,2025-10-12 00:51:47,2025-10-12 00:51:47,Transfer from ILIAS TRIPODIS,5.00,0.00,EUR,COMPLETED,21.18
+Transfer,Current,2025-10-12 00:53:09,2025-10-12 00:53:09,Transfer from GEORGIA ZARKADOULA,13.00,0.00,EUR,COMPLETED,34.18
+Exchange,Current,2025-10-12 04:50:24,2025-10-12 04:50:24,Transfer to Revolut Digital Assets Europe Ltd,-0.02,0.00,EUR,COMPLETED,34.16
+Deposit,Current,2025-10-12 10:14:14,2025-10-12 10:14:14,Payment from AAB INZ TIKKIE,38.50,0.00,EUR,COMPLETED,72.66
+Exchange,Current,2025-10-12 11:59:58,2025-10-12 11:59:58,Transfer to Revolut Digital Assets Europe Ltd,-1.62,0.00,EUR,COMPLETED,71.04
+Card Payment,Current,2025-10-12 04:50:24,2025-10-12 15:52:55,Apple,-2.99,0.00,EUR,COMPLETED,68.05
+Transfer,Current,2025-10-12 16:39:55,2025-10-12 16:39:55,Transfer from ZOI PARLAPANI,17.00,0.00,EUR,COMPLETED,85.05
+Exchange,Current,2025-10-12 17:27:58,2025-10-12 17:27:58,Transfer to Revolut Digital Assets Europe Ltd,-1.64,0.00,EUR,COMPLETED,83.41
+Exchange,Current,2025-10-14 12:51:09,2025-10-14 12:51:09,Transfer to Revolut Digital Assets Europe Ltd,-0.40,0.00,EUR,COMPLETED,83.01
+Transfer,Current,2025-10-14 13:05:48,2025-10-14 13:05:49,Transfer to ALIKI DESPOINA ATHANASIADOU,-17.00,0.00,EUR,COMPLETED,66.01
+Deposit,Current,2025-10-14 13:10:19,2025-10-14 13:10:20,Apple Pay deposit by *4555,540.00,0.00,EUR,COMPLETED,606.01
+Transfer,Current,2025-10-14 13:10:43,2025-10-14 13:10:44,To investment account,-540.00,0.00,EUR,COMPLETED,66.01
+Deposit,Current,2025-10-14 13:11:30,2025-10-14 13:11:30,From investment account,540.00,0.00,EUR,COMPLETED,606.01
+Transfer,Current,2025-10-14 13:12:10,2025-10-14 13:12:10,To investment account,-565.26,0.00,EUR,COMPLETED,40.75
+Card Payment,Current,2025-10-12 17:27:58,2025-10-14 15:07:34,OVpay,-3.18,0.00,EUR,COMPLETED,37.57
+Card Payment,Current,2025-10-12 11:59:58,2025-10-14 15:07:38,OVpay,-3.19,0.00,EUR,COMPLETED,34.38
+Deposit,Current,2025-10-14 19:50:05,2025-10-14 19:50:06,Apple Pay deposit by *4555,200.00,0.00,EUR,COMPLETED,234.38
+Transfer,Current,2025-10-14 19:50:17,2025-10-14 19:50:17,Transfer to Revolut user,-100.00,0.00,EUR,COMPLETED,134.38
+Card Payment,Current,2025-10-14 12:51:09,2025-10-15 11:18:10,Anne&Max,-7.80,0.00,EUR,COMPLETED,126.58
+Exchange,Current,2025-10-15 18:36:47,2025-10-15 18:36:47,Transfer to Revolut Digital Assets Europe Ltd,-1.02,0.00,EUR,COMPLETED,125.56
+Transfer,Current,2025-10-15 21:20:17,2025-10-15 21:20:17,Transfer from KONSTANTINOS KANAVOURAS,43.00,0.00,EUR,COMPLETED,168.56
+Transfer,Current,2025-10-15 23:06:00,2025-10-15 23:06:01,Transfer from ANASTASIOS FAIDON RETSELIS,15.00,0.00,EUR,COMPLETED,183.56
+Transfer,Current,2025-10-16 10:33:35,2025-10-16 10:33:35,Transfer to Revolut user,-100.00,0.00,EUR,COMPLETED,83.56
+Transfer,Current,2025-10-16 10:48:36,2025-10-16 10:48:36,Transfer from KONSTANTINOS DIMITRIOU,39.25,0.00,EUR,COMPLETED,122.81
+Transfer,Current,2025-10-16 10:52:41,2025-10-16 10:52:41,Transfer to Revolut user,-39.25,0.00,EUR,COMPLETED,83.56
+Transfer,Current,2025-10-16 10:53:33,2025-10-16 10:53:33,Pocket Withdrawal,36.62,0.00,EUR,COMPLETED,120.18
+Transfer,Current,2025-10-16 10:54:37,2025-10-16 10:54:37,Transfer to ASTERIOS ARAMPATZIS,-12.00,0.00,EUR,COMPLETED,108.18
+Transfer,Current,2025-10-16 10:55:18,2025-10-16 10:55:19,Transfer to DIMITRIOS STOUPIS,-12.00,0.00,EUR,COMPLETED,96.18
+Deposit,Current,2025-10-16 11:59:02,2025-10-16 11:59:03,Apple Pay deposit by *4555,400.00,0.00,EUR,COMPLETED,496.18
+Transfer,Current,2025-10-16 11:59:19,2025-10-16 11:59:19,To EUR Pro,-420.00,0.00,EUR,COMPLETED,76.18
+Transfer,Current,2025-10-16 22:13:18,2025-10-16 22:13:18,To EUR Pro,-20.00,0.00,EUR,COMPLETED,56.18
+Transfer,Current,2025-10-16 22:13:27,2025-10-16 22:13:27,Transfer to Revolut user,-20.00,0.00,EUR,COMPLETED,36.18
+Card Payment,Current,2025-10-15 18:36:47,2025-10-17 11:42:33,Uber Eats,-14.49,0.00,EUR,COMPLETED,21.69
+Exchange,Current,2025-10-17 12:27:23,2025-10-17 12:27:23,Transfer to Revolut Digital Assets Europe Ltd,-2.00,0.00,EUR,COMPLETED,19.69
+Exchange,Current,2025-10-17 13:40:15,2025-10-17 13:40:15,Transfer to Revolut Digital Assets Europe Ltd,-1.32,0.00,EUR,COMPLETED,18.37
+Exchange,Current,2025-10-17 14:19:14,2025-10-17 14:19:14,Transfer to Revolut Digital Assets Europe Ltd,-1.98,0.00,EUR,COMPLETED,16.39
+Card Payment,Current,2025-10-17 14:19:14,2025-10-18 09:46:25,Albert Heijn,-9.01,0.00,EUR,COMPLETED,7.38
+Card Payment,Current,2025-10-17 12:27:22,2025-10-18 11:51:48,Jumbo Supermarkt,-4.00,0.00,EUR,COMPLETED,3.38
+Deposit,Current,2025-10-18 15:23:59,2025-10-18 15:24:01,Apple Pay deposit by *4555,20.00,0.00,EUR,COMPLETED,23.38
+Exchange,Current,2025-10-18 15:24:46,2025-10-18 15:24:46,Transfer to Revolut Digital Assets Europe Ltd,-1.16,0.00,EUR,COMPLETED,22.22
+Card Payment,Current,2025-10-18 15:24:46,2025-10-19 11:59:04,Amazon,-10.42,0.00,EUR,COMPLETED,11.80
+Card Payment,Current,2025-10-17 13:40:15,2025-10-19 12:16:25,OVpay,-1.34,0.00,EUR,COMPLETED,10.46
+Deposit,Current,2025-10-21 08:13:26,2025-10-21 08:13:27,Apple Pay deposit by *4555,150.00,0.00,EUR,COMPLETED,160.46
+Transfer,Current,2025-10-21 09:13:11,2025-10-21 09:13:11,Transfer to Revolut user,-20.00,0.00,EUR,COMPLETED,140.46
+Exchange,Current,2025-10-21 10:07:46,2025-10-21 10:07:46,Transfer to Revolut Digital Assets Europe Ltd,-1.00,0.00,EUR,COMPLETED,139.46
+Exchange,Current,2025-10-21 13:56:30,2025-10-21 13:56:30,Transfer to Revolut Digital Assets Europe Ltd,-0.56,0.00,EUR,COMPLETED,138.90
+Transfer,Current,2025-10-21 14:07:32,2025-10-21 14:07:32,Transfer from KONSTANTINOS DIMITRIOU,20.00,0.00,EUR,COMPLETED,158.90
+Card Payment,Current,2025-10-21 10:07:46,2025-10-22 13:54:21,Coffeecompany,-5.50,0.00,EUR,COMPLETED,153.40
+Card Payment,Current,2025-10-21 13:56:30,2025-10-23 11:45:32,OVpay,-1.72,0.00,EUR,COMPLETED,151.68
+Exchange,Current,2025-10-24 09:45:03,2025-10-24 09:45:03,Transfer to Revolut Digital Assets Europe Ltd,-1.96,0.00,EUR,COMPLETED,149.72
+Transfer,Current,2025-10-24 10:18:07,2025-10-24 10:18:07,To EUR Pro,-100.00,0.00,EUR,COMPLETED,49.72
+Exchange,Current,2025-10-24 18:57:19,2025-10-24 18:57:19,Transfer to Revolut Digital Assets Europe Ltd,-0.52,0.00,EUR,COMPLETED,49.20
+Exchange,Current,2025-10-24 18:58:49,2025-10-24 18:58:49,Transfer to Revolut Digital Assets Europe Ltd,-1.92,0.00,EUR,COMPLETED,47.28
+Card Payment,Current,2025-10-24 09:45:03,2025-10-25 11:39:19,Jumbo,-8.02,0.00,EUR,COMPLETED,39.26
+Card Payment,Current,2025-10-24 18:58:49,2025-10-25 11:41:11,Jumbo,-19.04,0.00,EUR,COMPLETED,20.22
+Card Payment,Current,2025-10-24 18:57:19,2025-10-25 11:42:26,Jumbo,-5.74,0.00,EUR,COMPLETED,14.48
+Deposit,Current,2025-10-25 14:33:48,2025-10-25 14:33:48,Payment from AAB INZ TIKKIE,19.00,0.00,EUR,COMPLETED,33.48
+Exchange,Current,2025-10-25 17:23:59,2025-10-25 17:23:59,Transfer to Revolut Digital Assets Europe Ltd,-1.20,0.00,EUR,COMPLETED,32.28
+Card Payment,Current,2025-10-25 17:23:59,2025-10-26 12:28:22,Anne&max Delft,-8.40,0.00,EUR,COMPLETED,23.88
+Exchange,Current,2025-10-26 13:07:59,2025-10-26 13:07:59,Transfer to Revolut Digital Assets Europe Ltd,-0.50,0.00,EUR,COMPLETED,23.38
+Exchange,Current,2025-10-26 13:29:54,2025-10-26 13:29:54,Transfer to Revolut Digital Assets Europe Ltd,-1.20,0.00,EUR,COMPLETED,22.18
+Deposit,Current,2025-10-26 13:30:05,2025-10-26 13:30:06,Apple Pay deposit by *4555,50.00,0.00,EUR,COMPLETED,72.18
+Exchange,Current,2025-10-26 13:42:06,2025-10-26 13:42:06,Transfer to Revolut Digital Assets Europe Ltd,-0.12,0.00,EUR,COMPLETED,72.06
+Exchange,Current,2025-10-26 19:09:45,2025-10-26 19:09:45,Transfer from Revolut Digital Assets Europe Ltd,322.80,0.00,EUR,COMPLETED,394.86
+Exchange,Current,2025-10-26 19:10:14,2025-10-26 19:10:14,Transfer from Revolut Digital Assets Europe Ltd,101.27,0.00,EUR,COMPLETED,496.13
+Transfer,Current,2025-10-26 19:12:38,2025-10-27 03:16:12,To Kraken Exchange via PayPal (Europe),-422.00,0.00,EUR,COMPLETED,74.13
+Card Payment,Current,2025-10-26 13:07:59,2025-10-27 14:30:07,Koffie & Ik,-8.75,0.00,EUR,COMPLETED,65.38
+Card Payment,Current,2025-10-26 13:29:53,2025-10-27 14:30:41,Amazing Oriental,-5.40,0.00,EUR,COMPLETED,59.98
+Card Payment,Current,2025-10-26 13:42:06,2025-10-27 14:30:41,Albert Heijn,-9.94,0.00,EUR,COMPLETED,50.04
+Exchange,Current,2025-10-27 18:34:15,2025-10-27 18:34:15,Transfer to Revolut Digital Assets Europe Ltd,-1.72,0.00,EUR,COMPLETED,48.32
+Charge,Current,2025-10-28 03:24:02,2025-10-28 03:24:02,Premium plan fee,0.00,9.99,EUR,COMPLETED,38.33
+Transfer,Current,2025-10-28 12:46:14,2025-10-28 12:46:14,Transfer from Revolut user,50.00,0.00,EUR,COMPLETED,88.33
+Card Payment,Current,2025-10-27 18:34:15,2025-10-29 11:32:33,Uber Eats,-14.14,0.00,EUR,COMPLETED,74.19
+Exchange,Current,2025-10-29 18:37:40,2025-10-29 18:37:40,Transfer to Revolut Digital Assets Europe Ltd,-0.42,0.00,EUR,COMPLETED,73.77
+Card Payment,Current,2025-10-29 18:37:40,2025-10-30 11:38:21,Jumbo,-20.79,0.00,EUR,COMPLETED,52.98
+Exchange,Current,2025-10-30 14:15:15,2025-10-30 14:15:15,Transfer to Revolut Digital Assets Europe Ltd,-1.30,0.00,EUR,COMPLETED,51.68
+Transfer,Current,2025-10-31 09:41:24,2025-10-31 09:41:25,Transfer from ALIKI DESPOINA ATHANASIADOU,1000.00,0.00,EUR,COMPLETED,1051.68
+Transfer,Current,2025-10-31 09:46:13,2025-10-31 09:46:14,Transfer from ALIKI DESPOINA ATHANASIADOU,12.00,0.00,EUR,COMPLETED,1063.68
+Card Payment,Current,2025-10-30 14:15:15,2025-10-31 13:05:57,Rivvia.ams,-42.35,0.00,EUR,COMPLETED,1021.33
+Exchange,Current,2025-11-01 12:43:03,2025-11-01 12:43:03,Transfer to Revolut Digital Assets Europe Ltd,-0.10,0.00,EUR,COMPLETED,1021.23
+Deposit,Current,2025-11-01 14:30:30,2025-11-01 14:30:31,Apple Pay deposit by *4555,18.00,0.00,EUR,COMPLETED,1039.23
+ATM,Current,2025-10-31 09:47:45,2025-11-01 14:50:09,Cash withdrawal at Ermou Str Br,-1000.00,12.00,EUR,COMPLETED,27.23
+Card Payment,Current,2025-11-01 17:56:32,2025-11-02 10:23:31,Radegast 040,-22.40,0.00,EUR,COMPLETED,4.83
+Card Payment,Current,2025-11-01 12:43:03,2025-11-02 10:44:25,Albert Heijn,-3.95,0.00,EUR,COMPLETED,0.88
+Transfer,Current,2025-11-02 21:48:20,2025-11-02 21:48:21,Transfer from ALIKI DESPOINA ATHANASIADOU,50.00,0.00,EUR,COMPLETED,50.88
+Card Refund,Current,2025-11-02 20:54:42,2025-11-03 11:27:06,Google,17.41,0.00,EUR,COMPLETED,68.29
+Exchange,Current,2025-11-03 12:40:12,2025-11-03 12:40:12,Transfer to Revolut Digital Assets Europe Ltd,-2.00,0.00,EUR,COMPLETED,66.29
+Exchange,Current,2025-11-03 17:48:24,2025-11-03 17:48:24,Transfer to Revolut Digital Assets Europe Ltd,-2.00,0.00,EUR,COMPLETED,64.29
+Exchange,Current,2025-11-03 21:07:42,2025-11-03 21:07:42,Transfer to Revolut Digital Assets Europe Ltd,-1.02,0.00,EUR,COMPLETED,63.27
+Card Payment,Current,2025-11-03 17:48:23,2025-11-04 12:18:03,Mollie Cafe Brandon,-8.00,0.00,EUR,COMPLETED,55.27
+Card Payment,Current,2025-11-03 12:40:12,2025-11-04 12:18:23,Bakkerij Wolf,-12.00,0.00,EUR,COMPLETED,43.27
+Card Payment,Current,2025-11-03 21:07:41,2025-11-05 11:41:33,Uber Eats,-14.49,0.00,EUR,COMPLETED,28.78
+Exchange,Current,2025-11-07 08:22:35,2025-11-07 08:22:35,Transfer from Revolut Digital Assets Europe Ltd,200.00,0.00,EUR,COMPLETED,228.78
+Transfer,Current,2025-11-07 08:23:14,2025-11-07 08:23:14,To margin trading account,-191.60,0.00,EUR,COMPLETED,37.18
+Exchange,Current,2025-11-07 22:28:05,2025-11-07 22:28:05,Transfer to Revolut Digital Assets Europe Ltd,-0.14,0.00,EUR,COMPLETED,37.04
+Exchange,Current,2025-11-08 06:27:21,2025-11-08 06:27:21,Transfer to Revolut Digital Assets Europe Ltd,-1.20,0.00,EUR,COMPLETED,35.84
+Card Payment,Current,2025-11-07 22:28:05,2025-11-08 15:12:20,Greene King,-26.93,0.00,EUR,COMPLETED,8.91
+Transfer,Current,2025-11-08 21:20:35,2025-11-08 21:20:36,Transfer from Revolut user,50.00,0.00,EUR,COMPLETED,58.91
+Exchange,Current,2025-11-08 21:21:29,2025-11-08 21:21:29,Transfer to Revolut Digital Assets Europe Ltd,-2.00,0.00,EUR,COMPLETED,56.91
+Exchange,Current,2025-11-08 21:29:19,2025-11-08 21:29:19,Transfer to Revolut Digital Assets Europe Ltd,-1.44,0.00,EUR,COMPLETED,55.47
+Exchange,Current,2025-11-09 00:47:59,2025-11-09 00:47:59,Transfer to Revolut Digital Assets Europe Ltd,-1.46,0.00,EUR,COMPLETED,54.01
+Exchange,Current,2025-11-09 05:51:14,2025-11-09 05:51:14,Transfer to Revolut Digital Assets Europe Ltd,-1.60,0.00,EUR,COMPLETED,52.41
+Card Payment,Current,2025-11-08 06:27:20,2025-11-09 16:11:58,Transport for London,-8.40,0.00,EUR,COMPLETED,44.01
+Card Payment,Current,2025-11-08 21:21:29,2025-11-10 10:38:36,Cosmote,-13.00,0.00,EUR,COMPLETED,31.01
+Card Payment,Current,2025-11-08 21:29:19,2025-11-10 12:13:25,OVpay,-3.28,0.00,EUR,COMPLETED,27.73
+Card Payment,Current,2025-11-09 00:47:59,2025-11-10 12:13:52,OVpay,-3.27,0.00,EUR,COMPLETED,24.46
+Card Payment,Current,2025-11-09 05:51:13,2025-11-10 15:14:33,Transport for London,-3.20,0.00,EUR,COMPLETED,21.26
+Exchange,Current,2025-11-12 04:50:11,2025-11-12 04:50:11,Transfer to Revolut Digital Assets Europe Ltd,-0.02,0.00,EUR,COMPLETED,21.24
+Card Payment,Current,2025-11-12 04:50:11,2025-11-12 14:08:05,Apple,-2.99,0.00,EUR,COMPLETED,18.25
+Deposit,Current,2025-11-12 21:32:53,2025-11-12 21:32:54,Apple Pay deposit by *1258,300.00,0.00,EUR,COMPLETED,318.25
+Exchange,Current,2025-11-13 14:47:09,2025-11-13 14:47:09,Transfer to Revolut Digital Assets Europe Ltd,-0.14,0.00,EUR,COMPLETED,318.11
+Exchange,Current,2025-11-15 14:44:02,2025-11-15 14:44:02,Transfer to Revolut Digital Assets Europe Ltd,-1.22,0.00,EUR,COMPLETED,316.89
+Exchange,Current,2025-11-15 16:06:57,2025-11-15 16:06:57,Transfer to Revolut Digital Assets Europe Ltd,-1.14,0.00,EUR,COMPLETED,315.75
+Transfer,Current,2025-11-15 16:33:47,2025-11-15 16:33:48,Transfer to Revolut user,-50.00,0.00,EUR,COMPLETED,265.75
+Card Payment,Current,2025-11-13 14:47:09,2025-11-15 17:00:59,Namecheap,-9.93,0.00,EUR,COMPLETED,255.82
+Exchange,Current,2025-11-15 19:07:20,2025-11-15 19:07:20,Transfer to Revolut Digital Assets Europe Ltd,-1.12,0.00,EUR,COMPLETED,254.70
+Exchange,Current,2025-11-16 01:36:42,2025-11-16 01:36:42,Transfer to Revolut Digital Assets Europe Ltd,-0.02,0.00,EUR,COMPLETED,254.68
+Card Payment,Current,2025-11-15 19:07:20,2025-11-16 10:48:37,Jumbo,-8.44,0.00,EUR,COMPLETED,246.24
+Card Payment,Current,2025-11-15 16:06:57,2025-11-16 11:26:59,Albert Heijn,-52.43,0.00,EUR,COMPLETED,193.81
+Card Payment,Current,2025-11-15 14:44:01,2025-11-16 12:15:54,Gall & Gall,-153.39,0.00,EUR,COMPLETED,40.42
+Card Payment,Current,2025-11-16 01:36:41,2025-11-16 12:16:31,PlayStation,-29.99,0.00,EUR,COMPLETED,10.43
+Deposit,Current,2025-11-17 10:30:08,2025-11-17 10:30:10,Apple Pay deposit by *1258,100.00,0.00,EUR,COMPLETED,110.43
+Transfer,Current,2025-11-17 10:34:18,2025-11-17 11:09:47,To Ministerie van Justitie en Veiligheid,-33.85,0.00,EUR,COMPLETED,76.58
+Exchange,Current,2025-11-19 09:18:55,2025-11-19 09:18:55,Transfer to Revolut Digital Assets Europe Ltd,-0.38,0.00,EUR,COMPLETED,76.20
+Exchange,Current,2025-11-19 20:54:56,2025-11-19 20:54:56,Transfer to Revolut Digital Assets Europe Ltd,-0.82,0.00,EUR,COMPLETED,75.38
+Deposit,Current,2025-11-20 08:22:46,2025-11-20 08:22:47,Apple Pay deposit by *1258,250.00,0.00,EUR,COMPLETED,325.38
+Transfer,Current,2025-11-20 08:23:11,2025-11-20 08:23:11,Transfer to ALIKI DESPOINA ATHANASIADOU,-250.00,0.00,EUR,COMPLETED,75.38
+Exchange,Current,2025-11-20 11:45:06,2025-11-20 11:45:06,Transfer to Revolut Digital Assets Europe Ltd,-0.02,0.00,EUR,COMPLETED,75.36
+Transfer,Current,2025-11-20 13:47:46,2025-11-20 13:47:46,To EUR Pro,-60.00,0.00,EUR,COMPLETED,15.36
+Transfer,Current,2025-11-20 22:53:29,2025-11-20 22:53:30,Transfer from KONSTANTINOS DIMITRIOU,10.00,0.00,EUR,COMPLETED,25.36
+Card Payment,Current,2025-11-19 09:18:55,2025-11-21 09:25:57,OVpay,-1.81,0.00,EUR,COMPLETED,23.55
+Card Payment,Current,2025-11-19 20:54:56,2025-11-21 09:26:14,OVpay,-1.59,0.00,EUR,COMPLETED,21.96
+Card Payment,Current,2025-11-20 11:45:06,2025-11-21 12:03:32,Apple,-2.99,0.00,EUR,COMPLETED,18.97
+Exchange,Current,2025-11-23 14:05:43,2025-11-23 14:05:43,Transfer to Revolut Digital Assets Europe Ltd,-1.00,0.00,EUR,COMPLETED,17.97
+Deposit,Current,2025-11-23 20:40:47,2025-11-23 20:40:49,Apple Pay deposit by *1258,50.00,0.00,EUR,COMPLETED,67.97
+Transfer,Current,2025-11-23 20:41:39,2025-11-24 03:10:30,To Picnic BV,-36.94,0.00,EUR,COMPLETED,31.03
+Card Payment,Current,2025-11-23 14:05:42,2025-11-24 09:59:07,De Keuken Van,-3.50,0.00,EUR,COMPLETED,27.53
+Transfer,Current,2025-11-25 07:49:04,2025-11-25 07:49:04,Transfer to Revolut user,-12.00,0.00,EUR,COMPLETED,15.53
+Deposit,Current,2025-11-25 11:01:32,2025-11-25 11:01:33,Apple Pay deposit by *4555,1500.00,0.00,EUR,COMPLETED,1515.53
+Transfer,Current,2025-11-25 11:01:51,2025-11-25 11:01:51,Transfer to Revolut user,-1000.00,0.00,EUR,COMPLETED,515.53
+Exchange,Current,2025-11-25 18:03:26,2025-11-25 18:03:26,Transfer to Revolut Digital Assets Europe Ltd,-0.02,0.00,EUR,COMPLETED,515.51
+Transfer,Current,2025-11-26 08:09:31,2025-11-26 08:09:31,To EUR Pro,-50.00,0.00,EUR,COMPLETED,465.51
+Card Payment,Current,2025-11-25 18:03:25,2025-11-26 09:34:17,Amazon,-104.99,0.00,EUR,COMPLETED,360.52
+Transfer,Current,2025-11-27 09:05:52,2025-11-27 09:05:52,To EUR Pro,-150.00,0.00,EUR,COMPLETED,210.52
+Charge,Current,2025-11-28 06:00:41,2025-11-28 06:00:41,Premium plan fee,0.00,9.99,EUR,COMPLETED,200.53
+Exchange,Current,2025-11-28 08:02:46,2025-11-28 08:02:46,Transfer to Revolut Digital Assets Europe Ltd,-1.82,0.00,EUR,COMPLETED,198.71
+Exchange,Current,2025-11-28 10:46:36,2025-11-28 10:46:36,Transfer to Revolut Digital Assets Europe Ltd,-1.12,0.00,EUR,COMPLETED,197.59
+Exchange,Current,2025-11-28 13:19:47,2025-11-28 13:19:47,Transfer to Revolut Digital Assets Europe Ltd,-1.80,0.00,EUR,COMPLETED,195.79
+Deposit,Current,2025-11-28 16:39:37,2025-11-28 16:39:38,Apple Pay deposit by *4555,1000.00,0.00,EUR,COMPLETED,1195.79
+Transfer,Current,2025-11-28 16:39:57,2025-11-28 16:39:57,To EUR Pro,-1000.00,0.00,EUR,COMPLETED,195.79
+Exchange,Current,2025-11-29 12:15:30,2025-11-29 12:15:30,Transfer to Revolut Digital Assets Europe Ltd,-1.70,0.00,EUR,COMPLETED,194.09
+Card Payment,Current,2025-11-28 13:19:46,2025-11-29 13:03:31,Anne&Max,-36.10,0.00,EUR,COMPLETED,157.99
+Card Payment,Current,2025-11-28 10:46:35,2025-11-29 15:34:24,bulk,-25.44,0.00,EUR,COMPLETED,132.55
+Card Payment,Current,2025-11-29 12:15:30,2025-11-30 13:53:37,Bakkerij Neplenbroek,-5.15,0.00,EUR,COMPLETED,127.40
+Exchange,Current,2025-11-30 20:48:04,2025-11-30 20:48:04,Transfer to Revolut Digital Assets Europe Ltd,-0.02,0.00,EUR,COMPLETED,127.38
+Transfer,Current,2025-11-30 09:57:30,2025-12-01 03:27:31,To Srikrishnan via Tikkie,-4.00,0.00,EUR,COMPLETED,123.38
+Exchange,Current,2025-12-01 10:35:17,2025-12-01 10:35:17,Transfer to Revolut Digital Assets Europe Ltd,-1.00,0.00,EUR,COMPLETED,122.38
+Exchange,Current,2025-12-01 19:30:59,2025-12-01 19:30:59,Transfer to Revolut Digital Assets Europe Ltd,-0.22,0.00,EUR,COMPLETED,122.16
+Card Payment,Current,2025-12-01 19:30:59,2025-12-02 10:18:33,Jumbo,-0.89,0.00,EUR,COMPLETED,121.27
+Card Payment,Current,2025-12-01 10:35:16,2025-12-02 10:49:58,The Social Hub,-4.50,0.00,EUR,COMPLETED,116.77
+Card Payment,Current,2025-11-28 08:02:45,2025-12-02 15:18:24,Zalando Payments,-104.09,0.00,EUR,COMPLETED,12.68
+Deposit,Current,2025-12-02 22:49:30,2025-12-02 22:49:32,Apple Pay deposit by *4555,800.00,0.00,EUR,COMPLETED,812.68
+Transfer,Current,2025-12-02 22:50:01,2025-12-02 22:50:01,Transfer to Revolut user,-400.00,0.00,EUR,COMPLETED,412.68
+Card Payment,Current,2025-11-30 20:48:03,2025-12-03 10:41:00,Google,-1.99,0.00,EUR,COMPLETED,410.69
+Deposit,Current,2025-12-04 16:36:12,2025-12-04 16:36:13,Payment from AAB INZ TIKKIE,35.00,0.00,EUR,COMPLETED,445.69
+Transfer,Current,2025-12-04 16:42:06,2025-12-04 16:42:06,To EUR Pro,-100.00,0.00,EUR,COMPLETED,345.69
+Transfer,Current,2025-12-05 15:13:32,2025-12-05 15:13:32,To EUR Pro,-50.00,0.00,EUR,COMPLETED,295.69
+Exchange,Current,2025-12-05 21:19:32,2025-12-05 21:19:32,Transfer to Revolut Digital Assets Europe Ltd,-1.20,0.00,EUR,COMPLETED,294.49
+Exchange,Current,2025-12-06 01:05:57,2025-12-06 01:05:57,Transfer to Revolut Digital Assets Europe Ltd,-2.00,0.00,EUR,COMPLETED,292.49
+Card Payment,Current,2025-12-05 21:19:32,2025-12-06 15:33:18,Biercafé Doerak,-24.40,0.00,EUR,COMPLETED,268.09
+Transfer,Current,2025-12-06 19:10:42,2025-12-06 19:10:43,Transfer to MENELAOS ANASTASOPOULOS,-70.00,0.00,EUR,COMPLETED,198.09
+Exchange,Current,2025-12-06 20:12:04,2025-12-06 20:12:04,Transfer to Revolut Digital Assets Europe Ltd,-1.00,0.00,EUR,COMPLETED,197.09
+Card Payment,Current,2025-12-06 01:05:57,2025-12-07 11:43:00,Sing A Long B,-13.00,0.00,EUR,COMPLETED,184.09
+Card Payment,Current,2025-12-06 20:12:04,2025-12-07 13:11:12,Albert Heijn,-5.50,0.00,EUR,COMPLETED,178.59
+Exchange,Current,2025-12-07 16:01:56,2025-12-07 16:01:56,Transfer to Revolut Digital Assets Europe Ltd,-1.70,0.00,EUR,COMPLETED,176.89
+Card Payment,Current,2025-12-07 16:01:56,2025-12-08 11:21:07,Ikigai Leiden,-8.15,0.00,EUR,COMPLETED,168.74
+Exchange,Current,2025-12-08 19:24:04,2025-12-08 19:24:04,Transfer to Revolut Digital Assets Europe Ltd,-0.38,0.00,EUR,COMPLETED,168.36
+Exchange,Current,2025-12-09 07:53:01,2025-12-09 07:53:01,Transfer to Revolut Digital Assets Europe Ltd,-0.14,0.00,EUR,COMPLETED,168.22
+Card Payment,Current,2025-12-09 07:53:01,2025-12-10 10:33:52,Skroutz,-10.93,0.00,EUR,COMPLETED,157.29
+Card Payment,Current,2025-12-08 19:24:04,2025-12-10 11:40:16,OVpay,-1.81,0.00,EUR,COMPLETED,155.48
+Exchange,Current,2025-12-10 14:05:54,2025-12-10 14:05:54,Transfer to Revolut Digital Assets Europe Ltd,-2.00,0.00,EUR,COMPLETED,153.48
+Exchange,Current,2025-12-10 18:52:40,2025-12-10 18:52:40,Transfer to Revolut Digital Assets Europe Ltd,-1.50,0.00,EUR,COMPLETED,151.98
+Card Payment,Current,2025-12-10 14:05:54,2025-12-11 10:03:47,LOT61,-5.00,0.00,EUR,COMPLETED,146.98
+Card Refund,Current,2025-12-10 10:38:27,2025-12-11 10:07:17,Skroutz,10.93,0.00,EUR,COMPLETED,157.91
+Card Payment,Current,2025-12-10 18:52:40,2025-12-11 12:55:49,A Beautiful Mess,-6.25,0.00,EUR,COMPLETED,151.66
+Exchange,Current,2025-12-12 04:51:16,2025-12-12 04:51:16,Transfer to Revolut Digital Assets Europe Ltd,-0.02,0.00,EUR,COMPLETED,151.64
+Transfer,Current,2025-12-12 08:41:36,2025-12-12 08:41:36,To EUR Pro,-50.00,0.00,EUR,COMPLETED,101.64
+Card Payment,Current,2025-12-12 04:51:15,2025-12-12 16:13:59,Apple,-2.99,0.00,EUR,COMPLETED,98.65
+Exchange,Current,2025-12-13 17:16:17,2025-12-13 17:16:17,Transfer to Revolut Digital Assets Europe Ltd,-0.20,0.00,EUR,COMPLETED,98.45
+Card Payment,Current,2025-12-13 17:16:16,2025-12-14 10:35:16,UNIQLO,-39.90,0.00,EUR,COMPLETED,58.55
+Deposit,Current,2025-12-14 14:57:43,2025-12-14 14:57:45,Apple Pay deposit by *4555,150.00,0.00,EUR,COMPLETED,208.55
+Transfer,Current,2025-12-14 14:58:19,2025-12-14 14:58:20,Transfer to Revolut user,-100.00,0.00,EUR,COMPLETED,108.55
+Transfer,Current,2025-12-14 16:59:26,2025-12-15 03:15:43,To Amalia Roza,-35.00,0.00,EUR,COMPLETED,73.55
+Refund,Current,2025-12-15 09:20:02,2025-12-15 09:20:02,Transfer to Amalia Roza refund,35.00,0.00,EUR,COMPLETED,108.55
+Exchange,Current,2025-12-16 12:59:14,2025-12-16 12:59:14,Transfer to Revolut Digital Assets Europe Ltd,-1.22,0.00,EUR,COMPLETED,107.33
+Exchange,Current,2025-12-16 21:19:42,2025-12-16 21:19:42,Transfer to Revolut Digital Assets Europe Ltd,-0.82,0.00,EUR,COMPLETED,106.51
+Card Payment,Current,2025-12-16 12:59:14,2025-12-17 16:00:47,Albert Heijn,-8.39,0.00,EUR,COMPLETED,98.12
+Card Payment,Current,2025-12-16 21:19:42,2025-12-17 17:08:54,Bw And Hotel Stockholm,-11.59,0.00,EUR,COMPLETED,86.53
+Exchange,Current,2025-12-17 22:58:30,2025-12-17 22:58:30,Transfer to Revolut Digital Assets Europe Ltd,-1.46,0.00,EUR,COMPLETED,85.07
+Card Payment,Current,2025-12-17 22:58:30,2025-12-18 16:56:20,CHSD Restaurang AB,-7.27,0.00,EUR,COMPLETED,77.80
+Exchange,Current,2025-12-18 22:22:10,2025-12-18 22:22:10,Transfer to Revolut Digital Assets Europe Ltd,-1.40,0.00,EUR,COMPLETED,76.40
+Exchange,Current,2025-12-18 22:57:00,2025-12-18 22:57:00,Transfer to Revolut Digital Assets Europe Ltd,-0.90,0.00,EUR,COMPLETED,75.50
+Deposit,Current,2025-12-19 08:32:25,2025-12-19 08:32:26,Apple Pay deposit by *4555,1400.00,0.00,EUR,COMPLETED,1475.50
+Transfer,Current,2025-12-19 08:32:43,2025-12-19 08:32:43,Transfer to Revolut user,-1000.00,0.00,EUR,COMPLETED,475.50
+Exchange,Current,2025-12-19 14:03:08,2025-12-19 14:03:08,Transfer to Revolut Digital Assets Europe Ltd,-1.26,0.00,EUR,COMPLETED,474.24
+Card Payment,Current,2025-12-18 22:22:09,2025-12-19 17:57:34,The Crib by Retro,-6.30,0.00,EUR,COMPLETED,467.94
+Card Payment,Current,2025-12-18 22:57:00,2025-12-19 17:57:34,The Crib by Retro,-52.55,0.00,EUR,COMPLETED,415.39
+Exchange,Current,2025-12-19 18:27:37,2025-12-19 18:27:37,Transfer to Revolut Digital Assets Europe Ltd,-2.00,0.00,EUR,COMPLETED,413.39
+Exchange,Current,2025-12-20 05:41:49,2025-12-20 05:41:49,Transfer to Revolut Digital Assets Europe Ltd,-2.00,0.00,EUR,COMPLETED,411.39
+Exchange,Current,2025-12-20 09:48:01,2025-12-20 09:48:01,Transfer to Revolut Digital Assets Europe Ltd,-0.56,0.00,EUR,COMPLETED,410.83
+Transfer,Current,2025-12-20 14:49:33,2025-12-20 14:49:33,Transfer to Revolut user,-20.00,0.00,EUR,COMPLETED,390.83
+Card Payment,Current,2025-12-19 14:03:07,2025-12-20 19:10:41,7-Eleven,-5.37,0.00,EUR,COMPLETED,385.46
+Exchange,Current,2025-12-21 05:10:20,2025-12-21 05:10:20,Transfer to Revolut Digital Assets Europe Ltd,-1.20,0.00,EUR,COMPLETED,384.26
+Card Payment,Current,2025-12-19 18:27:36,2025-12-21 13:23:47,Cosmote,-13.00,0.00,EUR,COMPLETED,371.26
+Card Payment,Current,2025-12-20 09:48:01,2025-12-21 13:53:41,efood,-3.72,0.00,EUR,COMPLETED,367.54
+Exchange,Current,2025-12-22 17:45:20,2025-12-22 17:45:20,Transfer to Revolut Digital Assets Europe Ltd,-1.00,0.00,EUR,COMPLETED,366.54
+Exchange,Current,2025-12-22 18:18:29,2025-12-22 18:18:29,Transfer to Revolut Digital Assets Europe Ltd,-0.60,0.00,EUR,COMPLETED,365.94
+Exchange,Current,2025-12-22 18:56:35,2025-12-22 18:56:35,Transfer to Revolut Digital Assets Europe Ltd,-1.00,0.00,EUR,COMPLETED,364.94
+Exchange,Current,2025-12-22 20:16:30,2025-12-22 20:16:30,Transfer to Revolut Digital Assets Europe Ltd,-0.80,0.00,EUR,COMPLETED,364.14
+Exchange,Current,2025-12-23 09:40:30,2025-12-23 09:40:30,Transfer to Revolut Digital Assets Europe Ltd,-0.20,0.00,EUR,COMPLETED,363.94
+Card Payment,Current,2025-12-20 05:41:49,2025-12-23 10:26:31,OASA - Transport for Athens,-9.00,0.00,EUR,COMPLETED,354.94
+Card Payment,Current,2025-12-21 05:10:20,2025-12-23 10:26:58,OASA - Transport for Athens,-2.40,0.00,EUR,COMPLETED,352.54
+Card Payment,Current,2025-12-22 17:45:20,2025-12-23 11:28:12,Nterlikatesen,-13.50,0.00,EUR,COMPLETED,339.04
+Card Payment,Current,2025-12-22 18:18:29,2025-12-23 11:28:16,Choureal,-4.70,0.00,EUR,COMPLETED,334.34
+Exchange,Current,2025-12-23 13:04:20,2025-12-23 13:04:20,Transfer to Revolut Digital Assets Europe Ltd,-1.90,0.00,EUR,COMPLETED,332.44
+Exchange,Current,2025-12-23 14:00:02,2025-12-23 14:00:02,Transfer to Revolut Digital Assets Europe Ltd,-1.00,0.00,EUR,COMPLETED,331.44
+Transfer,Current,2025-12-23 14:31:33,2025-12-23 14:31:34,Transfer to Revolut user,-27.00,0.00,EUR,COMPLETED,304.44
+Deposit,Current,2025-12-23 15:16:25,2025-12-23 15:16:27,Apple Pay deposit by *4555,600.00,0.00,EUR,COMPLETED,904.44
+Transfer,Current,2025-12-23 15:16:42,2025-12-23 15:16:42,Transfer to Revolut user,-500.00,0.00,EUR,COMPLETED,404.44
+Exchange,Current,2025-12-23 16:08:24,2025-12-23 16:08:24,Transfer to Revolut Digital Assets Europe Ltd,-2.00,0.00,EUR,COMPLETED,402.44
+Exchange,Current,2025-12-23 16:13:54,2025-12-23 16:13:54,Transfer to Revolut Digital Assets Europe Ltd,-2.00,0.00,EUR,COMPLETED,400.44
+Card Payment,Current,2025-12-23 20:11:26,,Oseth,-1.20,0.00,EUR,REVERTED,
+Exchange,Current,2025-12-23 20:11:26,2025-12-23 20:11:26,Transfer to Revolut Digital Assets Europe Ltd,-1.60,0.00,EUR,COMPLETED,398.84
+Card Payment,Current,2025-12-23 22:38:15,,Tsiakiris Stefanos,-84.00,0.00,EUR,REVERTED,
+Exchange,Current,2025-12-23 22:38:16,2025-12-23 22:38:16,Transfer to Revolut Digital Assets Europe Ltd,-2.00,0.00,EUR,COMPLETED,396.84
+Transfer,Current,2025-12-23 22:40:20,2025-12-23 22:40:21,Transfer from PETROS POLYCHRONIS,28.50,0.00,EUR,COMPLETED,425.34
+Deposit,Current,2025-12-23 23:41:47,2025-12-23 23:41:47,Payment from AAB INZ TIKKIE,28.00,0.00,EUR,COMPLETED,453.34
+Exchange,Current,2025-12-24 08:54:16,2025-12-24 08:54:16,Transfer to Revolut Digital Assets Europe Ltd,-2.00,0.00,EUR,COMPLETED,451.34
+Card Payment,Current,2025-12-23 14:00:01,2025-12-24 10:12:37,Flying Tiger Copenhagen,-2.50,0.00,EUR,COMPLETED,448.84
+Card Payment,Current,2025-12-22 18:56:35,2025-12-24 10:13:45,Boca 51 Ike,-11.50,0.00,EUR,COMPLETED,437.34
+Card Payment,Current,2025-12-23 16:13:54,2025-12-24 10:14:03,4all,-6.00,0.00,EUR,COMPLETED,431.34
+Card Payment,Current,2025-12-23 13:04:20,2025-12-24 10:15:39,H&M,-13.05,0.00,EUR,COMPLETED,418.29
+Card Payment,Current,2025-12-22 20:16:30,2025-12-24 11:09:33,Oseth,-0.60,0.00,EUR,COMPLETED,417.69
+Transfer,Current,2025-12-24 11:38:46,2025-12-24 11:38:46,Transfer to NIKOLAOS KOTSAKIACHIDIS,-7.20,0.00,EUR,COMPLETED,410.49
+Transfer,Current,2025-12-24 12:01:31,2025-12-24 12:01:31,To pocket EUR ChatGPT from EUR,-70.00,0.00,EUR,COMPLETED,340.49
+Card Payment,Current,2025-12-23 16:08:24,2025-12-24 12:52:13,Kings Hair Salon Mon,-25.00,0.00,EUR,COMPLETED,315.49
+Transfer,Current,2025-12-24 15:06:40,2025-12-24 15:06:41,Transfer from NIKOLAOS KOTSAKIACHIDIS,7.20,0.00,EUR,COMPLETED,322.69
+Card Payment,Current,2025-12-24 08:54:15,2025-12-25 10:18:12,Saridou Niki,-15.00,0.00,EUR,COMPLETED,307.69
+Transfer,Current,2025-12-25 16:10:47,2025-12-25 16:10:47,Transfer to NIKOLAOS KOTSAKIACHIDIS,-6.21,0.00,EUR,COMPLETED,301.48
+Transfer,Current,2025-12-25 21:56:21,2025-12-25 21:56:21,Transfer from IOANNIS KLEITSAS,15.00,0.00,EUR,COMPLETED,316.48
+Transfer,Current,2025-12-26 00:39:29,2025-12-26 00:39:30,Transfer from ADAMANTIA MARIA LAZOPOULOU,35.00,0.00,EUR,COMPLETED,351.48
+Transfer,Current,2025-12-26 00:46:54,2025-12-26 00:46:54,Transfer from PETROS POLYCHRONIS,35.00,0.00,EUR,COMPLETED,386.48
+Exchange,Current,2025-12-26 10:39:48,2025-12-26 10:39:48,Transfer to Revolut Digital Assets Europe Ltd,-0.02,0.00,EUR,COMPLETED,386.46
+Card Payment,Current,2025-12-23 09:40:30,2025-12-26 10:45:03,Paradosiako,-6.90,0.00,EUR,COMPLETED,379.56
+Card Payment,Current,2025-12-26 10:39:48,2025-12-27 10:50:25,Apple,-14.99,0.00,EUR,COMPLETED,364.57
+Charge,Current,2025-12-28 03:36:38,2025-12-28 03:36:38,Premium plan fee,0.00,9.99,EUR,COMPLETED,354.58
+Transfer,Current,2025-12-28 11:55:27,2025-12-28 11:55:28,Transfer to Revolut user,-85.00,0.00,EUR,COMPLETED,269.58
+Deposit,Current,2025-12-29 07:48:25,2025-12-29 07:48:26,Apple Pay deposit by *4555,250.00,0.00,EUR,COMPLETED,519.58
+Transfer,Current,2025-12-29 07:48:37,2025-12-29 07:48:38,Transfer to Revolut user,-250.00,0.00,EUR,COMPLETED,269.58
+Transfer,Current,2025-12-29 07:52:55,2025-12-29 07:52:56,Transfer from Revolut user,50.00,0.00,EUR,COMPLETED,319.58
+Exchange,Current,2025-12-29 09:39:23,2025-12-29 09:39:23,Transfer to Revolut Digital Assets Europe Ltd,-2.00,0.00,EUR,COMPLETED,317.58
+Card Payment,Current,2025-12-23 20:11:26,2025-12-29 12:42:17,Oseth,-1.20,0.00,EUR,COMPLETED,316.38
+Exchange,Current,2025-12-29 12:42:18,2025-12-29 12:42:18,Transfer to Revolut Digital Assets Europe Ltd,-1.60,0.00,EUR,COMPLETED,314.78
+Card Payment,Current,2025-12-23 22:38:15,2025-12-29 12:42:18,Tsiakiris Stefanos,-84.00,0.00,EUR,COMPLETED,230.78
+Exchange,Current,2025-12-29 12:42:18,2025-12-29 12:42:18,Transfer to Revolut Digital Assets Europe Ltd,-2.00,0.00,EUR,COMPLETED,228.78
+Exchange,Current,2025-12-29 13:35:31,2025-12-29 13:35:31,Transfer to Revolut Digital Assets Europe Ltd,-1.20,0.00,EUR,COMPLETED,227.58
+Card Payment,Current,2025-12-29 13:35:31,2025-12-30 12:26:50,Because Bagel E.e.,-5.40,0.00,EUR,COMPLETED,222.18
+Card Payment,Current,2025-12-29 09:39:23,2025-12-30 12:38:52,Restoran Lobby,-5.00,0.00,EUR,COMPLETED,217.18
+Exchange,Current,2025-12-30 17:04:17,2025-12-30 17:04:17,Transfer to Revolut Digital Assets Europe Ltd,-0.40,0.00,EUR,COMPLETED,216.78
+Exchange,Current,2025-12-30 18:47:17,2025-12-30 18:47:17,Transfer to Revolut Digital Assets Europe Ltd,-2.00,0.00,EUR,COMPLETED,214.78
+Exchange,Current,2025-12-30 21:09:20,2025-12-30 21:09:20,Transfer to Revolut Digital Assets Europe Ltd,-1.00,0.00,EUR,COMPLETED,213.78
+Transfer,Current,2025-12-30 22:21:48,2025-12-30 22:21:49,Transfer from DIMITRIOS STOUPIS,21.50,0.00,EUR,COMPLETED,235.28
+Transfer,Current,2025-12-30 22:21:57,2025-12-30 22:21:57,Transfer from GEORGIOS SAVVIDIS,22.00,0.00,EUR,COMPLETED,257.28
+Exchange,Current,2025-12-30 23:55:22,2025-12-30 23:55:22,Transfer to Revolut Digital Assets Europe Ltd,-1.00,0.00,EUR,COMPLETED,256.28
+Transfer,Current,2025-12-31 00:00:43,2025-12-31 00:00:44,Transfer from ZOI PARLAPANI,21.50,0.00,EUR,COMPLETED,277.78
+Exchange,Current,2025-12-31 00:21:51,2025-12-31 00:21:51,Transfer to Revolut Digital Assets Europe Ltd,-1.00,0.00,EUR,COMPLETED,276.78
+Transfer,Current,2025-12-31 00:53:37,2025-12-31 00:53:37,Transfer from KONSTANTINOS KANAVOURAS,31.50,0.00,EUR,COMPLETED,308.28
+Exchange,Current,2025-12-31 08:55:56,2025-12-31 08:55:56,Transfer to Revolut Digital Assets Europe Ltd,-2.00,0.00,EUR,COMPLETED,306.28
+Card Payment,Current,2025-12-30 21:09:20,2025-12-31 12:04:15,Mpakalikon Nauarinou E,-183.50,0.00,EUR,COMPLETED,122.78
+Card Payment,Current,2025-12-31 00:21:51,2025-12-31 12:23:40,FREE NOW,-18.50,0.00,EUR,COMPLETED,104.28
+Card Payment,Current,2025-12-30 18:47:17,2025-12-31 12:24:50,Bhta Restaurant,-12.00,0.00,EUR,COMPLETED,92.28
+Transfer,Current,2025-12-31 13:14:26,2025-12-31 13:14:27,Transfer from ASTERIOS ARAMPATZIS,21.50,0.00,EUR,COMPLETED,113.78
+Exchange,Current,2025-12-31 17:56:43,2025-12-31 17:56:43,Transfer to Revolut Digital Assets Europe Ltd,-1.50,0.00,EUR,COMPLETED,112.28
+Exchange,Current,2025-12-31 17:57:05,2025-12-31 17:57:05,Transfer to Revolut Digital Assets Europe Ltd,-2.00,0.00,EUR,COMPLETED,110.28
+Transfer,Current,2025-12-31 18:59:05,2025-12-31 18:59:05,Transfer from DIMITRIOS-ORFEAS MAKRIS,5.00,0.00,EUR,COMPLETED,115.28
+Exchange,Current,2025-12-31 20:48:07,2025-12-31 20:48:07,Transfer to Revolut Digital Assets Europe Ltd,-0.02,0.00,EUR,COMPLETED,115.26
+Card Payment,Current,2025-12-30 23:55:21,2026-01-01 10:17:19,The Pulp Bar,-10.50,0.00,EUR,COMPLETED,104.76
+Exchange,Current,2026-01-01 10:50:54,2026-01-01 10:50:54,Transfer to Revolut Digital Assets Europe Ltd,-1.36,0.00,EUR,COMPLETED,103.40
+Card Payment,Current,2025-12-31 08:55:55,2026-01-01 16:16:41,Saridou Niki,-15.00,0.00,EUR,COMPLETED,88.40
+Exchange,Current,2026-01-02 08:56:00,2026-01-02 08:56:00,Transfer to Revolut Digital Assets Europe Ltd,-2.00,0.00,EUR,COMPLETED,86.40
+Card Payment,Current,2025-12-30 17:04:16,2026-01-02 09:53:43,Oseth,-5.80,0.00,EUR,COMPLETED,80.60
+Card Payment,Current,2026-01-01 10:50:54,2026-01-02 10:12:24,Fleur,-9.32,0.00,EUR,COMPLETED,71.28
+Deposit,Current,2026-01-02 13:41:11,2026-01-02 13:41:13,Apple Pay deposit by *4555,400.00,0.00,EUR,COMPLETED,471.28
+Exchange,Current,2026-01-02 13:41:51,2026-01-02 13:41:51,Transfer to Revolut Digital Assets Europe Ltd,-2.00,0.00,EUR,COMPLETED,469.28
+Transfer,Current,2026-01-02 13:42:43,2026-01-02 13:42:44,Transfer from NIKOLAOS GIANNOPOULOS,15.00,0.00,EUR,COMPLETED,484.28
+Transfer,Current,2026-01-02 13:42:47,2026-01-02 13:42:47,Transfer from KONSTANTINOS VERGOPOULOS,15.00,0.00,EUR,COMPLETED,499.28
+Card Payment,Current,2025-12-31 20:48:06,2026-01-03 10:24:35,Google,-1.99,0.00,EUR,COMPLETED,497.29
+Card Payment,Current,2026-01-02 08:56:00,2026-01-03 10:44:13,Saridou Niki,-15.00,0.00,EUR,COMPLETED,482.29
+Transfer,Current,2026-01-03 11:44:43,2026-01-03 11:44:44,Transfer from NIKOLAOS KOTSAKIACHIDIS,1.00,0.00,EUR,COMPLETED,483.29
+Exchange,Current,2026-01-03 13:40:26,2026-01-03 13:40:26,Transfer to Revolut Digital Assets Europe Ltd,-2.00,0.00,EUR,COMPLETED,481.29
+Transfer,Current,2026-01-03 13:58:16,2026-01-03 13:58:16,Pocket Withdrawal,17.00,0.00,EUR,COMPLETED,498.29
+Transfer,Current,2026-01-03 22:43:02,2026-01-03 22:43:03,Transfer to PETROS POLYCHRONIS,-33.00,0.00,EUR,COMPLETED,465.29
+Transfer,Current,2026-01-04 22:12:25,2026-01-04 22:12:26,Transfer to AIMILIANOS KOTSAKIACHIDIS,-2.00,0.00,EUR,COMPLETED,463.29
+Exchange,Current,2026-01-05 07:25:28,2026-01-05 07:25:28,Transfer to Revolut Digital Assets Europe Ltd,-2.00,0.00,EUR,COMPLETED,461.29
+Exchange,Current,2026-01-05 09:03:51,2026-01-05 09:03:51,Transfer to Revolut Digital Assets Europe Ltd,-1.40,0.00,EUR,COMPLETED,459.89
+Card Payment,Current,2026-01-03 13:40:26,2026-01-05 10:47:02,2nd Floor,-18.00,0.00,EUR,COMPLETED,441.89
+Card Payment,Current,2025-12-31 17:56:42,2026-01-05 11:31:24,McDonald's,-9.25,0.00,EUR,COMPLETED,432.64
+Card Payment,Current,2025-12-31 17:57:05,2026-01-05 11:31:24,McDonald's,-11.00,0.00,EUR,COMPLETED,421.64
+Exchange,Current,2026-01-05 13:55:25,2026-01-05 13:55:25,Transfer to Revolut Digital Assets Europe Ltd,-0.02,0.00,EUR,COMPLETED,421.62
+Exchange,Current,2026-01-05 19:19:42,2026-01-05 19:19:42,Transfer to Revolut Digital Assets Europe Ltd,-1.00,0.00,EUR,COMPLETED,420.62
+Card Payment,Current,2026-01-05 13:55:24,2026-01-06 10:44:41,PlayStation,-8.99,0.00,EUR,COMPLETED,411.63
+Card Payment,Current,2026-01-05 19:19:41,2026-01-06 12:23:40,Pan Orama Delicatess,-2.50,0.00,EUR,COMPLETED,409.13
+Card Payment,Current,2026-01-05 07:25:28,2026-01-07 10:51:02,PLATON IDIOTIKO POLYATREIO IATRIKI S.A.,-4.00,0.00,EUR,COMPLETED,405.13
+Card Payment,Current,2026-01-02 13:41:50,2026-01-07 12:00:41,Bahamas Brunch Bar,-46.00,0.00,EUR,COMPLETED,359.13
+Exchange,Current,2026-01-07 18:08:58,2026-01-07 18:08:58,Transfer to Revolut Digital Assets Europe Ltd,-1.42,0.00,EUR,COMPLETED,357.71
+Exchange,Current,2026-01-08 09:16:12,2026-01-08 09:16:12,Transfer to Revolut Digital Assets Europe Ltd,-1.72,0.00,EUR,COMPLETED,355.99
+Card Payment,Current,2026-01-05 09:03:51,2026-01-08 10:26:51,Paradosiako,-8.30,0.00,EUR,COMPLETED,347.69
+Exchange,Current,2026-01-08 16:39:55,2026-01-08 16:39:55,Transfer to Revolut Digital Assets Europe Ltd,-1.00,0.00,EUR,COMPLETED,346.69
+Exchange,Current,2026-01-08 16:42:34,2026-01-08 16:42:34,Transfer to Revolut Digital Assets Europe Ltd,-2.00,0.00,EUR,COMPLETED,344.69
+Exchange,Current,2026-01-08 18:46:12,2026-01-08 18:46:12,Transfer to Revolut Digital Assets Europe Ltd,-1.00,0.00,EUR,COMPLETED,343.69
+Transfer,Current,2026-01-08 22:07:22,2026-01-08 22:07:22,Transfer from Revolut user,9.50,0.00,EUR,COMPLETED,353.19
+Transfer,Current,2026-01-09 08:52:13,2026-01-09 08:52:14,Transfer to Revolut user,-100.00,0.00,EUR,COMPLETED,253.19
+Card Payment,Current,2026-01-07 18:08:58,2026-01-09 12:59:43,efood,-15.29,0.00,EUR,COMPLETED,237.90
+Card Payment,Current,2026-01-08 18:46:12,2026-01-09 13:28:06,Village Cinemas,-28.50,0.00,EUR,COMPLETED,209.40
+Exchange,Current,2026-01-09 17:11:38,2026-01-09 17:11:38,Transfer to Revolut Digital Assets Europe Ltd,-1.00,0.00,EUR,COMPLETED,208.40
+Exchange,Current,2026-01-09 17:13:47,2026-01-09 17:13:47,Transfer to Revolut Digital Assets Europe Ltd,-2.00,0.00,EUR,COMPLETED,206.40
+Card Payment,Current,2026-01-08 09:16:12,2026-01-09 18:18:33,efood,-17.14,0.00,EUR,COMPLETED,189.26
+Exchange,Current,2026-01-12 04:52:56,2026-01-12 04:52:56,Transfer to Revolut Digital Assets Europe Ltd,-0.02,0.00,EUR,COMPLETED,189.24
+Card Payment,Current,2026-01-08 16:39:54,2026-01-12 12:42:49,e-Parabolo,-0.50,0.00,EUR,COMPLETED,188.74
+Card Payment,Current,2026-01-08 16:42:33,2026-01-12 12:42:49,e-Parabolo,-10.00,0.00,EUR,COMPLETED,178.74
+Card Payment,Current,2026-01-12 04:52:56,2026-01-12 15:19:30,Apple,-2.99,0.00,EUR,COMPLETED,175.75
+Exchange,Current,2026-01-13 11:41:59,2026-01-13 11:41:59,Transfer to Revolut Digital Assets Europe Ltd,-0.60,0.00,EUR,COMPLETED,175.15
+Card Payment,Current,2026-01-09 17:11:38,2026-01-13 13:07:31,e-Parabolo,-0.50,0.00,EUR,COMPLETED,174.65
+Card Payment,Current,2026-01-09 17:13:46,2026-01-13 13:07:32,e-Parabolo,-10.00,0.00,EUR,COMPLETED,164.65
+Card Payment,Current,2026-01-13 11:41:59,2026-01-14 11:06:23,Anne&Max,-8.70,0.00,EUR,COMPLETED,155.95
+Exchange,Current,2026-01-14 16:37:15,2026-01-14 16:37:15,Transfer to Revolut Digital Assets Europe Ltd,-1.10,0.00,EUR,COMPLETED,154.85
+Exchange,Current,2026-01-15 12:07:13,2026-01-15 12:07:13,Transfer to Revolut Digital Assets Europe Ltd,-1.60,0.00,EUR,COMPLETED,153.25
+Card Payment,Current,2026-01-14 16:37:14,2026-01-15 12:08:04,Starbucks,-4.45,0.00,EUR,COMPLETED,148.80
+Card Payment,Current,2026-01-15 12:07:13,2026-01-16 09:42:58,Bakkerij Wolf Wolvenstr,-13.20,0.00,EUR,COMPLETED,135.60
+Card Payment,Current,2026-01-17 09:49:31,,Jumbo,-47.75,0.00,EUR,PENDING,
+Exchange,Current,2026-01-17 09:49:31,2026-01-17 09:49:31,Transfer to Revolut Digital Assets Europe Ltd,-0.50,0.00,EUR,COMPLETED,135.10
+Transfer,Savings,2025-09-05 08:14:36,2025-09-05 08:14:37,Transfer from ALIKI DESPOINA ATHANASIADOU,3.00,0.00,EUR,COMPLETED,312.17
+Transfer,Savings,2025-09-06 09:46:22,2025-09-06 09:46:22,Transfer from ALIKI DESPOINA ATHANASIADOU,4.75,0.00,EUR,COMPLETED,316.92
+Transfer,Savings,2025-09-07 18:48:59,2025-09-07 18:49:00,Transfer from ALIKI DESPOINA ATHANASIADOU,0.05,0.00,EUR,COMPLETED,316.97
+Transfer,Savings,2025-09-08 13:35:52,2025-09-08 13:35:56,Transfer from ALIKI DESPOINA ATHANASIADOU,0.70,0.00,EUR,COMPLETED,317.67
+Transfer,Savings,2025-09-09 08:01:51,2025-09-09 08:01:51,Transfer from ALIKI DESPOINA ATHANASIADOU,3.50,0.00,EUR,COMPLETED,321.17
+Transfer,Savings,2025-09-09 12:18:16,2025-09-09 12:18:17,Transfer from ALIKI DESPOINA ATHANASIADOU,1.50,0.00,EUR,COMPLETED,322.67
+Transfer,Savings,2025-09-09 17:07:44,2025-09-09 17:07:45,Transfer from ALIKI DESPOINA ATHANASIADOU,5.00,0.00,EUR,COMPLETED,327.67
+Transfer,Savings,2025-09-09 18:33:23,2025-09-09 18:33:23,Transfer from ALIKI DESPOINA ATHANASIADOU,1.75,0.00,EUR,COMPLETED,329.42
+Transfer,Savings,2025-09-09 20:25:20,2025-09-09 20:25:21,Transfer from ALIKI DESPOINA ATHANASIADOU,1.25,0.00,EUR,COMPLETED,330.67
+Transfer,Savings,2025-09-09 20:49:20,2025-09-09 20:49:20,Transfer from ALIKI DESPOINA ATHANASIADOU,0.75,0.00,EUR,COMPLETED,331.42
+Transfer,Savings,2025-09-10 08:24:47,2025-09-10 08:24:47,Transfer from ALIKI DESPOINA ATHANASIADOU,1.00,0.00,EUR,COMPLETED,332.42
+Transfer,Savings,2025-09-10 12:34:05,2025-09-10 12:34:06,Transfer from ALIKI DESPOINA ATHANASIADOU,2.50,0.00,EUR,COMPLETED,334.92
+Transfer,Savings,2025-09-10 13:46:54,2025-09-10 13:46:54,Transfer from ALIKI DESPOINA ATHANASIADOU,2.30,0.00,EUR,COMPLETED,337.22
+Transfer,Savings,2025-09-10 16:01:04,2025-09-10 16:01:05,Transfer from ALIKI DESPOINA ATHANASIADOU,5.00,0.00,EUR,COMPLETED,342.22
+Transfer,Savings,2025-09-10 16:05:41,2025-09-10 16:05:42,Transfer from ALIKI DESPOINA ATHANASIADOU,1.00,0.00,EUR,COMPLETED,343.22
+Transfer,Savings,2025-09-10 18:53:32,2025-09-10 18:53:33,Transfer from ALIKI DESPOINA ATHANASIADOU,0.50,0.00,EUR,COMPLETED,343.72
+Transfer,Savings,2025-09-10 19:26:03,2025-09-10 19:26:04,Transfer from ALIKI DESPOINA ATHANASIADOU,2.00,0.00,EUR,COMPLETED,345.72
+Transfer,Savings,2025-09-11 08:27:53,2025-09-11 08:27:54,Transfer from ALIKI DESPOINA ATHANASIADOU,0.50,0.00,EUR,COMPLETED,346.22
+Transfer,Savings,2025-09-11 08:47:57,2025-09-11 08:47:58,Transfer from ALIKI DESPOINA ATHANASIADOU,0.50,0.00,EUR,COMPLETED,346.72
+Transfer,Savings,2025-09-11 12:45:09,2025-09-11 12:45:09,Transfer from ALIKI DESPOINA ATHANASIADOU,0.50,0.00,EUR,COMPLETED,347.22
+Transfer,Savings,2025-09-11 18:47:44,2025-09-11 18:47:44,Transfer from ALIKI DESPOINA ATHANASIADOU,0.50,0.00,EUR,COMPLETED,347.72
+Transfer,Savings,2025-09-11 20:48:29,2025-09-11 20:48:29,Transfer from ALIKI DESPOINA ATHANASIADOU,3.50,0.00,EUR,COMPLETED,351.22
+Transfer,Savings,2025-09-12 07:22:09,2025-09-12 07:22:10,Transfer from ALIKI DESPOINA ATHANASIADOU,4.45,0.00,EUR,COMPLETED,355.67
+Transfer,Savings,2025-09-12 07:33:17,2025-09-12 07:33:17,Transfer from ALIKI DESPOINA ATHANASIADOU,1.30,0.00,EUR,COMPLETED,356.97
+Transfer,Savings,2025-09-12 10:40:41,2025-09-12 10:40:41,Transfer from ALIKI DESPOINA ATHANASIADOU,2.50,0.00,EUR,COMPLETED,359.47
+Transfer,Savings,2025-09-12 12:01:00,2025-09-12 12:01:01,Transfer from ALIKI DESPOINA ATHANASIADOU,1.50,0.00,EUR,COMPLETED,360.97
+Transfer,Savings,2025-09-12 13:53:05,2025-09-12 13:53:05,Transfer from ALIKI DESPOINA ATHANASIADOU,5.00,0.00,EUR,COMPLETED,365.97
+Transfer,Savings,2025-09-12 20:44:20,2025-09-12 20:44:21,Transfer from ALIKI DESPOINA ATHANASIADOU,2.90,0.00,EUR,COMPLETED,368.87
+Transfer,Savings,2025-09-13 17:06:20,2025-09-13 17:06:21,Transfer from ALIKI DESPOINA ATHANASIADOU,0.05,0.00,EUR,COMPLETED,368.92
+Transfer,Savings,2025-09-13 17:51:49,2025-09-13 17:51:49,Transfer from ALIKI DESPOINA ATHANASIADOU,5.00,0.00,EUR,COMPLETED,373.92
+Transfer,Savings,2025-09-14 08:54:10,2025-09-14 08:54:11,Transfer from ALIKI DESPOINA ATHANASIADOU,5.00,0.00,EUR,COMPLETED,378.92
+Transfer,Savings,2025-09-14 17:03:01,2025-09-14 17:03:02,Transfer from ALIKI DESPOINA ATHANASIADOU,0.05,0.00,EUR,COMPLETED,378.97
+Transfer,Savings,2025-09-17 18:16:25,2025-09-17 18:16:25,Transfer from ALIKI DESPOINA ATHANASIADOU,3.05,0.00,EUR,COMPLETED,382.02
+Transfer,Savings,2025-09-20 14:18:10,2025-09-20 14:18:10,Transfer from ALIKI DESPOINA ATHANASIADOU,0.50,0.00,EUR,COMPLETED,382.52
+Transfer,Savings,2025-09-20 14:25:51,2025-09-20 14:25:51,Transfer from ALIKI DESPOINA ATHANASIADOU,1.15,0.00,EUR,COMPLETED,383.67
+Transfer,Savings,2025-09-20 14:27:19,2025-09-20 14:27:20,Transfer from ALIKI DESPOINA ATHANASIADOU,1.25,0.00,EUR,COMPLETED,384.92
+Transfer,Savings,2025-09-21 16:02:21,2025-09-21 16:02:22,Transfer from ALIKI DESPOINA ATHANASIADOU,5.00,0.00,EUR,COMPLETED,389.92
+Transfer,Savings,2025-09-21 19:11:11,2025-09-21 19:11:11,Transfer from ALIKI DESPOINA ATHANASIADOU,1.80,0.00,EUR,COMPLETED,391.72
+Transfer,Savings,2025-09-26 18:26:00,2025-09-26 18:26:01,Transfer from ALIKI DESPOINA ATHANASIADOU,250.00,0.00,EUR,COMPLETED,641.72
+Transfer,Savings,2025-09-26 23:13:58,2025-09-26 23:13:58,Transfer from ALIKI DESPOINA ATHANASIADOU,0.25,0.00,EUR,COMPLETED,641.97
+Transfer,Savings,2025-09-27 03:44:36,2025-09-27 03:44:36,Transfer from ALIKI DESPOINA ATHANASIADOU,4.05,0.00,EUR,COMPLETED,646.02
+Transfer,Savings,2025-09-28 08:37:29,2025-09-28 08:37:30,Transfer from ALIKI DESPOINA ATHANASIADOU,3.50,0.00,EUR,COMPLETED,649.52
+Transfer,Savings,2025-09-28 09:04:15,2025-09-28 09:04:15,Transfer to ALIKI DESPOINA ATHANASIADOU,-612.90,0.00,EUR,COMPLETED,36.62
+Transfer,Savings,2025-10-09 17:29:40,2025-10-09 17:29:40,Transfer from ALIKI DESPOINA ATHANASIADOU,180.00,0.00,EUR,COMPLETED,216.62
+Transfer,Savings,2025-10-16 10:53:33,2025-10-16 10:53:33,Pocket Withdrawal,-36.62,0.00,EUR,COMPLETED,180.00
+Transfer,Savings,2025-10-16 10:53:33,2025-10-16 10:53:33,Closing transaction,0.00,0.00,EUR,COMPLETED,180.00
+Transfer,Savings,2025-11-21 20:13:34,2025-11-21 20:13:35,Transfer to ALIKI DESPOINA ATHANASIADOU,-180.00,0.00,EUR,COMPLETED,0.00
+Transfer,Savings,2025-12-18 13:09:01,2025-12-18 13:09:01,Transfer from ALIKI DESPOINA ATHANASIADOU,500.00,0.00,EUR,COMPLETED,500.00
+Transfer,Savings,2025-12-24 12:01:31,2025-12-24 12:01:31,To pocket EUR ChatGPT from EUR,70.00,0.00,EUR,COMPLETED,570.00
+Card Payment,Savings,2025-12-29 15:36:12,2025-12-30 11:52:40,EasyJet,-53.00,0.00,EUR,COMPLETED,517.00
+Transfer,Savings,2026-01-03 13:58:16,2026-01-03 13:58:16,Pocket Withdrawal,-17.00,0.00,EUR,COMPLETED,500.00
+Transfer,Savings,2026-01-03 13:58:35,2026-01-03 13:58:35,Closing transaction,0.00,0.00,EUR,COMPLETED,500.00
+Transfer,Savings,2026-01-16 20:43:25,2026-01-16 20:43:25,Transfer to ALIKI DESPOINA ATHANASIADOU,-500.00,0.00,EUR,COMPLETED,0.00
+Transfer,Deposit,2025-12-20 20:22:39,2025-12-20 20:22:40,To Instant Access Savings,8500.00,0.00,EUR,COMPLETED,8500.00
+Interest,Deposit,2025-12-21 02:40:37,2025-12-21 02:40:37,Interest earned - Instant Access Savings,0.34,0.00,EUR,COMPLETED,8500.34
+Interest,Deposit,2025-12-22 02:24:13,2025-12-22 02:24:13,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8500.69
+Interest,Deposit,2025-12-23 02:35:34,2025-12-23 02:35:34,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8501.04
+Interest,Deposit,2025-12-24 02:29:21,2025-12-24 02:29:21,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8501.39
+Interest,Deposit,2025-12-25 02:35:27,2025-12-25 02:35:27,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8501.74
+Interest,Deposit,2025-12-26 02:36:10,2025-12-26 02:36:10,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8502.09
+Interest,Deposit,2025-12-27 02:38:58,2025-12-27 02:38:58,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8502.44
+Interest,Deposit,2025-12-28 02:49:37,2025-12-28 02:49:37,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8502.79
+Interest,Deposit,2025-12-29 03:01:08,2025-12-29 03:01:08,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8503.14
+Interest,Deposit,2025-12-30 02:52:31,2025-12-30 02:52:31,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8503.49
+Interest,Deposit,2025-12-31 02:50:23,2025-12-31 02:50:23,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8503.84
+Interest,Deposit,2026-01-01 02:41:18,2026-01-01 02:41:18,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8504.19
+Interest,Deposit,2026-01-02 02:36:18,2026-01-02 02:36:18,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8504.54
+Interest,Deposit,2026-01-03 03:04:07,2026-01-03 03:04:07,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8504.89
+Interest,Deposit,2026-01-04 02:40:33,2026-01-04 02:40:33,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8505.24
+Interest,Deposit,2026-01-05 02:43:49,2026-01-05 02:43:49,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8505.59
+Interest,Deposit,2026-01-06 02:31:25,2026-01-06 02:31:25,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8505.94
+Interest,Deposit,2026-01-07 02:56:32,2026-01-07 02:56:32,Interest earned - Instant Access Savings,0.34,0.00,EUR,COMPLETED,8506.28
+Interest,Deposit,2026-01-08 02:53:28,2026-01-08 02:53:28,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8506.63
+Interest,Deposit,2026-01-09 03:02:45,2026-01-09 03:02:45,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8506.98
+Interest,Deposit,2026-01-10 02:28:56,2026-01-10 02:28:56,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8507.33
+Interest,Deposit,2026-01-11 02:53:17,2026-01-11 02:53:17,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8507.68
+Interest,Deposit,2026-01-12 02:43:47,2026-01-12 02:43:47,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8508.03
+Interest,Deposit,2026-01-13 02:56:20,2026-01-13 02:56:20,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8508.38
+Interest,Deposit,2026-01-14 02:51:07,2026-01-14 02:51:07,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8508.73
+Interest,Deposit,2026-01-15 02:36:40,2026-01-15 02:36:40,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8509.08
+Interest,Deposit,2026-01-16 02:40:14,2026-01-16 02:40:14,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8509.43
+Interest,Deposit,2026-01-17 02:41:27,2026-01-17 02:41:27,Interest earned - Instant Access Savings,0.35,0.00,EUR,COMPLETED,8509.78

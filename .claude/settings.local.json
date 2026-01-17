@@ -14,7 +14,8 @@
       "Bash(ls:*)",
       "mcp__midday-docs__fetch_midday_documentation",
       "mcp__midday-docs__search_midday_code",
-      "mcp__midday-docs__fetch_generic_url_content"
+      "mcp__midday-docs__fetch_generic_url_content",
+      "WebSearch"
     ]
   }
 }

@@ -20,14 +20,22 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import type { MockTransaction } from "@/lib/mock-data";
-import { mockCategories, type MockCategory } from "@/lib/mock-data";
+import type { TransactionWithRelations } from "@/lib/actions/transactions";
+import { updateTransactionCategory } from "@/lib/actions/transactions";
+
+interface Category {
+  id: string;
+  name: string;
+  color: string | null;
+  icon: string | null;
+}
 
 interface TransactionSheetProps {
-  transaction: MockTransaction | null;
+  transaction: TransactionWithRelations | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onUpdateTransaction?: (id: string, updates: Partial<MockTransaction>) => void;
+  onUpdateTransaction?: (id: string, updates: Partial<TransactionWithRelations>) => void;
+  categories?: Category[];
 }
 
 function formatDate(date: Date): string {
@@ -54,59 +62,63 @@ export function TransactionSheet({
   open,
   onOpenChange,
   onUpdateTransaction,
+  categories = [],
 }: TransactionSheetProps) {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [instructions, setInstructions] = useState<string>("");
   const [hasChanges, setHasChanges] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Reset state when transaction changes
   useEffect(() => {
     if (transaction) {
       setSelectedCategoryId(transaction.categoryId);
-      setInstructions(transaction.categorizationInstructions || "");
+      setInstructions("");
       setHasChanges(false);
     }
   }, [transaction]);
 
-  const handleCategoryChange = (value: string) => {
+  const handleCategoryChange = (value: string | null) => {
+    if (!value) return;
     const newCategoryId = value === "uncategorized" ? null : value;
     setSelectedCategoryId(newCategoryId);
-    setHasChanges(
-      newCategoryId !== transaction?.categoryId ||
-        instructions !== (transaction?.categorizationInstructions || "")
-    );
+    setHasChanges(newCategoryId !== transaction?.categoryId);
   };
 
   const handleInstructionsChange = (value: string) => {
     setInstructions(value);
-    setHasChanges(
-      selectedCategoryId !== transaction?.categoryId ||
-        value !== (transaction?.categorizationInstructions || "")
-    );
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!transaction || !hasChanges) return;
 
-    const newCategory = selectedCategoryId
-      ? mockCategories.find((cat) => cat.id === selectedCategoryId) || null
-      : null;
+    setIsSaving(true);
+    try {
+      const result = await updateTransactionCategory(transaction.id, selectedCategoryId);
 
-    onUpdateTransaction?.(transaction.id, {
-      categoryId: selectedCategoryId,
-      category: newCategory,
-      categorizationInstructions: instructions || null,
-    });
+      if (result.success) {
+        const newCategory = selectedCategoryId
+          ? categories.find((cat) => cat.id === selectedCategoryId) || null
+          : null;
 
-    setHasChanges(false);
+        onUpdateTransaction?.(transaction.id, {
+          categoryId: selectedCategoryId,
+          category: newCategory,
+        });
+
+        setHasChanges(false);
+      }
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (!transaction) return null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="sm:max-w-md overflow-y-auto">
-        <SheetHeader className="space-y-1">
+      <SheetContent side="right" className="sm:max-w-md overflow-y-auto px-2.5">
+        <SheetHeader className="space-y-1 p-0 pt-4">
           <SheetDescription className="text-muted-foreground">
             {formatDate(transaction.bookedAt)}
           </SheetDescription>
@@ -119,7 +131,7 @@ export function TransactionSheet({
               transaction.amount > 0 && "text-[#22C55E]"
             )}
           >
-            {formatAmount(transaction.amount, transaction.currency)}
+            {formatAmount(transaction.amount, transaction.currency || "EUR")}
           </div>
         </SheetHeader>
 
@@ -141,12 +153,12 @@ export function TransactionSheet({
                         className="h-3 w-3 shrink-0"
                         style={{
                           backgroundColor:
-                            mockCategories.find((c) => c.id === selectedCategoryId)?.color ||
+                            categories.find((c) => c.id === selectedCategoryId)?.color ||
                             "#A1A1AA",
                         }}
                       />
                       <span>
-                        {mockCategories.find((c) => c.id === selectedCategoryId)?.name ||
+                        {categories.find((c) => c.id === selectedCategoryId)?.name ||
                           "Unknown"}
                       </span>
                     </div>
@@ -165,12 +177,12 @@ export function TransactionSheet({
                     <span>Uncategorized</span>
                   </div>
                 </SelectItem>
-                {mockCategories.map((category) => (
+                {categories.map((category) => (
                   <SelectItem key={category.id} value={category.id}>
                     <div className="flex items-center gap-2">
                       <div
                         className="h-3 w-3 shrink-0"
-                        style={{ backgroundColor: category.color }}
+                        style={{ backgroundColor: category.color || "#A1A1AA" }}
                       />
                       <span>{category.name}</span>
                     </div>
@@ -206,9 +218,6 @@ export function TransactionSheet({
               onChange={(e) => handleInstructionsChange(e.target.value)}
               className="min-h-[100px] resize-none"
             />
-            <p className="text-xs text-muted-foreground">
-              These instructions will help the AI categorize similar transactions automatically.
-            </p>
           </div>
 
           <Separator />
@@ -242,10 +251,10 @@ export function TransactionSheet({
         <div className="mt-6 pt-4 border-t">
           <Button
             onClick={handleSave}
-            disabled={!hasChanges}
+            disabled={!hasChanges || isSaving}
             className="w-full"
           >
-            Save Changes
+            {isSaving ? "Saving..." : "Save Changes"}
           </Button>
         </div>
       </SheetContent>
