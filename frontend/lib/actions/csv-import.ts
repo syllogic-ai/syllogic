@@ -459,10 +459,51 @@ export async function previewImportedTransactions(
   }
 }
 
+// Backend API transaction import item (snake_case format)
+interface BackendTransactionImportItem {
+  account_id: string;
+  amount: number;
+  description: string | null;
+  merchant: string | null;
+  booked_at: string; // ISO datetime string
+  transaction_type: "credit" | "debit";
+  currency: string;
+  external_id: string | null;
+}
+
+// Backend API request format
+interface BackendTransactionImportRequest {
+  transactions: BackendTransactionImportItem[];
+  user_id: string;
+  sync_exchange_rates: boolean;
+  update_functional_amounts: boolean;
+  calculate_balances: boolean;
+}
+
+// Backend API response format
+interface BackendTransactionImportResponse {
+  success: boolean;
+  message: string;
+  transactions_inserted: number;
+  transaction_ids: string[] | null;
+  categorization_summary: {
+    total: number;
+    categorized: number;
+    deterministic: number;
+    llm: number;
+    uncategorized: number;
+    tokens_used: number;
+    cost_usd: number;
+  } | null;
+  exchange_rates_synced: Record<string, unknown> | null;
+  functional_amounts_updated: Record<string, unknown> | null;
+  balances_calculated: Record<string, unknown> | null;
+}
+
 export async function finalizeImport(
   importId: string,
   selectedIndices: number[]
-): Promise<{ success: boolean; error?: string; importedCount?: number }> {
+): Promise<{ success: boolean; error?: string; importedCount?: number; categorizationSummary?: BackendTransactionImportResponse["categorization_summary"] }> {
   const session = await auth.api.getSession({
     headers: await headers(),
   });
@@ -504,20 +545,51 @@ export async function finalizeImport(
       selectedIndices.includes(tx.rowIndex)
     );
 
-    // Insert transactions
-    const transactionsToInsert: NewTransaction[] = selectedTransactions.map((tx) => ({
-      userId: session.user.id,
-      accountId: importSession.accountId,
-      amount: tx.amount.toString(),
-      description: tx.description,
-      merchant: tx.merchant,
-      bookedAt: new Date(tx.date),
-      transactionType: tx.transactionType,
+    if (selectedTransactions.length === 0) {
+      return { success: true, importedCount: 0 };
+    }
+
+    // Transform transactions to backend format (snake_case)
+    const backendTransactions: BackendTransactionImportItem[] = selectedTransactions.map((tx) => ({
+      account_id: importSession.accountId,
+      amount: tx.amount,
+      description: tx.description || null,
+      merchant: tx.merchant || null,
+      booked_at: new Date(tx.date).toISOString(),
+      transaction_type: tx.transactionType,
       currency: account.currency || "EUR",
+      external_id: null,
     }));
 
-    if (transactionsToInsert.length > 0) {
-      await db.insert(transactions).values(transactionsToInsert);
+    // Build the backend request
+    const backendRequest: BackendTransactionImportRequest = {
+      transactions: backendTransactions,
+      user_id: session.user.id,
+      sync_exchange_rates: true,
+      update_functional_amounts: true,
+      calculate_balances: true,
+    };
+
+    // Call backend API
+    const backendUrl = process.env.BACKEND_API_URL || "http://localhost:8000";
+    const response = await fetch(`${backendUrl}/api/transactions/import`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(backendRequest),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Backend import failed:", response.status, errorText);
+      return { success: false, error: `Backend import failed: ${response.status} - ${errorText}` };
+    }
+
+    const backendResponse: BackendTransactionImportResponse = await response.json();
+
+    if (!backendResponse.success) {
+      return { success: false, error: backendResponse.message };
     }
 
     // Update import session
@@ -525,16 +597,20 @@ export async function finalizeImport(
       .update(csvImports)
       .set({
         status: "completed",
-        importedRows: selectedTransactions.length,
+        importedRows: backendResponse.transactions_inserted,
         completedAt: new Date(),
       })
       .where(eq(csvImports.id, importId));
 
     revalidatePath("/transactions");
-    return { success: true, importedCount: selectedTransactions.length };
+    return {
+      success: true,
+      importedCount: backendResponse.transactions_inserted,
+      categorizationSummary: backendResponse.categorization_summary,
+    };
   } catch (error) {
     console.error("Failed to finalize import:", error);
-    return { success: false, error: "Failed to import transactions" };
+    return { success: false, error: error instanceof Error ? error.message : "Failed to import transactions" };
   }
 }
 
