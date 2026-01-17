@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import {
   RiPriceTag3Line,
   RiDownloadLine,
   RiCloseLine,
   RiDeleteBinLine,
+  RiSearchLine,
 } from "@remixicon/react";
 import { Dock, DockIcon } from "@/components/ui/dock";
 import {
@@ -21,7 +22,7 @@ import {
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
 import { bulkUpdateTransactionCategory } from "@/lib/actions/transactions";
 import { exportTransactionsToCSV } from "@/lib/utils/csv-export";
 import type { CategoryDisplay } from "@/types";
@@ -46,6 +47,14 @@ export function BulkActionsDock({
 }: BulkActionsDockProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [categoryPopoverOpen, setCategoryPopoverOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredCategories = useMemo(() => {
+    if (!searchQuery.trim()) return categories;
+    return categories.filter((cat) =>
+      cat.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [categories, searchQuery]);
 
   if (selectedCount === 0) {
     return null;
@@ -100,67 +109,82 @@ export function BulkActionsDock({
         <Separator orientation="vertical" className="h-8" />
 
         {/* Categorize */}
-        <Popover open={categoryPopoverOpen} onOpenChange={setCategoryPopoverOpen}>
-          <Tooltip>
-            <PopoverTrigger>
-              <TooltipTrigger>
-                <DockIcon className="bg-muted hover:bg-muted/80">
-                  <RiPriceTag3Line className="size-5" />
-                </DockIcon>
-              </TooltipTrigger>
-            </PopoverTrigger>
-            <TooltipContent side="top" sideOffset={8}>
-              <p>Categorize</p>
-            </TooltipContent>
-          </Tooltip>
+        <Popover
+          open={categoryPopoverOpen}
+          onOpenChange={(open) => {
+            setCategoryPopoverOpen(open);
+            if (!open) setSearchQuery("");
+          }}
+        >
+          <PopoverTrigger
+            nativeButton={false}
+            render={<DockIcon className="bg-muted hover:bg-muted/80" />}
+          >
+            <RiPriceTag3Line className="size-5" />
+          </PopoverTrigger>
           <PopoverContent className="w-56 p-0" align="center" side="top" sideOffset={12}>
-            <div className="p-2 border-b">
+            <div className="p-2 border-b space-y-2">
               <p className="text-xs font-medium text-muted-foreground">
                 Select category
               </p>
+              <div className="relative">
+                <RiSearchLine className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-8 pl-8 text-sm"
+                />
+              </div>
             </div>
-            <ScrollArea className="max-h-64">
-              <div className="p-1">
+            <div className="max-h-48 overflow-y-auto p-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start text-muted-foreground"
+                onClick={() => handleCategorize(null)}
+                disabled={isLoading}
+              >
+                <RiDeleteBinLine className="mr-2 h-4 w-4" />
+                Remove category
+              </Button>
+              {filteredCategories.map((category) => (
                 <Button
+                  key={category.id}
                   variant="ghost"
                   size="sm"
-                  className="w-full justify-start text-muted-foreground"
-                  onClick={() => handleCategorize(null)}
+                  className="w-full justify-start"
+                  onClick={() => handleCategorize(category.id)}
                   disabled={isLoading}
                 >
-                  <RiDeleteBinLine className="mr-2 h-4 w-4" />
-                  Remove category
+                  <div
+                    className="mr-2 h-3 w-3 rounded-full shrink-0"
+                    style={{ backgroundColor: category.color || "#666" }}
+                  />
+                  <span className="truncate">{category.name}</span>
                 </Button>
-                {categories.map((category) => (
-                  <Button
-                    key={category.id}
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-start"
-                    onClick={() => handleCategorize(category.id)}
-                    disabled={isLoading}
-                  >
-                    <div
-                      className="mr-2 h-3 w-3 rounded-full shrink-0"
-                      style={{ backgroundColor: category.color || "#666" }}
-                    />
-                    <span className="truncate">{category.name}</span>
-                  </Button>
-                ))}
-              </div>
-            </ScrollArea>
+              ))}
+              {filteredCategories.length === 0 && searchQuery && (
+                <p className="text-xs text-muted-foreground text-center py-2">
+                  No categories found
+                </p>
+              )}
+            </div>
           </PopoverContent>
         </Popover>
 
         {/* Export */}
         <Tooltip>
-          <TooltipTrigger>
-            <DockIcon
-              className="bg-muted hover:bg-muted/80"
-              onClick={handleExport}
-            >
-              <RiDownloadLine className="size-5" />
-            </DockIcon>
+          <TooltipTrigger
+            nativeButton={false}
+            render={
+              <DockIcon
+                className="bg-muted hover:bg-muted/80"
+                onClick={handleExport}
+              />
+            }
+          >
+            <RiDownloadLine className="size-5" />
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={8}>
             <p>Export CSV</p>
@@ -171,13 +195,16 @@ export function BulkActionsDock({
 
         {/* Clear selection */}
         <Tooltip>
-          <TooltipTrigger>
-            <DockIcon
-              className="bg-muted hover:bg-destructive/20 hover:text-destructive"
-              onClick={onClearSelection}
-            >
-              <RiCloseLine className="size-5" />
-            </DockIcon>
+          <TooltipTrigger
+            nativeButton={false}
+            render={
+              <DockIcon
+                className="bg-muted hover:bg-destructive/20 hover:text-destructive"
+                onClick={onClearSelection}
+              />
+            }
+          >
+            <RiCloseLine className="size-5" />
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={8}>
             <p>Clear selection</p>
