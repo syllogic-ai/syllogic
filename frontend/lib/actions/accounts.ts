@@ -75,12 +75,12 @@ export async function updateAccount(
         institution: input.institution,
         currency: input.currency,
         startingBalance: input.startingBalance?.toString(),
-        functionalBalance: input.startingBalance?.toString(), // For manual accounts, update both
         updatedAt: new Date(),
       })
       .where(eq(accounts.id, accountId));
 
     revalidatePath("/settings");
+    revalidatePath("/");
     return { success: true };
   } catch (error) {
     console.error("Failed to update account:", error);

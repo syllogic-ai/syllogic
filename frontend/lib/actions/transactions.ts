@@ -67,18 +67,6 @@ export async function createTransaction(
 
     const [result] = await db.insert(transactions).values(newTransaction).returning({ id: transactions.id });
 
-    // Update account balance
-    const balanceChange = input.transactionType === "credit" ? input.amount : -input.amount;
-    const newBalance = parseFloat(account.functionalBalance || "0") + balanceChange;
-
-    await db
-      .update(accounts)
-      .set({
-        functionalBalance: newBalance.toString(),
-        updatedAt: new Date(),
-      })
-      .where(eq(accounts.id, input.accountId));
-
     revalidatePath("/transactions");
     revalidatePath("/");
     return { success: true, transactionId: result.id };

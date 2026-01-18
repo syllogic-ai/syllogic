@@ -1,9 +1,9 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { accounts, transactions, categories, users, properties, vehicles } from "@/lib/db/schema";
+import { accounts, transactions, categories, users, properties, vehicles, accountBalances } from "@/lib/db/schema";
 import { getAuthenticatedSession } from "@/lib/auth-helpers";
-import { eq, sql, gte, lte, and, desc } from "drizzle-orm";
+import { eq, sql, gte, lte, and, desc, inArray } from "drizzle-orm";
 
 async function getUserCurrency(userId: string): Promise<string> {
   const result = await db
@@ -91,18 +91,41 @@ export async function getTotalBalance(accountId?: string) {
     return { total: 0, currency: "EUR" };
   }
 
-  const conditions = [eq(accounts.userId, session.user.id), eq(accounts.isActive, true)];
+  // Get user's active account IDs
+  const accountConditions = [
+    eq(accounts.userId, session.user.id),
+    eq(accounts.isActive, true),
+  ];
   if (accountId) {
-    conditions.push(eq(accounts.id, accountId));
+    accountConditions.push(eq(accounts.id, accountId));
   }
 
+  const userAccounts = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(and(...accountConditions));
+
+  if (userAccounts.length === 0) {
+    const currency = await getUserCurrency(session.user.id);
+    return { total: 0, currency };
+  }
+
+  const accountIds = userAccounts.map(a => a.id);
+
+  // Get the latest balance from account_balances table
   const [result, currency] = await Promise.all([
     db
       .select({
-        total: sql<string>`COALESCE(SUM(${accounts.functionalBalance}), 0)`,
+        total: sql<string>`COALESCE(SUM(${accountBalances.balanceInFunctionalCurrency}), 0)`,
       })
-      .from(accounts)
-      .where(and(...conditions)),
+      .from(accountBalances)
+      .where(and(
+        inArray(accountBalances.accountId, accountIds),
+        eq(accountBalances.date, sql`(
+          SELECT MAX(date) FROM account_balances
+          WHERE account_id = ANY(${accountIds})
+        )`)
+      )),
     getUserCurrency(session.user.id),
   ]);
 
@@ -123,62 +146,45 @@ export async function getBalanceHistory(days: number = 7, referenceDate?: Date, 
   const startDate = new Date(refDate);
   startDate.setDate(startDate.getDate() - days);
 
-  // Build conditions for transactions
-  const txConditions = [
-    eq(transactions.userId, session.user.id),
-    gte(transactions.bookedAt, startDate),
-    lte(transactions.bookedAt, refDate),
+  // Get user's active account IDs
+  const accountConditions = [
+    eq(accounts.userId, session.user.id),
+    eq(accounts.isActive, true),
   ];
-  if (accountId) {
-    txConditions.push(eq(transactions.accountId, accountId));
-  }
-
-  // For balance history, we calculate running balance by summing transactions
-  const result = await db
-    .select({
-      date: sql<string>`DATE(${transactions.bookedAt})`,
-      netChange: sql<string>`COALESCE(SUM(
-        CASE
-          WHEN ${transactions.transactionType} = 'credit' THEN ${transactions.amount}
-          ELSE -ABS(${transactions.amount})
-        END
-      ), 0)`,
-    })
-    .from(transactions)
-    .where(and(...txConditions))
-    .groupBy(sql`DATE(${transactions.bookedAt})`)
-    .orderBy(sql`DATE(${transactions.bookedAt})`);
-
-  // Get current balance to work backwards
-  const accountConditions = [eq(accounts.userId, session.user.id), eq(accounts.isActive, true)];
   if (accountId) {
     accountConditions.push(eq(accounts.id, accountId));
   }
 
-  const balanceResult = await db
-    .select({
-      total: sql<string>`COALESCE(SUM(${accounts.functionalBalance}), 0)`,
-    })
+  const userAccounts = await db
+    .select({ id: accounts.id })
     .from(accounts)
     .where(and(...accountConditions));
 
-  const currentBalance = parseFloat(balanceResult[0]?.total || "0");
-
-  // Calculate cumulative balance for each day
-  let runningBalance = currentBalance;
-  const reversedData = [...result].reverse();
-  const balanceHistory: { date: string; value: number }[] = [];
-
-  // Start from most recent and work backwards
-  for (const row of reversedData) {
-    balanceHistory.unshift({
-      date: row.date,
-      value: runningBalance,
-    });
-    runningBalance -= parseFloat(row.netChange);
+  if (userAccounts.length === 0) {
+    return [];
   }
 
-  return balanceHistory;
+  const accountIds = userAccounts.map(a => a.id);
+
+  // Query account_balances table - sum across accounts per day
+  const result = await db
+    .select({
+      date: sql<string>`DATE(${accountBalances.date})`,
+      value: sql<string>`SUM(${accountBalances.balanceInFunctionalCurrency})`,
+    })
+    .from(accountBalances)
+    .where(and(
+      inArray(accountBalances.accountId, accountIds),
+      gte(accountBalances.date, startDate),
+      lte(accountBalances.date, refDate)
+    ))
+    .groupBy(sql`DATE(${accountBalances.date})`)
+    .orderBy(sql`DATE(${accountBalances.date})`);
+
+  return result.map(row => ({
+    date: row.date,
+    value: parseFloat(row.value || "0"),
+  }));
 }
 
 export async function getMonthlySpending(referenceDate?: Date, accountId?: string) {
