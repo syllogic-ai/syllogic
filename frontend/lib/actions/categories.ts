@@ -1,11 +1,10 @@
 "use server";
 
-import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { categories, type Category, type NewCategory } from "@/lib/db/schema";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 
 export interface CategoryCreateInput {
   name: string;
@@ -27,11 +26,9 @@ export interface CategoryUpdateInput {
 export async function createCategory(
   input: CategoryCreateInput
 ): Promise<{ success: boolean; error?: string; categoryId?: string }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return { success: false, error: "Not authenticated" };
   }
 
@@ -39,7 +36,7 @@ export async function createCategory(
     // Check for duplicate name in the same category type
     const existing = await db.query.categories.findFirst({
       where: and(
-        eq(categories.userId, session.user.id),
+        eq(categories.userId, userId),
         eq(categories.name, input.name.trim()),
         eq(categories.categoryType, input.categoryType)
       ),
@@ -50,7 +47,7 @@ export async function createCategory(
     }
 
     const newCategory: NewCategory = {
-      userId: session.user.id,
+      userId,
       name: input.name.trim(),
       categoryType: input.categoryType,
       color: input.color,
@@ -75,11 +72,9 @@ export async function updateCategory(
   categoryId: string,
   input: CategoryUpdateInput
 ): Promise<{ success: boolean; error?: string }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return { success: false, error: "Not authenticated" };
   }
 
@@ -88,7 +83,7 @@ export async function updateCategory(
     const existing = await db.query.categories.findFirst({
       where: and(
         eq(categories.id, categoryId),
-        eq(categories.userId, session.user.id)
+        eq(categories.userId, userId)
       ),
     });
 
@@ -104,7 +99,7 @@ export async function updateCategory(
     if (input.name && input.name.trim() !== existing.name && existing.categoryType) {
       const duplicate = await db.query.categories.findFirst({
         where: and(
-          eq(categories.userId, session.user.id),
+          eq(categories.userId, userId),
           eq(categories.name, input.name.trim()),
           eq(categories.categoryType, existing.categoryType)
         ),
@@ -140,11 +135,9 @@ export async function updateCategory(
 export async function deleteCategory(
   categoryId: string
 ): Promise<{ success: boolean; error?: string }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return { success: false, error: "Not authenticated" };
   }
 
@@ -153,7 +146,7 @@ export async function deleteCategory(
     const existing = await db.query.categories.findFirst({
       where: and(
         eq(categories.id, categoryId),
-        eq(categories.userId, session.user.id)
+        eq(categories.userId, userId)
       ),
     });
 
@@ -177,34 +170,33 @@ export async function deleteCategory(
 }
 
 export async function getCategories(): Promise<Category[]> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return [];
   }
 
   return db.query.categories.findMany({
-    where: eq(categories.userId, session.user.id),
+    where: eq(categories.userId, userId),
     orderBy: (categories, { asc }) => [asc(categories.name)],
   });
 }
 
+// Alias for backward compatibility
+export const getUserCategories = getCategories;
+
 export async function getCategoriesByType(
   type: "expense" | "income" | "transfer"
 ): Promise<Category[]> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return [];
   }
 
   return db.query.categories.findMany({
     where: and(
-      eq(categories.userId, session.user.id),
+      eq(categories.userId, userId),
       eq(categories.categoryType, type)
     ),
     orderBy: (categories, { asc }) => [asc(categories.name)],

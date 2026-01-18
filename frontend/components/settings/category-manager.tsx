@@ -24,6 +24,7 @@ import {
 } from "@/lib/actions/categories";
 import type { Category } from "@/lib/db/schema";
 import { type CategoryInput } from "@/lib/actions/onboarding";
+import { groupCategoriesByType, getCategoryTypeLabel, type CategoryType } from "@/lib/utils/category-utils";
 
 interface CategoryManagerProps {
   initialCategories: Category[];
@@ -32,25 +33,14 @@ interface CategoryManagerProps {
 export function CategoryManager({ initialCategories }: CategoryManagerProps) {
   const router = useRouter();
   const [categories, setCategories] = useState<Category[]>(initialCategories);
-  const [activeTab, setActiveTab] = useState<"expense" | "income" | "transfer">("expense");
+  const [activeTab, setActiveTab] = useState<CategoryType>("expense");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const expenseCategories = categories.filter((c) => c.categoryType === "expense");
-  const incomeCategories = categories.filter((c) => c.categoryType === "income");
-  const transferCategories = categories.filter((c) => c.categoryType === "transfer");
+  const groupedCategories = groupCategoriesByType(categories);
 
-  const getCategoriesByType = (type: "expense" | "income" | "transfer") => {
-    switch (type) {
-      case "expense":
-        return expenseCategories;
-      case "income":
-        return incomeCategories;
-      case "transfer":
-        return transferCategories;
-    }
-  };
+  const getCategoriesByType = (type: CategoryType) => groupedCategories[type];
 
   const handleEdit = (category: Category) => {
     setEditingCategory(category);
@@ -213,7 +203,7 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
             disabled={isLoading}
           >
             <RiAddLine className="mr-2 h-4 w-4" />
-            Add {categoryType === "expense" ? "Expense" : categoryType === "income" ? "Income" : "Transfer"} Category
+            Add {getCategoryTypeLabel(categoryType)} Category
           </Button>
         </div>
       </div>
@@ -232,27 +222,27 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
         <CardContent>
           <Tabs
             value={activeTab}
-            onValueChange={(v) => setActiveTab(v as "expense" | "income" | "transfer")}
+            onValueChange={(v) => setActiveTab(v as CategoryType)}
           >
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="expense">
-                Expenses ({expenseCategories.length})
+                Expenses ({groupedCategories.expense.length})
               </TabsTrigger>
               <TabsTrigger value="income">
-                Income ({incomeCategories.length})
+                Income ({groupedCategories.income.length})
               </TabsTrigger>
               <TabsTrigger value="transfer">
-                Transfers ({transferCategories.length})
+                Transfers ({groupedCategories.transfer.length})
               </TabsTrigger>
             </TabsList>
             <TabsContent value="expense" className="mt-4">
-              {renderCategoryList(expenseCategories, "expense")}
+              {renderCategoryList(groupedCategories.expense, "expense")}
             </TabsContent>
             <TabsContent value="income" className="mt-4">
-              {renderCategoryList(incomeCategories, "income")}
+              {renderCategoryList(groupedCategories.income, "income")}
             </TabsContent>
             <TabsContent value="transfer" className="mt-4">
-              {renderCategoryList(transferCategories, "transfer")}
+              {renderCategoryList(groupedCategories.transfer, "transfer")}
             </TabsContent>
           </Tabs>
         </CardContent>

@@ -117,7 +117,6 @@ export function BulkActionsDock({
           }}
         >
           <PopoverTrigger
-            nativeButton={false}
             render={<DockIcon className="bg-muted hover:bg-muted/80" />}
           >
             <RiPriceTag3Line className="size-5" />
@@ -176,7 +175,6 @@ export function BulkActionsDock({
         {/* Export */}
         <Tooltip>
           <TooltipTrigger
-            nativeButton={false}
             render={
               <DockIcon
                 className="bg-muted hover:bg-muted/80"
@@ -196,7 +194,6 @@ export function BulkActionsDock({
         {/* Clear selection */}
         <Tooltip>
           <TooltipTrigger
-            nativeButton={false}
             render={
               <DockIcon
                 className="bg-muted hover:bg-destructive/20 hover:text-destructive"

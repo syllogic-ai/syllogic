@@ -1,11 +1,10 @@
 "use server";
 
-import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { users, categories, type User } from "@/lib/db/schema";
-import { auth } from "@/lib/auth";
+import { getAuthenticatedSession, requireAuth } from "@/lib/auth-helpers";
 import { storage } from "@/lib/storage";
 
 /**
@@ -20,16 +19,14 @@ export async function hasOpenAiApiKey(): Promise<boolean> {
  * Get the current user's profile data.
  */
 export async function getCurrentUserProfile(): Promise<User | null> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return null;
   }
 
   const user = await db.query.users.findFirst({
-    where: eq(users.id, session.user.id),
+    where: eq(users.id, userId),
   });
 
   return user || null;
@@ -41,9 +38,7 @@ export async function getCurrentUserProfile(): Promise<User | null> {
 export async function updateUserProfile(
   formData: FormData
 ): Promise<{ success: boolean; error?: string }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return { success: false, error: "Not authenticated" };
@@ -97,17 +92,15 @@ export async function updateUserProfile(
  * This allows the user to go through the onboarding flow again.
  */
 export async function resetOnboarding(): Promise<{ success: boolean; error?: string }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return { success: false, error: "Not authenticated" };
   }
 
   try {
     // Delete all user categories
-    await db.delete(categories).where(eq(categories.userId, session.user.id));
+    await db.delete(categories).where(eq(categories.userId, userId));
 
     // Reset onboarding status
     await db
@@ -117,7 +110,7 @@ export async function resetOnboarding(): Promise<{ success: boolean; error?: str
         onboardingCompletedAt: null,
         updatedAt: new Date(),
       })
-      .where(eq(users.id, session.user.id));
+      .where(eq(users.id, userId));
 
     revalidatePath("/");
     return { success: true };

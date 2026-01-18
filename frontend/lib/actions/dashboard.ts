@@ -1,17 +1,9 @@
 "use server";
 
-import { headers } from "next/headers";
 import { db } from "@/lib/db";
 import { accounts, transactions, categories, users, properties, vehicles } from "@/lib/db/schema";
-import { auth } from "@/lib/auth";
-import { eq, sql, gte, and, desc, lte, lt } from "drizzle-orm";
-
-async function getSession() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-  return session;
-}
+import { getAuthenticatedSession } from "@/lib/auth-helpers";
+import { eq, sql, gte, and, desc } from "drizzle-orm";
 
 async function getUserCurrency(userId: string): Promise<string> {
   const result = await db
@@ -24,7 +16,7 @@ async function getUserCurrency(userId: string): Promise<string> {
 }
 
 export async function getTotalBalance() {
-  const session = await getSession();
+  const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return { total: 0, currency: "EUR" };
@@ -49,7 +41,7 @@ export async function getTotalBalance() {
 }
 
 export async function getBalanceHistory(days: number = 7) {
-  const session = await getSession();
+  const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return [];
@@ -110,7 +102,7 @@ export async function getBalanceHistory(days: number = 7) {
 }
 
 export async function getMonthlySpending() {
-  const session = await getSession();
+  const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return { total: 0, currency: "EUR" };
@@ -143,7 +135,7 @@ export async function getMonthlySpending() {
 }
 
 export async function getMonthlyIncome() {
-  const session = await getSession();
+  const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return { total: 0, currency: "EUR" };
@@ -176,7 +168,7 @@ export async function getMonthlyIncome() {
 }
 
 export async function getSpendingHistory(days: number = 7) {
-  const session = await getSession();
+  const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return [];
@@ -208,7 +200,7 @@ export async function getSpendingHistory(days: number = 7) {
 }
 
 export async function getIncomeHistory(days: number = 7) {
-  const session = await getSession();
+  const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return [];
@@ -240,7 +232,7 @@ export async function getIncomeHistory(days: number = 7) {
 }
 
 export async function getIncomeExpenseData() {
-  const session = await getSession();
+  const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return [];
@@ -327,7 +319,7 @@ export async function getIncomeExpenseData() {
 }
 
 export async function getSpendingByCategory(limit: number = 5) {
-  const session = await getSession();
+  const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return { categories: [], total: 0 };
@@ -487,7 +479,7 @@ interface AssetsOverviewData {
 }
 
 export async function getAssetsOverview(): Promise<AssetsOverviewData> {
-  const session = await getSession();
+  const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return {
@@ -662,7 +654,7 @@ export async function getAssetsOverview(): Promise<AssetsOverviewData> {
 }
 
 export async function getDashboardData() {
-  const session = await getSession();
+  const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return {

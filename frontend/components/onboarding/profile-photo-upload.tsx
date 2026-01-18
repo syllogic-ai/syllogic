@@ -90,7 +90,7 @@ export function ProfilePhotoUpload({
     <div className="flex flex-col items-center gap-4">
       <div
         className={cn(
-          "relative cursor-pointer rounded-full transition-all",
+          "relative cursor-pointer transition-all",
           isDragging && "ring-2 ring-primary ring-offset-2"
         )}
         onDrop={handleDrop}
@@ -105,7 +105,7 @@ export function ProfilePhotoUpload({
             <AvatarFallback className="text-2xl">{getInitials(name)}</AvatarFallback>
           )}
         </Avatar>
-        <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 transition-opacity hover:opacity-100">
+        <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity hover:opacity-100">
           <RiCameraLine className="h-6 w-6 text-white" />
         </div>
         {displayImage && (

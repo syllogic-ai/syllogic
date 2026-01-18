@@ -1,27 +1,24 @@
 "use server";
 
-import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { users, categories, type NewCategory } from "@/lib/db/schema";
-import { auth } from "@/lib/auth";
+import { getAuthenticatedSession, requireAuth } from "@/lib/auth-helpers";
 import { DEFAULT_CATEGORIES, type DefaultCategory } from "@/lib/constants";
 import { storage } from "@/lib/storage";
 
 export type OnboardingStatus = "pending" | "step_1" | "step_2" | "completed";
 
 export async function getOnboardingStatus(): Promise<OnboardingStatus | null> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return null;
   }
 
   const user = await db.query.users.findFirst({
-    where: eq(users.id, session.user.id),
+    where: eq(users.id, userId),
     columns: {
       onboardingStatus: true,
     },
@@ -31,16 +28,14 @@ export async function getOnboardingStatus(): Promise<OnboardingStatus | null> {
 }
 
 export async function getCurrentUser() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return null;
   }
 
   return db.query.users.findFirst({
-    where: eq(users.id, session.user.id),
+    where: eq(users.id, userId),
   });
 }
 
@@ -50,9 +45,7 @@ export interface PersonalDetailsData {
 }
 
 export async function updatePersonalDetails(formData: FormData): Promise<{ success: boolean; error?: string }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return { success: false, error: "Not authenticated" };
@@ -114,9 +107,7 @@ export interface CategoryInput {
 export async function saveOnboardingCategories(
   categoryInputs: CategoryInput[]
 ): Promise<{ success: boolean; error?: string }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return { success: false, error: "Not authenticated" };
@@ -164,17 +155,5 @@ export async function getDefaultCategories(): Promise<DefaultCategory[]> {
   return DEFAULT_CATEGORIES;
 }
 
-export async function getUserCategories() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  if (!session?.user?.id) {
-    return [];
-  }
-
-  return db.query.categories.findMany({
-    where: eq(categories.userId, session.user.id),
-    orderBy: (categories, { asc }) => [asc(categories.name)],
-  });
-}
+// Note: getUserCategories has been consolidated in lib/actions/categories.ts
+// Use: import { getUserCategories } from "@/lib/actions/categories"

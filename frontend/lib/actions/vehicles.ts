@@ -1,11 +1,10 @@
 "use server";
 
-import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { vehicles, type NewVehicle } from "@/lib/db/schema";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 
 export interface CreateVehicleInput {
   name: string;
@@ -20,17 +19,15 @@ export interface CreateVehicleInput {
 export async function createVehicle(
   input: CreateVehicleInput
 ): Promise<{ success: boolean; error?: string; vehicleId?: string }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return { success: false, error: "Not authenticated" };
   }
 
   try {
     const newVehicle: NewVehicle = {
-      userId: session.user.id,
+      userId,
       name: input.name,
       vehicleType: input.vehicleType,
       make: input.make || null,
@@ -56,17 +53,15 @@ export async function updateVehicle(
   vehicleId: string,
   input: Partial<CreateVehicleInput>
 ): Promise<{ success: boolean; error?: string }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return { success: false, error: "Not authenticated" };
   }
 
   try {
     const vehicle = await db.query.vehicles.findFirst({
-      where: and(eq(vehicles.id, vehicleId), eq(vehicles.userId, session.user.id)),
+      where: and(eq(vehicles.id, vehicleId), eq(vehicles.userId, userId)),
     });
 
     if (!vehicle) {
@@ -99,17 +94,15 @@ export async function updateVehicle(
 export async function deleteVehicle(
   vehicleId: string
 ): Promise<{ success: boolean; error?: string }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return { success: false, error: "Not authenticated" };
   }
 
   try {
     const vehicle = await db.query.vehicles.findFirst({
-      where: and(eq(vehicles.id, vehicleId), eq(vehicles.userId, session.user.id)),
+      where: and(eq(vehicles.id, vehicleId), eq(vehicles.userId, userId)),
     });
 
     if (!vehicle) {
@@ -135,33 +128,29 @@ export async function deleteVehicle(
 }
 
 export async function getVehicles() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return [];
   }
 
   return db.query.vehicles.findMany({
-    where: and(eq(vehicles.userId, session.user.id), eq(vehicles.isActive, true)),
+    where: and(eq(vehicles.userId, userId), eq(vehicles.isActive, true)),
     orderBy: (vehicles, { asc }) => [asc(vehicles.name)],
   });
 }
 
 export async function getVehicle(vehicleId: string) {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return null;
   }
 
   return db.query.vehicles.findFirst({
     where: and(
       eq(vehicles.id, vehicleId),
-      eq(vehicles.userId, session.user.id),
+      eq(vehicles.userId, userId),
       eq(vehicles.isActive, true)
     ),
   });

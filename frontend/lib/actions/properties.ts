@@ -1,11 +1,10 @@
 "use server";
 
-import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { properties, type NewProperty } from "@/lib/db/schema";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 
 export interface CreatePropertyInput {
   name: string;
@@ -18,17 +17,15 @@ export interface CreatePropertyInput {
 export async function createProperty(
   input: CreatePropertyInput
 ): Promise<{ success: boolean; error?: string; propertyId?: string }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return { success: false, error: "Not authenticated" };
   }
 
   try {
     const newProperty: NewProperty = {
-      userId: session.user.id,
+      userId,
       name: input.name,
       propertyType: input.propertyType,
       address: input.address || null,
@@ -52,17 +49,15 @@ export async function updateProperty(
   propertyId: string,
   input: Partial<CreatePropertyInput>
 ): Promise<{ success: boolean; error?: string }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return { success: false, error: "Not authenticated" };
   }
 
   try {
     const property = await db.query.properties.findFirst({
-      where: and(eq(properties.id, propertyId), eq(properties.userId, session.user.id)),
+      where: and(eq(properties.id, propertyId), eq(properties.userId, userId)),
     });
 
     if (!property) {
@@ -93,17 +88,15 @@ export async function updateProperty(
 export async function deleteProperty(
   propertyId: string
 ): Promise<{ success: boolean; error?: string }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return { success: false, error: "Not authenticated" };
   }
 
   try {
     const property = await db.query.properties.findFirst({
-      where: and(eq(properties.id, propertyId), eq(properties.userId, session.user.id)),
+      where: and(eq(properties.id, propertyId), eq(properties.userId, userId)),
     });
 
     if (!property) {
@@ -129,33 +122,29 @@ export async function deleteProperty(
 }
 
 export async function getProperties() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return [];
   }
 
   return db.query.properties.findMany({
-    where: and(eq(properties.userId, session.user.id), eq(properties.isActive, true)),
+    where: and(eq(properties.userId, userId), eq(properties.isActive, true)),
     orderBy: (properties, { asc }) => [asc(properties.name)],
   });
 }
 
 export async function getProperty(propertyId: string) {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return null;
   }
 
   return db.query.properties.findFirst({
     where: and(
       eq(properties.id, propertyId),
-      eq(properties.userId, session.user.id),
+      eq(properties.userId, userId),
       eq(properties.isActive, true)
     ),
   });

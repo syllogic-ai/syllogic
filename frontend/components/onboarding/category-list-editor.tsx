@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { CategoryRow } from "./category-row";
 import { CategoryFormDialog } from "./category-form-dialog";
 import { type CategoryInput } from "@/lib/actions/onboarding";
+import { groupCategoriesByType, type CategoryType } from "@/lib/utils/category-utils";
 
 interface CategoryListEditorProps {
   categories: CategoryInput[];
@@ -13,7 +14,7 @@ interface CategoryListEditorProps {
 }
 
 interface CategoryGroup {
-  type: "expense" | "income" | "transfer";
+  type: CategoryType;
   label: string;
   categories: CategoryInput[];
 }
@@ -22,28 +23,17 @@ export function CategoryListEditor({ categories, onChange }: CategoryListEditorP
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<CategoryInput | null>(null);
   const [editingIndex, setEditingIndex] = useState<number>(-1);
-  const [addingType, setAddingType] = useState<"expense" | "income" | "transfer">("expense");
+  const [addingType, setAddingType] = useState<CategoryType>("expense");
 
-  const expenseCategories = categories.filter((c) => c.categoryType === "expense");
-  const incomeCategories = categories.filter((c) => c.categoryType === "income");
-  const transferCategories = categories.filter((c) => c.categoryType === "transfer");
+  const groupedCategories = groupCategoriesByType(categories);
 
   const groups: CategoryGroup[] = [
-    { type: "expense", label: "Expenses", categories: expenseCategories },
-    { type: "income", label: "Income", categories: incomeCategories },
-    { type: "transfer", label: "Transfers", categories: transferCategories },
+    { type: "expense", label: "Expenses", categories: groupedCategories.expense },
+    { type: "income", label: "Income", categories: groupedCategories.income },
+    { type: "transfer", label: "Transfers", categories: groupedCategories.transfer },
   ];
 
-  const getCategoriesByType = (type: "expense" | "income" | "transfer") => {
-    switch (type) {
-      case "expense":
-        return expenseCategories;
-      case "income":
-        return incomeCategories;
-      case "transfer":
-        return transferCategories;
-    }
-  };
+  const getCategoriesByType = (type: CategoryType) => groupedCategories[type];
 
   const handleEdit = (category: CategoryInput, globalIndex: number) => {
     setEditingCategory(category);

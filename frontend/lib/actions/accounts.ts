@@ -1,11 +1,10 @@
 "use server";
 
-import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { accounts, type NewAccount } from "@/lib/db/schema";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 
 export interface CreateAccountInput {
   name: string;
@@ -18,18 +17,16 @@ export interface CreateAccountInput {
 export async function createAccount(
   input: CreateAccountInput
 ): Promise<{ success: boolean; error?: string; accountId?: string }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return { success: false, error: "Not authenticated" };
   }
 
   try {
     const balanceValue = input.startingBalance?.toString() || "0";
     const newAccount: NewAccount = {
-      userId: session.user.id,
+      userId,
       name: input.name,
       accountType: input.accountType,
       institution: input.institution || null,
@@ -55,17 +52,15 @@ export async function updateAccount(
   accountId: string,
   input: Partial<CreateAccountInput>
 ): Promise<{ success: boolean; error?: string }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return { success: false, error: "Not authenticated" };
   }
 
   try {
     const account = await db.query.accounts.findFirst({
-      where: and(eq(accounts.id, accountId), eq(accounts.userId, session.user.id)),
+      where: and(eq(accounts.id, accountId), eq(accounts.userId, userId)),
     });
 
     if (!account) {
@@ -96,17 +91,15 @@ export async function updateAccount(
 export async function deleteAccount(
   accountId: string
 ): Promise<{ success: boolean; error?: string }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return { success: false, error: "Not authenticated" };
   }
 
   try {
     const account = await db.query.accounts.findFirst({
-      where: and(eq(accounts.id, accountId), eq(accounts.userId, session.user.id)),
+      where: and(eq(accounts.id, accountId), eq(accounts.userId, userId)),
     });
 
     if (!account) {
@@ -131,16 +124,14 @@ export async function deleteAccount(
 }
 
 export async function getAccounts() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return [];
   }
 
   return db.query.accounts.findMany({
-    where: and(eq(accounts.userId, session.user.id), eq(accounts.isActive, true)),
+    where: and(eq(accounts.userId, userId), eq(accounts.isActive, true)),
     orderBy: (accounts, { asc }) => [asc(accounts.name)],
   });
 }

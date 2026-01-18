@@ -1,11 +1,10 @@
 "use server";
 
-import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { csvImports, accounts, transactions, type NewTransaction } from "@/lib/db/schema";
-import { auth } from "@/lib/auth";
+import { getAuthenticatedSession, requireAuth } from "@/lib/auth-helpers";
 import { storage } from "@/lib/storage";
 import { detectDuplicates, markDuplicates } from "@/lib/utils/duplicate-detection";
 import OpenAI from "openai";
@@ -46,9 +45,7 @@ export async function initializeCsvImport(
   fileName: string,
   fileContent: string
 ): Promise<{ success: boolean; error?: string; importId?: string }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return { success: false, error: "Not authenticated" };
@@ -100,11 +97,9 @@ export async function initializeCsvImport(
 export async function parseCsvHeaders(
   importId: string
 ): Promise<{ success: boolean; error?: string; data?: ParsedCsvData }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return { success: false, error: "Not authenticated" };
   }
 
@@ -113,7 +108,7 @@ export async function parseCsvHeaders(
     const importSession = await db.query.csvImports.findFirst({
       where: and(
         eq(csvImports.id, importId),
-        eq(csvImports.userId, session.user.id)
+        eq(csvImports.userId, userId)
       ),
     });
 
@@ -174,11 +169,9 @@ export async function getAiColumnMapping(
   csvHeaders: string[],
   sampleRows: string[][]
 ): Promise<{ success: boolean; error?: string; mapping?: ColumnMapping }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return { success: false, error: "Not authenticated" };
   }
 
@@ -272,11 +265,9 @@ export async function saveColumnMapping(
   importId: string,
   mapping: ColumnMapping
 ): Promise<{ success: boolean; error?: string }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return { success: false, error: "Not authenticated" };
   }
 
@@ -288,7 +279,7 @@ export async function saveColumnMapping(
         status: "previewing",
       })
       .where(
-        and(eq(csvImports.id, importId), eq(csvImports.userId, session.user.id))
+        and(eq(csvImports.id, importId), eq(csvImports.userId, userId))
       );
 
     return { success: true };
@@ -312,11 +303,9 @@ export interface PreviewTransaction {
 export async function previewImportedTransactions(
   importId: string
 ): Promise<{ success: boolean; error?: string; transactions?: PreviewTransaction[] }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return { success: false, error: "Not authenticated" };
   }
 
@@ -325,7 +314,7 @@ export async function previewImportedTransactions(
     const importSession = await db.query.csvImports.findFirst({
       where: and(
         eq(csvImports.id, importId),
-        eq(csvImports.userId, session.user.id)
+        eq(csvImports.userId, userId)
       ),
     });
 
@@ -436,7 +425,7 @@ export async function previewImportedTransactions(
     const existingTransactions = await db.query.transactions.findMany({
       where: and(
         eq(transactions.accountId, importSession.accountId),
-        eq(transactions.userId, session.user.id)
+        eq(transactions.userId, userId)
       ),
     });
 
@@ -504,9 +493,7 @@ export async function finalizeImport(
   importId: string,
   selectedIndices: number[]
 ): Promise<{ success: boolean; error?: string; importedCount?: number; categorizationSummary?: BackendTransactionImportResponse["categorization_summary"] }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return { success: false, error: "Not authenticated" };
@@ -617,18 +604,16 @@ export async function finalizeImport(
 export async function getCsvImportSession(
   importId: string
 ): Promise<CsvImportSession | null> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return null;
   }
 
   const importSession = await db.query.csvImports.findFirst({
     where: and(
       eq(csvImports.id, importId),
-      eq(csvImports.userId, session.user.id)
+      eq(csvImports.userId, userId)
     ),
   });
 
@@ -772,9 +757,7 @@ export async function importRevolutCsv(filePath: string): Promise<{
   imported?: number;
   categoriesCreated?: number;
 }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return { success: false, error: "Not authenticated" };

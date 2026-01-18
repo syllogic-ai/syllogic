@@ -1,11 +1,10 @@
 "use server";
 
-import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { transactions, accounts, categories, type NewTransaction } from "@/lib/db/schema";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 
 export interface CreateTransactionInput {
   accountId: string;
@@ -20,11 +19,9 @@ export interface CreateTransactionInput {
 export async function createTransaction(
   input: CreateTransactionInput
 ): Promise<{ success: boolean; error?: string; transactionId?: string }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return { success: false, error: "Not authenticated" };
   }
 
@@ -33,7 +30,7 @@ export async function createTransaction(
     const account = await db.query.accounts.findFirst({
       where: and(
         eq(accounts.id, input.accountId),
-        eq(accounts.userId, session.user.id)
+        eq(accounts.userId, userId)
       ),
     });
 
@@ -46,7 +43,7 @@ export async function createTransaction(
       const category = await db.query.categories.findFirst({
         where: and(
           eq(categories.id, input.categoryId),
-          eq(categories.userId, session.user.id)
+          eq(categories.userId, userId)
         ),
       });
 
@@ -57,7 +54,7 @@ export async function createTransaction(
 
     // Create the transaction
     const newTransaction: NewTransaction = {
-      userId: session.user.id,
+      userId,
       accountId: input.accountId,
       amount: input.amount.toString(),
       description: input.description,
@@ -95,11 +92,9 @@ export async function updateTransactionCategory(
   transactionId: string,
   categoryId: string | null
 ): Promise<{ success: boolean; error?: string }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return { success: false, error: "Not authenticated" };
   }
 
@@ -108,7 +103,7 @@ export async function updateTransactionCategory(
     const transaction = await db.query.transactions.findFirst({
       where: and(
         eq(transactions.id, transactionId),
-        eq(transactions.userId, session.user.id)
+        eq(transactions.userId, userId)
       ),
     });
 
@@ -121,7 +116,7 @@ export async function updateTransactionCategory(
       const category = await db.query.categories.findFirst({
         where: and(
           eq(categories.id, categoryId),
-          eq(categories.userId, session.user.id)
+          eq(categories.userId, userId)
         ),
       });
 
@@ -147,37 +142,23 @@ export async function updateTransactionCategory(
 }
 
 export async function getUserAccounts() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return [];
   }
 
   return db.query.accounts.findMany({
     where: and(
-      eq(accounts.userId, session.user.id),
+      eq(accounts.userId, userId),
       eq(accounts.isActive, true)
     ),
     orderBy: [desc(accounts.createdAt)],
   });
 }
 
-export async function getUserCategories() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  if (!session?.user?.id) {
-    return [];
-  }
-
-  return db.query.categories.findMany({
-    where: eq(categories.userId, session.user.id),
-    orderBy: (categories, { asc }) => [asc(categories.name)],
-  });
-}
+// Note: getUserCategories has been consolidated in lib/actions/categories.ts
+// Use: import { getUserCategories } from "@/lib/actions/categories"
 
 export interface TransactionWithRelations {
   id: string;
@@ -212,16 +193,14 @@ export interface TransactionWithRelations {
 }
 
 export async function getTransactions(): Promise<TransactionWithRelations[]> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return [];
   }
 
   const result = await db.query.transactions.findMany({
-    where: eq(transactions.userId, session.user.id),
+    where: eq(transactions.userId, userId),
     orderBy: [desc(transactions.bookedAt)],
     with: {
       account: true,
@@ -271,11 +250,9 @@ export async function bulkUpdateTransactionCategory(
   transactionIds: string[],
   categoryId: string | null
 ): Promise<{ success: boolean; error?: string; updatedCount?: number }> {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return { success: false, error: "Not authenticated" };
   }
 
@@ -289,7 +266,7 @@ export async function bulkUpdateTransactionCategory(
       const category = await db.query.categories.findFirst({
         where: and(
           eq(categories.id, categoryId),
-          eq(categories.userId, session.user.id)
+          eq(categories.userId, userId)
         ),
       });
 
@@ -299,7 +276,7 @@ export async function bulkUpdateTransactionCategory(
     }
 
     // Update all transactions that belong to the user
-    const result = await db
+    await db
       .update(transactions)
       .set({
         categoryId,
@@ -308,7 +285,7 @@ export async function bulkUpdateTransactionCategory(
       .where(
         and(
           inArray(transactions.id, transactionIds),
-          eq(transactions.userId, session.user.id)
+          eq(transactions.userId, userId)
         )
       );
 

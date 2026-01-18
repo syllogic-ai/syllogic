@@ -30,24 +30,16 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import {
-  createTransaction,
-  getUserAccounts,
-  getUserCategories,
-} from "@/lib/actions/transactions";
+import { createTransaction, getUserAccounts } from "@/lib/actions/transactions";
+import { getUserCategories } from "@/lib/actions/categories";
 import type { Account, Category } from "@/lib/db/schema";
-
-interface CategoryInput {
-  id: string;
-  name: string;
-  color: string | null;
-  icon: string | null;
-}
+import type { CategoryDisplay } from "@/types";
+import { getCategoriesForTransactionType } from "@/lib/utils/category-utils";
 
 interface AddTransactionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  categories?: CategoryInput[];
+  categories?: CategoryDisplay[];
 }
 
 export function AddTransactionDialog({ open, onOpenChange, categories: propCategories }: AddTransactionDialogProps) {
@@ -143,12 +135,7 @@ export function AddTransactionDialog({ open, onOpenChange, categories: propCateg
   };
 
   // Filter categories based on transaction type
-  const filteredCategories = categories.filter((cat) => {
-    if (transactionType === "debit") {
-      return cat.categoryType === "expense" || cat.categoryType === "transfer";
-    }
-    return cat.categoryType === "income" || cat.categoryType === "transfer";
-  });
+  const filteredCategories = getCategoriesForTransactionType(categories, transactionType);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

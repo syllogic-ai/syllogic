@@ -22,17 +22,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CURRENCIES } from "@/lib/constants/currencies";
+import { CURRENCIES, ACCOUNT_TYPES } from "@/lib/constants";
 import { createAccount } from "@/lib/actions/accounts";
-
-const ACCOUNT_TYPES = [
-  { value: "checking", label: "Checking Account" },
-  { value: "savings", label: "Savings Account" },
-  { value: "credit_card", label: "Credit Card" },
-  { value: "investment", label: "Investment Account" },
-  { value: "cash", label: "Cash" },
-  { value: "other", label: "Other" },
-] as const;
 
 interface AddAccountDialogProps {
   onAccountAdded?: () => void;

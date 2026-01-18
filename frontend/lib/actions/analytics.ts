@@ -1,39 +1,18 @@
 "use server";
 
-import { headers } from "next/headers";
 import { db } from "@/lib/db";
-import { accounts, transactions } from "@/lib/db/schema";
-import { auth } from "@/lib/auth";
+import { transactions } from "@/lib/db/schema";
+import { requireAuth } from "@/lib/auth-helpers";
 import { eq, sql, gte, and, desc } from "drizzle-orm";
 
-export async function getTotalBalance() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  if (!session?.user?.id) {
-    return { total: 0, currency: "EUR" };
-  }
-
-  const result = await db
-    .select({
-      total: sql<string>`COALESCE(SUM(${accounts.functionalBalance}), 0)`,
-    })
-    .from(accounts)
-    .where(and(eq(accounts.userId, session.user.id), eq(accounts.isActive, true)));
-
-  return {
-    total: parseFloat(result[0]?.total || "0"),
-    currency: "EUR",
-  };
-}
+// Note: getTotalBalance has been consolidated in lib/actions/dashboard.ts
+// Use: import { getTotalBalance } from "@/lib/actions/dashboard"
+export { getTotalBalance } from "./dashboard";
 
 export async function getTransactionSummary(days: number = 30) {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return [];
   }
 
@@ -49,7 +28,7 @@ export async function getTransactionSummary(days: number = 30) {
     .from(transactions)
     .where(
       and(
-        eq(transactions.userId, session.user.id),
+        eq(transactions.userId, userId),
         gte(transactions.bookedAt, startDate)
       )
     )
@@ -64,11 +43,9 @@ export async function getTransactionSummary(days: number = 30) {
 }
 
 export async function getRecentTransactions(limit: number = 5) {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     return [];
   }
 
@@ -83,7 +60,7 @@ export async function getRecentTransactions(limit: number = 5) {
       currency: transactions.currency,
     })
     .from(transactions)
-    .where(eq(transactions.userId, session.user.id))
+    .where(eq(transactions.userId, userId))
     .orderBy(desc(transactions.bookedAt))
     .limit(limit);
 

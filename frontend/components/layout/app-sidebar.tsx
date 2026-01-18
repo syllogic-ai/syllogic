@@ -59,7 +59,8 @@ export function AppSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session } = useSession();
-  const { isMobile } = useSidebar();
+  const { isMobile, state } = useSidebar();
+  const isCollapsed = state === "collapsed";
 
   const handleSignOut = async () => {
     await signOut();
@@ -86,15 +87,17 @@ export function AppSidebar() {
               onClick={() => router.push("/")}
               tooltip="Finance"
             >
-              <div className="bg-foreground text-background flex aspect-square size-8 items-center justify-center">
+              <div className="bg-foreground text-background flex aspect-square size-8 items-center justify-center shrink-0">
                 <RiWalletLine className="size-4" />
               </div>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">Finance</span>
-                <span className="truncate text-xs text-muted-foreground">
-                  Personal
-                </span>
-              </div>
+              {!isCollapsed && (
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-medium">Finance</span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    Personal
+                  </span>
+                </div>
+              )}
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -111,8 +114,8 @@ export function AppSidebar() {
                     tooltip={item.title}
                     onClick={() => router.push(item.href)}
                   >
-                    <item.icon />
-                    <span>{item.title}</span>
+                    <item.icon className="shrink-0" />
+                    {!isCollapsed && <span>{item.title}</span>}
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               );
@@ -129,7 +132,7 @@ export function AppSidebar() {
                   size="lg"
                   className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                 >
-                  <Avatar className="h-8 w-8">
+                  <Avatar className="h-8 w-8 shrink-0">
                     <AvatarImage
                       src={session?.user?.image || undefined}
                       alt={session?.user?.name || "User"}
@@ -138,15 +141,19 @@ export function AppSidebar() {
                       {getInitials(session?.user?.name)}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-medium">
-                      {session?.user?.name || "User"}
-                    </span>
-                    <span className="truncate text-xs">
-                      {session?.user?.email}
-                    </span>
-                  </div>
-                  <RiArrowUpDownLine className="ml-auto size-4" />
+                  {!isCollapsed && (
+                    <>
+                      <div className="grid flex-1 text-left text-sm leading-tight">
+                        <span className="truncate font-medium">
+                          {session?.user?.name || "User"}
+                        </span>
+                        <span className="truncate text-xs">
+                          {session?.user?.email}
+                        </span>
+                      </div>
+                      <RiArrowUpDownLine className="ml-auto size-4" />
+                    </>
+                  )}
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent
