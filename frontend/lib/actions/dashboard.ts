@@ -3,7 +3,7 @@
 import { db } from "@/lib/db";
 import { accounts, transactions, categories, users, properties, vehicles } from "@/lib/db/schema";
 import { getAuthenticatedSession } from "@/lib/auth-helpers";
-import { eq, sql, gte, and, desc } from "drizzle-orm";
+import { eq, sql, gte, lte, and, desc } from "drizzle-orm";
 
 async function getUserCurrency(userId: string): Promise<string> {
   const result = await db
@@ -15,11 +15,85 @@ async function getUserCurrency(userId: string): Promise<string> {
   return result[0]?.functionalCurrency || "EUR";
 }
 
-export async function getTotalBalance() {
+async function getLatestTransactionDate(userId: string, accountId?: string): Promise<Date> {
+  const conditions = [eq(transactions.userId, userId)];
+  if (accountId) {
+    conditions.push(eq(transactions.accountId, accountId));
+  }
+
+  const result = await db
+    .select({
+      latestDate: sql<string>`MAX(${transactions.bookedAt})`,
+    })
+    .from(transactions)
+    .where(and(...conditions));
+
+  const latestDate = result[0]?.latestDate;
+  return latestDate ? new Date(latestDate) : new Date();
+}
+
+// Get user accounts for filter dropdown
+export async function getUserAccounts() {
+  const session = await getAuthenticatedSession();
+
+  if (!session?.user?.id) {
+    return [];
+  }
+
+  const result = await db
+    .select({
+      id: accounts.id,
+      name: accounts.name,
+      institution: accounts.institution,
+      accountType: accounts.accountType,
+    })
+    .from(accounts)
+    .where(and(eq(accounts.userId, session.user.id), eq(accounts.isActive, true)))
+    .orderBy(accounts.name);
+
+  return result;
+}
+
+// Get available months/years for the date selector
+export async function getAvailableMonths() {
+  const session = await getAuthenticatedSession();
+
+  if (!session?.user?.id) {
+    return [];
+  }
+
+  const result = await db
+    .select({
+      year: sql<number>`EXTRACT(YEAR FROM ${transactions.bookedAt})::int`,
+      month: sql<number>`EXTRACT(MONTH FROM ${transactions.bookedAt})::int`,
+    })
+    .from(transactions)
+    .where(eq(transactions.userId, session.user.id))
+    .groupBy(
+      sql`EXTRACT(YEAR FROM ${transactions.bookedAt})`,
+      sql`EXTRACT(MONTH FROM ${transactions.bookedAt})`
+    )
+    .orderBy(
+      desc(sql`EXTRACT(YEAR FROM ${transactions.bookedAt})`),
+      desc(sql`EXTRACT(MONTH FROM ${transactions.bookedAt})`)
+    );
+
+  return result.map((row) => ({
+    year: row.year,
+    month: row.month,
+  }));
+}
+
+export async function getTotalBalance(accountId?: string) {
   const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return { total: 0, currency: "EUR" };
+  }
+
+  const conditions = [eq(accounts.userId, session.user.id), eq(accounts.isActive, true)];
+  if (accountId) {
+    conditions.push(eq(accounts.id, accountId));
   }
 
   const [result, currency] = await Promise.all([
@@ -28,9 +102,7 @@ export async function getTotalBalance() {
         total: sql<string>`COALESCE(SUM(${accounts.functionalBalance}), 0)`,
       })
       .from(accounts)
-      .where(
-        and(eq(accounts.userId, session.user.id), eq(accounts.isActive, true))
-      ),
+      .where(and(...conditions)),
     getUserCurrency(session.user.id),
   ]);
 
@@ -40,18 +112,28 @@ export async function getTotalBalance() {
   };
 }
 
-export async function getBalanceHistory(days: number = 7) {
+export async function getBalanceHistory(days: number = 7, referenceDate?: Date, accountId?: string) {
   const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return [];
   }
 
-  const startDate = new Date();
+  const refDate = referenceDate || await getLatestTransactionDate(session.user.id, accountId);
+  const startDate = new Date(refDate);
   startDate.setDate(startDate.getDate() - days);
 
+  // Build conditions for transactions
+  const txConditions = [
+    eq(transactions.userId, session.user.id),
+    gte(transactions.bookedAt, startDate),
+    lte(transactions.bookedAt, refDate),
+  ];
+  if (accountId) {
+    txConditions.push(eq(transactions.accountId, accountId));
+  }
+
   // For balance history, we calculate running balance by summing transactions
-  // This is a simplified approach - in production you'd want balance snapshots
   const result = await db
     .select({
       date: sql<string>`DATE(${transactions.bookedAt})`,
@@ -63,24 +145,22 @@ export async function getBalanceHistory(days: number = 7) {
       ), 0)`,
     })
     .from(transactions)
-    .where(
-      and(
-        eq(transactions.userId, session.user.id),
-        gte(transactions.bookedAt, startDate)
-      )
-    )
+    .where(and(...txConditions))
     .groupBy(sql`DATE(${transactions.bookedAt})`)
     .orderBy(sql`DATE(${transactions.bookedAt})`);
 
   // Get current balance to work backwards
+  const accountConditions = [eq(accounts.userId, session.user.id), eq(accounts.isActive, true)];
+  if (accountId) {
+    accountConditions.push(eq(accounts.id, accountId));
+  }
+
   const balanceResult = await db
     .select({
       total: sql<string>`COALESCE(SUM(${accounts.functionalBalance}), 0)`,
     })
     .from(accounts)
-    .where(
-      and(eq(accounts.userId, session.user.id), eq(accounts.isActive, true))
-    );
+    .where(and(...accountConditions));
 
   const currentBalance = parseFloat(balanceResult[0]?.total || "0");
 
@@ -101,16 +181,26 @@ export async function getBalanceHistory(days: number = 7) {
   return balanceHistory;
 }
 
-export async function getMonthlySpending() {
+export async function getMonthlySpending(referenceDate?: Date, accountId?: string) {
   const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return { total: 0, currency: "EUR" };
   }
 
-  const startOfMonth = new Date();
-  startOfMonth.setDate(1);
-  startOfMonth.setHours(0, 0, 0, 0);
+  const refDate = referenceDate || await getLatestTransactionDate(session.user.id, accountId);
+  const startOfMonth = new Date(refDate.getFullYear(), refDate.getMonth(), 1);
+  const endOfMonth = new Date(refDate.getFullYear(), refDate.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  const conditions = [
+    eq(transactions.userId, session.user.id),
+    eq(transactions.transactionType, "debit"),
+    gte(transactions.bookedAt, startOfMonth),
+    lte(transactions.bookedAt, endOfMonth),
+  ];
+  if (accountId) {
+    conditions.push(eq(transactions.accountId, accountId));
+  }
 
   const [result, currency] = await Promise.all([
     db
@@ -118,13 +208,7 @@ export async function getMonthlySpending() {
         total: sql<string>`COALESCE(SUM(ABS(${transactions.amount})), 0)`,
       })
       .from(transactions)
-      .where(
-        and(
-          eq(transactions.userId, session.user.id),
-          eq(transactions.transactionType, "debit"),
-          gte(transactions.bookedAt, startOfMonth)
-        )
-      ),
+      .where(and(...conditions)),
     getUserCurrency(session.user.id),
   ]);
 
@@ -134,16 +218,26 @@ export async function getMonthlySpending() {
   };
 }
 
-export async function getMonthlyIncome() {
+export async function getMonthlyIncome(referenceDate?: Date, accountId?: string) {
   const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return { total: 0, currency: "EUR" };
   }
 
-  const startOfMonth = new Date();
-  startOfMonth.setDate(1);
-  startOfMonth.setHours(0, 0, 0, 0);
+  const refDate = referenceDate || await getLatestTransactionDate(session.user.id, accountId);
+  const startOfMonth = new Date(refDate.getFullYear(), refDate.getMonth(), 1);
+  const endOfMonth = new Date(refDate.getFullYear(), refDate.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  const conditions = [
+    eq(transactions.userId, session.user.id),
+    eq(transactions.transactionType, "credit"),
+    gte(transactions.bookedAt, startOfMonth),
+    lte(transactions.bookedAt, endOfMonth),
+  ];
+  if (accountId) {
+    conditions.push(eq(transactions.accountId, accountId));
+  }
 
   const [result, currency] = await Promise.all([
     db
@@ -151,13 +245,7 @@ export async function getMonthlyIncome() {
         total: sql<string>`COALESCE(SUM(${transactions.amount}), 0)`,
       })
       .from(transactions)
-      .where(
-        and(
-          eq(transactions.userId, session.user.id),
-          eq(transactions.transactionType, "credit"),
-          gte(transactions.bookedAt, startOfMonth)
-        )
-      ),
+      .where(and(...conditions)),
     getUserCurrency(session.user.id),
   ]);
 
@@ -167,15 +255,26 @@ export async function getMonthlyIncome() {
   };
 }
 
-export async function getSpendingHistory(days: number = 7) {
+export async function getSpendingHistory(days: number = 7, referenceDate?: Date, accountId?: string) {
   const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return [];
   }
 
-  const startDate = new Date();
+  const refDate = referenceDate || await getLatestTransactionDate(session.user.id, accountId);
+  const startDate = new Date(refDate);
   startDate.setDate(startDate.getDate() - days);
+
+  const conditions = [
+    eq(transactions.userId, session.user.id),
+    eq(transactions.transactionType, "debit"),
+    gte(transactions.bookedAt, startDate),
+    lte(transactions.bookedAt, refDate),
+  ];
+  if (accountId) {
+    conditions.push(eq(transactions.accountId, accountId));
+  }
 
   const result = await db
     .select({
@@ -183,13 +282,7 @@ export async function getSpendingHistory(days: number = 7) {
       value: sql<string>`COALESCE(SUM(ABS(${transactions.amount})), 0)`,
     })
     .from(transactions)
-    .where(
-      and(
-        eq(transactions.userId, session.user.id),
-        eq(transactions.transactionType, "debit"),
-        gte(transactions.bookedAt, startDate)
-      )
-    )
+    .where(and(...conditions))
     .groupBy(sql`DATE(${transactions.bookedAt})`)
     .orderBy(sql`DATE(${transactions.bookedAt})`);
 
@@ -199,15 +292,26 @@ export async function getSpendingHistory(days: number = 7) {
   }));
 }
 
-export async function getIncomeHistory(days: number = 7) {
+export async function getIncomeHistory(days: number = 7, referenceDate?: Date, accountId?: string) {
   const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return [];
   }
 
-  const startDate = new Date();
+  const refDate = referenceDate || await getLatestTransactionDate(session.user.id, accountId);
+  const startDate = new Date(refDate);
   startDate.setDate(startDate.getDate() - days);
+
+  const conditions = [
+    eq(transactions.userId, session.user.id),
+    eq(transactions.transactionType, "credit"),
+    gte(transactions.bookedAt, startDate),
+    lte(transactions.bookedAt, refDate),
+  ];
+  if (accountId) {
+    conditions.push(eq(transactions.accountId, accountId));
+  }
 
   const result = await db
     .select({
@@ -215,13 +319,7 @@ export async function getIncomeHistory(days: number = 7) {
       value: sql<string>`COALESCE(SUM(${transactions.amount}), 0)`,
     })
     .from(transactions)
-    .where(
-      and(
-        eq(transactions.userId, session.user.id),
-        eq(transactions.transactionType, "credit"),
-        gte(transactions.bookedAt, startDate)
-      )
-    )
+    .where(and(...conditions))
     .groupBy(sql`DATE(${transactions.bookedAt})`)
     .orderBy(sql`DATE(${transactions.bookedAt})`);
 
@@ -231,16 +329,28 @@ export async function getIncomeHistory(days: number = 7) {
   }));
 }
 
-export async function getIncomeExpenseData() {
+export async function getIncomeExpenseData(referenceDate?: Date, accountId?: string) {
   const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return [];
   }
 
-  // Calculate the start date (12 months ago from the first of current month)
-  const now = new Date();
-  const startDate = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+  // Use the latest transaction date as reference or provided date
+  const refDate = referenceDate || await getLatestTransactionDate(session.user.id, accountId);
+
+  // Calculate the start date (12 months ago from the reference month)
+  const startDate = new Date(refDate.getFullYear(), refDate.getMonth() - 11, 1);
+  const endOfRefMonth = new Date(refDate.getFullYear(), refDate.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  const conditions = [
+    eq(transactions.userId, session.user.id),
+    gte(transactions.bookedAt, startDate),
+    lte(transactions.bookedAt, endOfRefMonth),
+  ];
+  if (accountId) {
+    conditions.push(eq(transactions.accountId, accountId));
+  }
 
   // Get monthly income and expenses for the last 12 months
   const result = await db
@@ -255,12 +365,7 @@ export async function getIncomeExpenseData() {
       ), 0)`,
     })
     .from(transactions)
-    .where(
-      and(
-        eq(transactions.userId, session.user.id),
-        gte(transactions.bookedAt, startDate)
-      )
-    )
+    .where(and(...conditions))
     .groupBy(
       sql`EXTRACT(YEAR FROM ${transactions.bookedAt})`,
       sql`EXTRACT(MONTH FROM ${transactions.bookedAt})`
@@ -285,10 +390,10 @@ export async function getIncomeExpenseData() {
     "Dec",
   ];
 
-  // Create array of last 12 months with proper labels
+  // Create array of last 12 months with proper labels (ending at reference month)
   const months: { month: string; income: number; expenses: number }[] = [];
   for (let i = 0; i < 12; i++) {
-    const date = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1);
+    const date = new Date(refDate.getFullYear(), refDate.getMonth() - 11 + i, 1);
     const monthLabel = monthNames[date.getMonth()];
     months.push({
       month: monthLabel,
@@ -302,7 +407,7 @@ export async function getIncomeExpenseData() {
     // Find the corresponding month in our array
     const rowDate = new Date(row.year, row.month - 1, 1);
     const monthIndex = months.findIndex((_, i) => {
-      const targetDate = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1);
+      const targetDate = new Date(refDate.getFullYear(), refDate.getMonth() - 11 + i, 1);
       return (
         targetDate.getFullYear() === rowDate.getFullYear() &&
         targetDate.getMonth() === rowDate.getMonth()
@@ -318,16 +423,27 @@ export async function getIncomeExpenseData() {
   return months;
 }
 
-export async function getSpendingByCategory(limit: number = 5) {
+export async function getSpendingByCategory(limit: number = 5, referenceDate?: Date, accountId?: string) {
   const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return { categories: [], total: 0 };
   }
 
-  const startOfMonth = new Date();
-  startOfMonth.setDate(1);
-  startOfMonth.setHours(0, 0, 0, 0);
+  const refDate = referenceDate || await getLatestTransactionDate(session.user.id, accountId);
+  const startOfMonth = new Date(refDate.getFullYear(), refDate.getMonth(), 1);
+  const endOfMonth = new Date(refDate.getFullYear(), refDate.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  // Build base conditions
+  const baseConditions = [
+    eq(transactions.userId, session.user.id),
+    eq(transactions.transactionType, "debit"),
+    gte(transactions.bookedAt, startOfMonth),
+    lte(transactions.bookedAt, endOfMonth),
+  ];
+  if (accountId) {
+    baseConditions.push(eq(transactions.accountId, accountId));
+  }
 
   // Get spending by category, including uncategorized transactions
   // Use COALESCE to fall back to categorySystemId when categoryId is null
@@ -346,9 +462,7 @@ export async function getSpendingByCategory(limit: number = 5) {
     )
     .where(
       and(
-        eq(transactions.userId, session.user.id),
-        eq(transactions.transactionType, "debit"),
-        gte(transactions.bookedAt, startOfMonth),
+        ...baseConditions,
         sql`COALESCE(${transactions.categoryId}, ${transactions.categorySystemId}) IS NOT NULL`
       )
     )
@@ -364,9 +478,7 @@ export async function getSpendingByCategory(limit: number = 5) {
     .from(transactions)
     .where(
       and(
-        eq(transactions.userId, session.user.id),
-        eq(transactions.transactionType, "debit"),
-        gte(transactions.bookedAt, startOfMonth),
+        ...baseConditions,
         sql`${transactions.categoryId} IS NULL AND ${transactions.categorySystemId} IS NULL`
       )
     );
@@ -377,13 +489,7 @@ export async function getSpendingByCategory(limit: number = 5) {
       total: sql<string>`COALESCE(SUM(ABS(${transactions.amount})), 0)`,
     })
     .from(transactions)
-    .where(
-      and(
-        eq(transactions.userId, session.user.id),
-        eq(transactions.transactionType, "debit"),
-        gte(transactions.bookedAt, startOfMonth)
-      )
-    );
+    .where(and(...baseConditions));
 
   const categorizedCategories = categorizedResult.map((row) => ({
     id: row.id,
@@ -653,8 +759,20 @@ export async function getAssetsOverview(): Promise<AssetsOverviewData> {
   };
 }
 
-export async function getDashboardData() {
+export interface DashboardFilters {
+  accountId?: string;
+  dateFrom?: Date;
+  dateTo?: Date;
+  horizon?: number;
+}
+
+export async function getDashboardData(filters: DashboardFilters = {}) {
   const session = await getAuthenticatedSession();
+
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+  ];
 
   if (!session?.user?.id) {
     return {
@@ -662,6 +780,7 @@ export async function getDashboardData() {
       balanceHistory: [],
       monthlySpending: { total: 0, currency: "EUR" },
       monthlyIncome: { total: 0, currency: "EUR" },
+      savingsRate: { amount: 0, percentage: 0, currency: "EUR" },
       spendingHistory: [],
       incomeHistory: [],
       incomeExpense: [],
@@ -679,8 +798,30 @@ export async function getDashboardData() {
           accounts: [],
         })),
       },
+      referencePeriod: {
+        month: monthNames[new Date().getMonth()],
+        year: new Date().getFullYear(),
+        label: `${monthNames[new Date().getMonth()]} ${new Date().getFullYear()}`,
+      },
     };
   }
+
+  const { accountId, dateFrom, dateTo, horizon = 7 } = filters;
+
+  // Determine the reference date: use dateTo if provided, otherwise detect from latest transaction
+  let referenceDate: Date;
+  if (dateTo) {
+    referenceDate = new Date(dateTo);
+    referenceDate.setHours(23, 59, 59, 999);
+  } else if (dateFrom) {
+    // If only dateFrom is provided, use it as the reference
+    referenceDate = new Date(dateFrom);
+    referenceDate.setHours(23, 59, 59, 999);
+  } else {
+    referenceDate = await getLatestTransactionDate(session.user.id, accountId);
+  }
+
+  const currency = await getUserCurrency(session.user.id);
 
   const [
     balance,
@@ -693,26 +834,42 @@ export async function getDashboardData() {
     spendingByCategory,
     assetsOverview,
   ] = await Promise.all([
-    getTotalBalance(),
-    getBalanceHistory(7),
-    getMonthlySpending(),
-    getMonthlyIncome(),
-    getSpendingHistory(7),
-    getIncomeHistory(7),
-    getIncomeExpenseData(),
-    getSpendingByCategory(5),
+    getTotalBalance(accountId),
+    getBalanceHistory(horizon, referenceDate, accountId),
+    getMonthlySpending(referenceDate, accountId),
+    getMonthlyIncome(referenceDate, accountId),
+    getSpendingHistory(horizon, referenceDate, accountId),
+    getIncomeHistory(horizon, referenceDate, accountId),
+    getIncomeExpenseData(referenceDate, accountId),
+    getSpendingByCategory(5, referenceDate, accountId),
     getAssetsOverview(),
   ]);
+
+  // Calculate savings rate (income - expenses = potential savings)
+  const savingsAmount = monthlyIncome.total - monthlySpending.total;
+  const savingsPercentage = monthlyIncome.total > 0
+    ? (savingsAmount / monthlyIncome.total) * 100
+    : 0;
 
   return {
     balance,
     balanceHistory,
     monthlySpending,
     monthlyIncome,
+    savingsRate: {
+      amount: savingsAmount,
+      percentage: savingsPercentage,
+      currency,
+    },
     spendingHistory,
     incomeHistory,
     incomeExpense,
     spendingByCategory,
     assetsOverview,
+    referencePeriod: {
+      month: monthNames[referenceDate.getMonth()],
+      year: referenceDate.getFullYear(),
+      label: `${monthNames[referenceDate.getMonth()]} ${referenceDate.getFullYear()}`,
+    },
   };
 }

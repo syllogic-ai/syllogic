@@ -1,60 +1,102 @@
-import Link from "next/link";
+import { Suspense } from "react";
 import { Header } from "@/components/layout/header";
 import { KpiSparkCard } from "@/components/charts/kpi-spark-card";
 import { ProfitLossChart } from "@/components/charts/profit-loss-chart";
 import { SpendingByCategoryChart } from "@/components/charts/spending-by-category-chart";
 import { AssetsOverviewCard } from "@/components/assets";
-import { getDashboardData } from "@/lib/actions/dashboard";
+import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
+import { SearchButton } from "@/components/dashboard/search-button";
 import {
-  RiWalletLine,
-  RiArrowDownLine,
-  RiArrowUpLine,
-  RiAddLine,
-} from "@remixicon/react";
+  getDashboardData,
+  getUserAccounts,
+  type DashboardFilters as DashboardFiltersType,
+} from "@/lib/actions/dashboard";
 
-export default async function HomePage() {
-  const data = await getDashboardData();
+interface PageProps {
+  searchParams: Promise<{
+    account?: string;
+    from?: string;
+    to?: string;
+    horizon?: string;
+  }>;
+}
+
+export default async function HomePage({ searchParams }: PageProps) {
+  const params = await searchParams;
+
+  // Parse filters from URL search params
+  const filters: DashboardFiltersType = {};
+
+  if (params.account && params.account !== "all") {
+    filters.accountId = params.account;
+  }
+
+  if (params.from) {
+    filters.dateFrom = new Date(params.from);
+  }
+
+  if (params.to) {
+    filters.dateTo = new Date(params.to);
+  }
+
+  if (params.horizon) {
+    filters.horizon = parseInt(params.horizon, 10);
+  }
+
+  // Fetch data in parallel
+  const [data, accounts] = await Promise.all([
+    getDashboardData(filters),
+    getUserAccounts(),
+  ]);
 
   return (
     <>
-      <Header
-        title="Dashboard"
-        action={
-          <Link
-            href="/transactions"
-            className="inline-flex items-center justify-center whitespace-nowrap text-xs font-medium h-8 gap-1.5 px-2.5 bg-primary text-primary-foreground hover:bg-primary/80 transition-all"
-          >
-            <RiAddLine className="h-4 w-4" />
-            Add Transaction
-          </Link>
-        }
-      />
+      <Header title="Dashboard" />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+        {/* Filters Row */}
+        <div className="flex items-center justify-between">
+          <Suspense fallback={null}>
+            <DashboardFilters accounts={accounts} />
+          </Suspense>
+          <SearchButton />
+        </div>
         {/* Row 1: KPI Cards */}
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           <KpiSparkCard
             title="Total Balance"
             value={data.balance.total}
             currency={data.balance.currency}
-            subtitle="Across all accounts"
+            subtitle={filters.accountId ? "Selected account" : "Across all accounts"}
             sparkData={data.balanceHistory}
-            icon={<RiWalletLine className="h-4 w-4" />}
           />
           <KpiSparkCard
             title="Monthly Spending"
             value={data.monthlySpending.total}
             currency={data.monthlySpending.currency}
-            subtitle="This month"
+            subtitle={data.referencePeriod.label}
             sparkData={data.spendingHistory}
-            icon={<RiArrowDownLine className="h-4 w-4" />}
           />
           <KpiSparkCard
             title="Monthly Income"
             value={data.monthlyIncome.total}
             currency={data.monthlyIncome.currency}
-            subtitle="This month"
+            subtitle={data.referencePeriod.label}
             sparkData={data.incomeHistory}
-            icon={<RiArrowUpLine className="h-4 w-4" />}
+          />
+          <KpiSparkCard
+            title="Savings Rate"
+            value={data.savingsRate.amount}
+            currency={data.savingsRate.currency}
+            subtitle={data.referencePeriod.label}
+            sparkData={[]}
+            trend={
+              data.savingsRate.amount !== 0
+                ? {
+                    value: Math.abs(data.savingsRate.percentage),
+                    isPositive: data.savingsRate.amount > 0,
+                  }
+                : undefined
+            }
           />
         </div>
 

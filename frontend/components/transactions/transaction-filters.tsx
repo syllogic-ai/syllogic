@@ -47,6 +47,7 @@ interface TransactionFiltersProps {
   table: Table<TransactionWithRelations>;
   categories: CategoryForFilter[];
   accounts: AccountForFilter[];
+  action?: React.ReactNode;
 }
 
 interface FilterOption {
@@ -329,7 +330,7 @@ function FilterTag({ label, onRemove }: FilterTagProps) {
   );
 }
 
-export function TransactionFilters({ table, categories, accounts }: TransactionFiltersProps) {
+export function TransactionFilters({ table, categories, accounts, action }: TransactionFiltersProps) {
   const descriptionColumn = table.getColumn("description");
   const categoryColumn = table.getColumn("category");
   const accountColumn = table.getColumn("account");
@@ -458,29 +459,30 @@ export function TransactionFilters({ table, categories, accounts }: TransactionF
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1 max-w-sm">
-          <RiSearchLine className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search transactions..."
-            value={descriptionValue}
-            onChange={(event) =>
-              descriptionColumn?.setFilterValue(event.target.value)
-            }
-            className="pl-8"
-          />
-        </div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div className="relative w-64">
+            <RiSearchLine className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search transactions..."
+              value={descriptionValue}
+              onChange={(event) =>
+                descriptionColumn?.setFilterValue(event.target.value)
+              }
+              className="pl-8"
+            />
+          </div>
 
-        <Popover>
-          <PopoverTrigger className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3">
-            <RiFilter3Line className="h-4 w-4" />
-            Filters
-            {activeFilterCount > 0 && (
-              <span className="flex h-5 min-w-5 items-center justify-center bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">
-                {activeFilterCount}
-              </span>
-            )}
-          </PopoverTrigger>
+          <Popover>
+            <PopoverTrigger className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-transparent hover:bg-accent hover:text-accent-foreground h-8 px-3">
+              <RiFilter3Line className="h-4 w-4" />
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">
+                  {activeFilterCount}
+                </span>
+              )}
+            </PopoverTrigger>
           <PopoverContent align="start" className="w-80">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Filters</span>
@@ -549,6 +551,8 @@ export function TransactionFilters({ table, categories, accounts }: TransactionF
             </div>
           </PopoverContent>
         </Popover>
+        </div>
+        {action}
       </div>
 
       {/* Active filter tags */}

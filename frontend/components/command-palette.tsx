@@ -99,7 +99,7 @@ export function CommandPalette() {
       const key = e.key.toLowerCase();
 
       switch (key) {
-        case "d":
+        case "b":
           e.preventDefault();
           router.push("/");
           break;
@@ -233,7 +233,7 @@ export function CommandPalette() {
 
   // Navigation items for filtering
   const navigationItems = [
-    { label: "Dashboard", path: "/", icon: RiHomeLine, shortcut: "D" },
+    { label: "Dashboard", path: "/", icon: RiHomeLine, shortcut: "B" },
     { label: "Transactions", path: "/transactions", icon: RiExchangeLine, shortcut: "T" },
     { label: "Assets", path: "/assets", icon: RiWallet3Line, shortcut: "A" },
     { label: "Settings", path: "/settings", icon: RiSettings3Line, shortcut: "S" },

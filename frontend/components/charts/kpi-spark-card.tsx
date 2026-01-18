@@ -50,6 +50,9 @@ export function KpiSparkCard({
   icon,
   isLoading = false,
 }: KpiSparkCardProps) {
+  // Generate unique ID for gradient to avoid conflicts with multiple charts
+  const gradientId = React.useId();
+
   if (isLoading) {
     return <KpiSparkCardSkeleton />;
   }
@@ -94,7 +97,7 @@ export function KpiSparkCard({
                 margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
               >
                 <defs>
-                  <linearGradient id="sparkGradient" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                     <stop
                       offset="0%"
                       stopColor="currentColor"
@@ -112,7 +115,7 @@ export function KpiSparkCard({
                   dataKey="value"
                   stroke="currentColor"
                   strokeWidth={1.5}
-                  fill="url(#sparkGradient)"
+                  fill={`url(#${gradientId})`}
                   dot={false}
                   isAnimationActive={false}
                 />

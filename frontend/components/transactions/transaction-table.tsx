@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import * as React from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { DataTable } from "@/components/ui/data-table";
 import type { TransactionWithRelations } from "@/lib/actions/transactions";
@@ -17,6 +18,7 @@ interface TransactionTableProps {
   accounts?: AccountForFilter[];
   onUpdateTransaction?: (id: string, updates: Partial<TransactionWithRelations>) => void;
   onBulkUpdate?: (transactionIds: string[], categoryId: string | null) => void;
+  action?: React.ReactNode;
 }
 
 export function TransactionTable({
@@ -25,6 +27,7 @@ export function TransactionTable({
   accounts = [],
   onUpdateTransaction,
   onBulkUpdate,
+  action,
 }: TransactionTableProps) {
   const [selectedTransaction, setSelectedTransaction] = useState<TransactionWithRelations | null>(null);
   const searchParams = useSearchParams();
@@ -65,7 +68,7 @@ export function TransactionTable({
         enablePagination={true}
         pageSize={20}
         toolbar={(table) => (
-          <TransactionFilters table={table} categories={categories} accounts={accounts} />
+          <TransactionFilters table={table} categories={categories} accounts={accounts} action={action} />
         )}
         pagination={(table) => <TransactionPagination table={table} />}
         bulkActions={(table) => {

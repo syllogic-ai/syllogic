@@ -65,9 +65,6 @@ export function TransactionsClient({
 
   return (
     <>
-      <div className="flex items-center shrink-0">
-        <AddTransactionButton onAddManual={handleAddManual} />
-      </div>
       <div className="min-h-0 flex-1 flex flex-col">
         <TransactionTable
           transactions={transactions}
@@ -75,6 +72,7 @@ export function TransactionsClient({
           accounts={accounts}
           onUpdateTransaction={handleUpdateTransaction}
           onBulkUpdate={handleBulkUpdate}
+          action={<AddTransactionButton onAddManual={handleAddManual} />}
         />
       </div>
       <AddTransactionDialog
