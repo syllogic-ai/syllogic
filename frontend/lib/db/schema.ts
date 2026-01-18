@@ -284,6 +284,26 @@ export const exchangeRates = pgTable(
   ]
 );
 
+export const accountTimeseries = pgTable(
+  "account_timeseries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    accountId: uuid("account_id")
+      .references(() => accounts.id, { onDelete: "cascade" })
+      .notNull(),
+    date: timestamp("date").notNull(), // Date of the balance snapshot
+    balanceInAccountCurrency: decimal("balance_in_account_currency", { precision: 15, scale: 2 }).notNull(), // Balance in account's currency
+    balanceInFunctionalCurrency: decimal("balance_in_functional_currency", { precision: 15, scale: 2 }).notNull(), // Balance converted to functional currency
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_account_timeseries_account").on(table.accountId),
+    index("idx_account_timeseries_date").on(table.date),
+    unique("account_timeseries_account_date").on(table.accountId, table.date),
+  ]
+);
+
 // ============================================================================
 // Relations
 // ============================================================================
@@ -322,6 +342,14 @@ export const accountsRelations = relations(accounts, ({ one, many }) => ({
   }),
   transactions: many(transactions),
   csvImports: many(csvImports),
+  timeseries: many(accountTimeseries),
+}));
+
+export const accountTimeseriesRelations = relations(accountTimeseries, ({ one }) => ({
+  account: one(accounts, {
+    fields: [accountTimeseries.accountId],
+    references: [accounts.id],
+  }),
 }));
 
 export const categoriesRelations = relations(categories, ({ one, many }) => ({

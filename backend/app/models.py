@@ -51,6 +51,7 @@ class Account(Base):
     user = relationship("User", back_populates="accounts")
     transactions = relationship("Transaction", back_populates="account")
     csv_imports = relationship("CsvImport", back_populates="account")
+    timeseries = relationship("AccountTimeseries", back_populates="account")
 
     # Indexes and constraints
     __table_args__ = (
@@ -229,6 +230,32 @@ class ExchangeRate(Base):
         Index("idx_exchange_rates_base", "base_currency"),
         Index("idx_exchange_rates_target", "target_currency"),
         UniqueConstraint("date", "base_currency", "target_currency", name="exchange_rates_date_base_target"),
+    )
+
+
+class AccountTimeseries(Base):
+    """
+    Account timeseries model for daily balance snapshots.
+    Stores daily balance for each account in both account currency and functional currency.
+    """
+    __tablename__ = "account_timeseries"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id = Column(UUID(as_uuid=True), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    date = Column(DateTime, nullable=False, index=True)  # Date of the balance snapshot
+    balance_in_account_currency = Column(Numeric(15, 2), nullable=False)  # Balance in account's currency
+    balance_in_functional_currency = Column(Numeric(15, 2), nullable=False)  # Balance converted to functional currency
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    account = relationship("Account", back_populates="timeseries")
+
+    # Indexes and constraints
+    __table_args__ = (
+        Index("idx_account_timeseries_account", "account_id"),
+        Index("idx_account_timeseries_date", "date"),
+        UniqueConstraint("account_id", "date", name="account_timeseries_account_date"),
     )
 
 

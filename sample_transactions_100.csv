@@ -1,0 +1,120 @@
+date,description,merchant,amount
+2025-07-02,Monthly Salary Payment,ACME Corp,3500.00
+2025-07-05,Grocery Shopping,SuperMart,-125.50
+2025-07-08,Electricity Bill,PowerCo,-85.30
+2025-07-10,Gas Station Fill Up,QuickFuel,-45.20
+2025-07-12,Restaurant Dinner,La Bella Vista,-67.80
+2025-07-15,Performance Bonus,ACME Corp,500.00
+2025-07-18,Netflix Subscription,Netflix,-15.99
+2025-07-20,Amazon Purchase,Amazon,-89.45
+2025-07-22,Pharmacy Prescription,HealthPharm,-32.10
+2025-07-25,Monthly Rent Payment,Property Management,-1200.00
+2025-07-28,Internet Service Provider,TechConnect,-49.99
+2025-07-30,Gym Membership,FitLife,-29.99
+2025-08-02,Monthly Salary Payment,ACME Corp,3500.00
+2025-08-05,Grocery Shopping,SuperMart,-142.30
+2025-08-08,Water Bill,WaterWorks,-38.50
+2025-08-10,Restaurant Lunch,The Corner Cafe,-24.50
+2025-08-12,Gas Station Fill Up,QuickFuel,-48.75
+2025-08-15,Spotify Premium,Spotify,-9.99
+2025-08-18,Clothing Store,StyleMart,-156.80
+2025-08-20,Quarterly Commission,ACME Corp,1200.00
+2025-08-22,Pharmacy Over Counter,HealthPharm,-18.45
+2025-08-25,Monthly Rent Payment,Property Management,-1200.00
+2025-08-28,Internet Service Provider,TechConnect,-49.99
+2025-08-30,Insurance Premium,SecureLife Insurance,-150.00
+2025-09-02,Monthly Salary Payment,ACME Corp,3500.00
+2025-09-05,Grocery Shopping,SuperMart,-138.90
+2025-09-08,Electricity Bill,PowerCo,-92.40
+2025-09-10,Coffee Shop,Bean There,-12.50
+2025-09-12,Gas Station Fill Up,QuickFuel,-52.30
+2025-09-15,Quarterly Commission,ACME Corp,1200.00
+2025-09-18,Amazon Purchase,Amazon,-234.67
+2025-09-20,Restaurant Dinner,La Bella Vista,-89.20
+2025-09-22,Pharmacy Prescription,HealthPharm,-45.80
+2025-09-25,Monthly Rent Payment,Property Management,-1200.00
+2025-09-28,Internet Service Provider,TechConnect,-49.99
+2025-09-30,Cell Phone Bill,MobileNet,-65.00
+2025-10-02,Monthly Salary Payment,ACME Corp,3500.00
+2025-10-05,Grocery Shopping,SuperMart,-165.40
+2025-10-08,Water Bill,WaterWorks,-42.30
+2025-10-10,Gas Station Fill Up,QuickFuel,-46.80
+2025-10-12,Restaurant Lunch,The Corner Cafe,-28.90
+2025-10-15,Netflix Subscription,Netflix,-15.99
+2025-10-18,Home Improvement Store,HomeDepot,-287.50
+2025-10-20,Annual Bonus,ACME Corp,5000.00
+2025-10-22,Pharmacy Over Counter,HealthPharm,-22.15
+2025-10-25,Monthly Rent Payment,Property Management,-1200.00
+2025-10-28,Internet Service Provider,TechConnect,-49.99
+2025-10-30,Gym Membership,FitLife,-29.99
+2025-11-02,Monthly Salary Payment,ACME Corp,3500.00
+2025-11-05,Grocery Shopping,SuperMart,-178.60
+2025-11-08,Electricity Bill,PowerCo,-98.70
+2025-11-10,Gas Station Fill Up,QuickFuel,-51.20
+2025-11-12,Restaurant Dinner,La Bella Vista,-95.40
+2025-11-15,Spotify Premium,Spotify,-9.99
+2025-11-18,Amazon Purchase,Amazon,-312.45
+2025-11-20,Performance Bonus,ACME Corp,750.00
+2025-11-22,Pharmacy Prescription,HealthPharm,-38.90
+2025-11-25,Monthly Rent Payment,Property Management,-1200.00
+2025-11-28,Internet Service Provider,TechConnect,-49.99
+2025-11-30,Insurance Premium,SecureLife Insurance,-150.00
+2025-12-02,Monthly Salary Payment,ACME Corp,3500.00
+2025-12-05,Grocery Shopping,SuperMart,-198.30
+2025-12-08,Water Bill,WaterWorks,-45.60
+2025-12-10,Gas Station Fill Up,QuickFuel,-49.90
+2025-12-12,Restaurant Lunch,The Corner Cafe,-32.40
+2025-12-15,Netflix Subscription,Netflix,-15.99
+2025-12-18,Holiday Bonus,ACME Corp,1000.00
+2025-12-20,Amazon Purchase,Amazon,-456.78
+2025-12-22,Pharmacy Over Counter,HealthPharm,-19.85
+2025-12-25,Monthly Rent Payment,Property Management,-1200.00
+2025-12-28,Internet Service Provider,TechConnect,-49.99
+2025-12-30,Cell Phone Bill,MobileNet,-65.00
+2026-01-02,Monthly Salary Payment,ACME Corp,3500.00
+2026-01-05,Freelance Payment,Design Studio,850.00
+2026-01-08,Investment Dividend,StockBroker Inc,125.50
+2026-01-10,Tax Refund,IRS,450.00
+2026-01-12,Side Gig Payment,Freelance Platform,320.00
+2026-01-15,Referral Bonus,ACME Corp,200.00
+2026-01-18,Consulting Fee,Consulting Co,1500.00
+2026-01-20,Royalty Payment,Publisher Inc,275.00
+2026-01-22,Refund - Returned Item,Amazon,89.45
+2026-01-25,Monthly Salary Payment,ACME Corp,3500.00
+2026-01-28,Performance Bonus,ACME Corp,550.00
+2026-01-30,Interest Payment,Savings Bank,45.20
+2026-02-02,Monthly Salary Payment,ACME Corp,3500.00
+2026-02-05,Quarterly Commission,ACME Corp,1200.00
+2026-02-08,Freelance Writing Payment,Content Agency,425.00
+2026-02-10,Investment Return,Investment Fund,180.75
+2026-02-12,Referral Commission,Referral Program,150.00
+2026-02-15,Performance Incentive,ACME Corp,300.00
+2026-02-18,Online Course Sale,Education Platform,125.00
+2026-02-20,Photography Gig,Event Photography,650.00
+2026-02-22,Stock Dividend,StockBroker Inc,95.30
+2026-02-25,Monthly Salary Payment,ACME Corp,3500.00
+2026-02-28,Bonus Payment,ACME Corp,400.00
+2026-03-02,Monthly Salary Payment,ACME Corp,3500.00
+2026-03-05,Quarterly Commission,ACME Corp,1200.00
+2026-03-08,Freelance Design Work,Design Agency,725.00
+2026-03-10,Investment Income,Investment Account,210.50
+2026-03-12,Referral Reward,Referral Program,175.00
+2026-03-15,Performance Bonus,ACME Corp,600.00
+2026-03-18,Consulting Payment,Business Consulting,1200.00
+2026-03-20,Online Sale,Marketplace Platform,285.00
+2026-03-22,Stock Dividend,StockBroker Inc,110.25
+2026-03-25,Monthly Salary Payment,ACME Corp,3500.00
+2026-03-28,Commission Payment,ACME Corp,450.00
+2026-03-30,Interest Income,Savings Account,38.75
+2026-04-02,Monthly Salary Payment,ACME Corp,3500.00
+2026-04-05,Quarterly Commission,ACME Corp,1200.00
+2026-04-08,Freelance Project,Client Corp,950.00
+2026-04-10,Investment Return,Investment Fund,195.00
+2026-04-12,Referral Bonus,Referral Program,200.00
+2026-04-15,Performance Incentive,ACME Corp,350.00
+2026-04-18,Online Course Revenue,Education Platform,150.00
+2026-04-20,Photography Assignment,Photo Studio,575.00
+2026-04-22,Stock Dividend,StockBroker Inc,102.50
+2026-04-25,Monthly Salary Payment,ACME Corp,3500.00
+2026-04-28,Bonus Payment,ACME Corp,500.00
+2026-04-30,Interest Payment,Bank Account,42.30

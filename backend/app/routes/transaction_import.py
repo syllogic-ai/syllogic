@@ -7,6 +7,7 @@ Handles the complete workflow:
 4. Sync exchange rates
 5. Update functional amounts
 6. Calculate account balances
+7. Calculate and store account timeseries (daily balance snapshots)
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -18,7 +19,7 @@ import logging
 
 from app.database import get_db
 from app.db_helpers import get_user_id
-from app.models import Transaction, Account, User
+from app.models import Transaction, Account, User, ExchangeRate, AccountTimeseries
 from pydantic import BaseModel
 from app.schemas import (
     TransactionCreate,
@@ -30,6 +31,7 @@ from app.schemas import (
 from app.models import Category
 from app.services.category_matcher import CategoryMatcher
 from app.services.exchange_rate_service import ExchangeRateService
+from app.services.account_balance_service import AccountBalanceService
 from sqlalchemy import func
 
 logger = logging.getLogger(__name__)
@@ -68,6 +70,7 @@ class TransactionImportResponse(BaseModel):
     exchange_rates_synced: Optional[dict] = None
     functional_amounts_updated: Optional[dict] = None
     balances_calculated: Optional[dict] = None
+    timeseries_calculated: Optional[dict] = None
 
 
 def _get_user_overrides_from_db(db: Session, user_id: str) -> List[dict]:
@@ -503,35 +506,94 @@ def import_transactions(
         if request.sync_exchange_rates:
             logger.info("[IMPORT] Syncing exchange rates...")
             try:
-                # Get unique currencies from inserted transactions
-                currencies = list(set([txn["currency"] for txn in normalized_transactions]))
+                # Get unique account IDs from imported transactions
+                account_ids = list(set([txn["account_id"] for txn in normalized_transactions]))
                 
-                # Find earliest transaction date for each currency
-                earliest_dates = {}
-                for currency in currencies:
-                    earliest = db.query(func.min(Transaction.booked_at)).filter(
-                        Transaction.user_id == user_id,
-                        Transaction.currency == currency
-                    ).scalar()
-                    if earliest:
-                        earliest_dates[currency] = earliest.date()
+                # Get account currencies (base currencies for exchange rate fetching)
+                account_currencies = []
+                for account_id in account_ids:
+                    account = db.query(Account).filter(Account.id == account_id).first()
+                    if account and account.currency:
+                        if account.currency not in account_currencies:
+                            account_currencies.append(account.currency)
                 
-                if earliest_dates:
-                    earliest_date = min(earliest_dates.values())
-                    end_date = datetime.now().date()
-                    
-                    # Sync exchange rates
-                    service = ExchangeRateService(db)
-                    exchange_rates_result = service.sync_exchange_rates(
+                # If no account currencies found, default to EUR
+                if not account_currencies:
+                    account_currencies = ["EUR"]
+                    logger.warning("[IMPORT] No account currencies found, defaulting to EUR")
+                
+                # Find earliest transaction date from imported transactions only
+                if normalized_transactions:
+                    earliest_date = min([
+                        txn["booked_at"].date() if isinstance(txn["booked_at"], datetime) 
+                        else (txn["booked_at"] if isinstance(txn["booked_at"], date) else datetime.now().date())
+                        for txn in normalized_transactions
+                    ])
+                else:
+                    earliest_date = datetime.now().date()
+                
+                end_date = datetime.now().date()
+                
+                logger.info(
+                    f"[IMPORT] Fetching exchange rates for account currencies {account_currencies} "
+                    f"from {earliest_date} to {end_date}"
+                )
+                
+                # Fetch exchange rates for each account currency
+                service = ExchangeRateService(db)
+                total_rates_stored = 0
+                
+                for account_currency in account_currencies:
+                    # Fetch rates for this account currency to EUR and USD
+                    rates_by_date = service.fetch_exchange_rates_batch(
+                        base_currency=account_currency,
+                        target_currencies=["EUR", "USD"],
                         start_date=earliest_date,
                         end_date=end_date
                     )
+                    
+                    # Store the fetched rates for each date
+                    stored_count = 0
+                    for rate_date, rate_dict in rates_by_date.items():
+                        # Store EUR rate if available
+                        if "EUR" in rate_dict:
+                            eur_stored = service.store_exchange_rates(
+                                target_currency="EUR",
+                                rates={account_currency: rate_dict["EUR"]},
+                                for_date=rate_date
+                            )
+                            stored_count += eur_stored
+                        
+                        # Store USD rate if available
+                        if "USD" in rate_dict:
+                            usd_stored = service.store_exchange_rates(
+                                target_currency="USD",
+                                rates={account_currency: rate_dict["USD"]},
+                                for_date=rate_date
+                            )
+                            stored_count += usd_stored
+                    
+                    total_rates_stored += stored_count
                     logger.info(
-                        f"[IMPORT] Exchange rates synced: "
-                        f"{exchange_rates_result.get('total_rates_stored', 0)} rates stored"
+                        f"[IMPORT] Fetched and stored {stored_count} rates for {account_currency} -> EUR/USD"
                     )
+                
+                exchange_rates_result = {
+                    "total_rates_stored": total_rates_stored,
+                    "account_currencies": account_currencies,
+                    "date_range": {
+                        "start": earliest_date.isoformat(),
+                        "end": end_date.isoformat()
+                    }
+                }
+                logger.info(
+                    f"[IMPORT] Exchange rates synced: "
+                    f"{total_rates_stored} rates stored for currencies {account_currencies}"
+                )
             except Exception as e:
                 logger.error(f"[IMPORT] Error syncing exchange rates: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
                 exchange_rates_result = {"error": str(e)}
         
         # Step 7: Update functional amounts
@@ -593,50 +655,18 @@ def import_transactions(
         
         # Step 8: Calculate account balances
         balances_result = None
+        balance_service = None
         if request.calculate_balances:
             logger.info("[IMPORT] Calculating account balances...")
-            try:
-                # Get all accounts for user
-                accounts = db.query(Account).filter(Account.user_id == user_id).all()
-                
-                updated_accounts = 0
-                for account in accounts:
-                    # Sum all transactions for this account
-                    # Use COALESCE to handle NULL values properly
-                    transaction_sum_result = db.query(func.sum(Transaction.amount)).filter(
-                        Transaction.user_id == user_id,
-                        Transaction.account_id == account.id
-                    ).scalar()
-                    
-                    # Handle NULL result from sum() when no transactions exist
-                    if transaction_sum_result is None:
-                        transaction_sum = Decimal("0")
-                    else:
-                        transaction_sum = Decimal(str(transaction_sum_result))
-                    
-                    # Calculate functional_balance = sum(transactions) + starting_balance
-                    starting_balance = account.starting_balance or Decimal("0")
-                    functional_balance = transaction_sum + starting_balance
-                    
-                    logger.debug(
-                        f"[IMPORT] Account {account.name}: "
-                        f"transaction_sum={transaction_sum}, "
-                        f"starting_balance={starting_balance}, "
-                        f"functional_balance={functional_balance}"
-                    )
-                    
-                    # Update the account
-                    account.functional_balance = functional_balance
-                    updated_accounts += 1
-                
-                db.commit()
-                balances_result = {
-                    "accounts_updated": updated_accounts
-                }
-                logger.info(f"[IMPORT] Calculated balances for {updated_accounts} accounts")
-            except Exception as e:
-                logger.error(f"[IMPORT] Error calculating balances: {e}")
-                balances_result = {"error": str(e)}
+            balance_service = AccountBalanceService(db)
+            balances_result = balance_service.calculate_account_balances(user_id)
+        
+        # Step 9: Calculate and store account timeseries
+        timeseries_result = None
+        logger.info("[IMPORT] Calculating account timeseries...")
+        if balance_service is None:
+            balance_service = AccountBalanceService(db)
+        timeseries_result = balance_service.calculate_account_timeseries(user_id)
         
         return TransactionImportResponse(
             success=True,
@@ -654,7 +684,8 @@ def import_transactions(
             },
             exchange_rates_synced=exchange_rates_result,
             functional_amounts_updated=functional_amounts_result,
-            balances_calculated=balances_result
+            balances_calculated=balances_result,
+            timeseries_calculated=timeseries_result
         )
         
     except HTTPException:
