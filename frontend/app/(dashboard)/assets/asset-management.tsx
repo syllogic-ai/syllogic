@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useRegisterCommandPaletteCallbacks } from "@/components/command-palette-context";
 import {
   RiDeleteBinLine,
   RiEditLine,
@@ -104,6 +105,19 @@ export function AssetManagement({
 }: AssetManagementProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [isAddAssetDialogOpen, setIsAddAssetDialogOpen] = useState(false);
+
+  const handleOpenAddAssetDialog = useCallback(() => {
+    setIsAddAssetDialogOpen(true);
+  }, []);
+
+  // Register command palette callbacks
+  useRegisterCommandPaletteCallbacks(
+    {
+      onAddAsset: handleOpenAddAssetDialog,
+    },
+    [handleOpenAddAssetDialog]
+  );
 
   // Edit states
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
@@ -331,7 +345,11 @@ export function AssetManagement({
             Add and manage your accounts, properties, and vehicles.
           </p>
         </div>
-        <AddAssetDialog onAssetAdded={handleRefresh} />
+        <AddAssetDialog
+          onAssetAdded={handleRefresh}
+          open={isAddAssetDialogOpen}
+          onOpenChange={setIsAddAssetDialogOpen}
+        />
       </div>
 
       {/* Accounts Section */}

@@ -21,30 +21,38 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CURRENCIES } from "@/lib/constants/currencies";
+import { CURRENCIES, ACCOUNT_TYPES } from "@/lib/constants";
 import { createAccount } from "@/lib/actions/accounts";
 import { AssetTypeSelector } from "./asset-type-selector";
 import { AddPropertyForm } from "./add-property-form";
 import { AddVehicleForm } from "./add-vehicle-form";
 import type { AssetType } from "./types";
 
-const ACCOUNT_TYPES = [
-  { value: "checking", label: "Checking Account" },
-  { value: "savings", label: "Savings Account" },
-  { value: "credit_card", label: "Credit Card" },
-  { value: "investment", label: "Investment Account" },
-  { value: "cash", label: "Cash" },
-  { value: "other", label: "Other" },
-] as const;
-
 interface AddAssetDialogProps {
   onAssetAdded?: () => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  showTrigger?: boolean;
 }
 
 type DialogStep = "select" | "property" | "vehicle" | "account";
 
-export function AddAssetDialog({ onAssetAdded }: AddAssetDialogProps) {
-  const [open, setOpen] = useState(false);
+export function AddAssetDialog({
+  onAssetAdded,
+  open: controlledOpen,
+  onOpenChange,
+  showTrigger = true,
+}: AddAssetDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = (newOpen: boolean) => {
+    if (isControlled) {
+      onOpenChange?.(newOpen);
+    } else {
+      setInternalOpen(newOpen);
+    }
+  };
   const [step, setStep] = useState<DialogStep>("select");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -158,10 +166,12 @@ export function AddAssetDialog({ onAssetAdded }: AddAssetDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button size="sm" variant="outline" />}>
-        <RiAddLine className="mr-2 h-4 w-4" />
-        Add Asset
-      </DialogTrigger>
+      {showTrigger && (
+        <DialogTrigger render={<Button size="sm" variant="outline" />}>
+          <RiAddLine className="mr-2 h-4 w-4" />
+          Add Asset
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           {step !== "select" && (

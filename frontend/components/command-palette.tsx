@@ -1,17 +1,21 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
-  RiDashboardLine,
+  RiHomeLine,
   RiExchangeLine,
   RiSettings3Line,
   RiAddLine,
   RiMoonLine,
   RiSunLine,
-  RiComputerLine,
-  RiPieChartLine,
+  RiWallet3Line,
+  RiDownloadLine,
+  RiUploadLine,
+  RiRefreshLine,
+  RiLoader4Line,
+  RiBankLine,
 } from "@remixicon/react";
 import {
   CommandDialog,
@@ -24,114 +28,453 @@ import {
   CommandShortcut,
   CommandSeparator,
 } from "@/components/ui/command";
+import {
+  getCommandPaletteData,
+  type CommandPaletteData,
+} from "@/lib/actions/command-palette";
+import { formatAmount, formatDate } from "@/lib/utils";
+import { useCommandPaletteCallbacks } from "./command-palette-context";
 
-interface CommandPaletteProps {
-  onAddTransaction?: () => void;
-}
+const MIN_SEARCH_LENGTH = 2;
 
-export function CommandPalette({ onAddTransaction }: CommandPaletteProps) {
+export function CommandPalette() {
+  const { callbacks } = useCommandPaletteCallbacks();
+  const { onAddTransaction, onExportCSV, onAddAsset, onRefreshData } = callbacks;
   const [open, setOpen] = React.useState(false);
+  const [data, setData] = React.useState<CommandPaletteData | null>(null);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [search, setSearch] = React.useState("");
   const router = useRouter();
+  const pathname = usePathname();
   const { setTheme, theme } = useTheme();
 
-  // Handle keyboard shortcuts
+  // Fetch data when search reaches minimum length
+  React.useEffect(() => {
+    if (open && search.length >= MIN_SEARCH_LENGTH && !data) {
+      setIsLoading(true);
+      getCommandPaletteData()
+        .then(setData)
+        .finally(() => setIsLoading(false));
+    }
+  }, [open, search, data]);
+
+  // Reset search when palette closes
+  React.useEffect(() => {
+    if (!open) {
+      setSearch("");
+    }
+  }, [open]);
+
+  // Handle Cmd+K to open palette
   React.useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      // CMD+K or CTRL+K to toggle command palette
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        setOpen((open) => !open);
+        setOpen((o) => !o);
       }
+    };
+    document.addEventListener("keydown", down);
+    return () => document.removeEventListener("keydown", down);
+  }, []);
 
-      // CMD+N or CTRL+N to add transaction
-      if (e.key === "n" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        onAddTransaction?.();
-      }
+  // Handle direct navigation keys (only when palette is closed and not in input)
+  React.useEffect(() => {
+    const handleDirectKeys = (e: KeyboardEvent) => {
+      // Skip if palette is open
+      if (open) return;
 
-      // CMD+/ or CTRL+/ to toggle theme
-      if (e.key === "/" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        setTheme(theme === "dark" ? "light" : "dark");
+      // Skip if modifier keys are pressed
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+
+      // Skip if focused on input/textarea/contenteditable
+      const activeElement = document.activeElement;
+      const isInputFocused =
+        activeElement instanceof HTMLInputElement ||
+        activeElement instanceof HTMLTextAreaElement ||
+        activeElement?.getAttribute("contenteditable") === "true" ||
+        activeElement?.closest("[cmdk-input]");
+
+      if (isInputFocused) return;
+
+      const key = e.key.toLowerCase();
+
+      switch (key) {
+        case "d":
+          e.preventDefault();
+          router.push("/");
+          break;
+        case "t":
+          e.preventDefault();
+          router.push("/transactions");
+          break;
+        case "a":
+          e.preventDefault();
+          router.push("/assets");
+          break;
+        case "s":
+          e.preventDefault();
+          router.push("/settings");
+          break;
+        case "n":
+          e.preventDefault();
+          onAddTransaction?.();
+          break;
+        case "m":
+          e.preventDefault();
+          setTheme(theme === "dark" ? "light" : "dark");
+          break;
       }
     };
 
-    document.addEventListener("keydown", down);
-    return () => document.removeEventListener("keydown", down);
-  }, [theme, setTheme, onAddTransaction]);
+    document.addEventListener("keydown", handleDirectKeys);
+    return () => document.removeEventListener("keydown", handleDirectKeys);
+  }, [open, router, theme, setTheme, onAddTransaction]);
 
   const runCommand = React.useCallback((command: () => void) => {
     setOpen(false);
     command();
   }, []);
 
+  // Default refresh handler
+  const handleRefreshData = React.useCallback(() => {
+    if (onRefreshData) {
+      onRefreshData();
+    } else {
+      router.refresh();
+    }
+  }, [router, onRefreshData]);
+
+  // Get contextual actions based on current route
+  const getContextualActions = () => {
+    const actions: Array<{
+      label: string;
+      icon: React.ComponentType<{ className?: string }>;
+      onSelect: () => void;
+      shortcut?: string;
+    }> = [];
+
+    switch (pathname) {
+      case "/":
+        actions.push({
+          label: "Refresh data",
+          icon: RiRefreshLine,
+          onSelect: handleRefreshData,
+        });
+        break;
+      case "/transactions":
+        if (onExportCSV) {
+          actions.push({
+            label: "Export CSV",
+            icon: RiDownloadLine,
+            onSelect: onExportCSV,
+          });
+        }
+        actions.push({
+          label: "Import CSV",
+          icon: RiUploadLine,
+          onSelect: () => router.push("/transactions/import"),
+        });
+        break;
+      case "/assets":
+        if (onAddAsset) {
+          actions.push({
+            label: "Add asset",
+            icon: RiAddLine,
+            onSelect: onAddAsset,
+          });
+        }
+        break;
+    }
+
+    return actions;
+  };
+
+  const contextualActions = getContextualActions();
+
+  // Determine if we should show search results
+  const shouldSearch = search.length >= MIN_SEARCH_LENGTH;
+
+  // Filter function for search
+  const filteredAccounts = React.useMemo(() => {
+    if (!data?.accounts || !shouldSearch) return [];
+    const term = search.toLowerCase();
+    return data.accounts.filter(
+      (a) =>
+        a.name.toLowerCase().includes(term) ||
+        a.institution?.toLowerCase().includes(term)
+    );
+  }, [data?.accounts, search, shouldSearch]);
+
+  const filteredAssets = React.useMemo(() => {
+    if (!data?.assets || !shouldSearch) return [];
+    const term = search.toLowerCase();
+    return data.assets.filter(
+      (a) =>
+        a.name.toLowerCase().includes(term) ||
+        a.subtitle?.toLowerCase().includes(term)
+    );
+  }, [data?.assets, search, shouldSearch]);
+
+  const filteredTransactions = React.useMemo(() => {
+    if (!data?.transactions || !shouldSearch) return [];
+    const term = search.toLowerCase();
+    return data.transactions.filter(
+      (t) =>
+        t.merchant?.toLowerCase().includes(term) ||
+        t.description?.toLowerCase().includes(term)
+    );
+  }, [data?.transactions, search, shouldSearch]);
+
+  // Check if we have any search results
+  const hasSearchResults =
+    filteredAccounts.length > 0 ||
+    filteredAssets.length > 0 ||
+    filteredTransactions.length > 0;
+
+  // Navigation items for filtering
+  const navigationItems = [
+    { label: "Dashboard", path: "/", icon: RiHomeLine, shortcut: "D" },
+    { label: "Transactions", path: "/transactions", icon: RiExchangeLine, shortcut: "T" },
+    { label: "Assets", path: "/assets", icon: RiWallet3Line, shortcut: "A" },
+    { label: "Settings", path: "/settings", icon: RiSettings3Line, shortcut: "S" },
+  ];
+
+  // Theme items for filtering
+  const themeItems = [
+    { label: "Light Mode", action: () => setTheme("light"), icon: RiSunLine },
+    { label: "Dark Mode", action: () => setTheme("dark"), icon: RiMoonLine },
+    { label: "Toggle Theme", action: () => setTheme(theme === "dark" ? "light" : "dark"), icon: theme === "dark" ? RiSunLine : RiMoonLine, shortcut: "M" },
+  ];
+
+  // Filter navigation items based on search
+  const filteredNavigation = React.useMemo(() => {
+    if (!search) return navigationItems;
+    const term = search.toLowerCase();
+    return navigationItems.filter((item) =>
+      item.label.toLowerCase().includes(term)
+    );
+  }, [search]);
+
+  // Filter contextual actions based on search
+  const filteredActions = React.useMemo(() => {
+    if (!search) return contextualActions;
+    const term = search.toLowerCase();
+    return contextualActions.filter((action) =>
+      action.label.toLowerCase().includes(term)
+    );
+  }, [search, contextualActions]);
+
+  // Filter theme items based on search
+  const filteredTheme = React.useMemo(() => {
+    if (!search) return themeItems;
+    const term = search.toLowerCase();
+    return themeItems.filter((item) =>
+      item.label.toLowerCase().includes(term)
+    );
+  }, [search, themeItems]);
+
+  // Check if we have any filtered command results
+  const hasCommandResults =
+    filteredNavigation.length > 0 ||
+    filteredActions.length > 0 ||
+    filteredTheme.length > 0;
+
   return (
-    <CommandDialog open={open} onOpenChange={setOpen}>
-      <Command className="[&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:font-medium">
-        <CommandInput placeholder="Type a command or search..." />
+    <CommandDialog
+      open={open}
+      onOpenChange={setOpen}
+      className="sm:max-w-xl"
+    >
+      <Command
+        className="[&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:font-medium"
+        shouldFilter={false}
+      >
+        <CommandInput
+          placeholder="Search or type a command..."
+          value={search}
+          onValueChange={setSearch}
+        />
         <CommandList>
-          <CommandEmpty>No results found.</CommandEmpty>
+          {isLoading && shouldSearch ? (
+            <div className="flex items-center justify-center py-6">
+              <RiLoader4Line className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <>
+              {/* Show "no results" when nothing matches */}
+              {search && !hasSearchResults && !hasCommandResults && (
+                <CommandEmpty>No results found.</CommandEmpty>
+              )}
 
-          <CommandGroup heading="Navigation">
-            <CommandItem
-              onSelect={() => runCommand(() => router.push("/"))}
-            >
-              <RiDashboardLine className="mr-2 h-4 w-4" />
-              <span>Dashboard</span>
-              <CommandShortcut>G D</CommandShortcut>
-            </CommandItem>
-            <CommandItem
-              onSelect={() => runCommand(() => router.push("/transactions"))}
-            >
-              <RiExchangeLine className="mr-2 h-4 w-4" />
-              <span>Transactions</span>
-              <CommandShortcut>G T</CommandShortcut>
-            </CommandItem>
-            <CommandItem
-              onSelect={() => runCommand(() => router.push("/assets"))}
-            >
-              <RiPieChartLine className="mr-2 h-4 w-4" />
-              <span>Assets</span>
-              <CommandShortcut>G A</CommandShortcut>
-            </CommandItem>
-            <CommandItem
-              onSelect={() => runCommand(() => router.push("/settings"))}
-            >
-              <RiSettings3Line className="mr-2 h-4 w-4" />
-              <span>Settings</span>
-              <CommandShortcut>G S</CommandShortcut>
-            </CommandItem>
-          </CommandGroup>
+              {/* Search results - only show when searching with 2+ characters */}
+              {shouldSearch && hasSearchResults && (
+                <>
+                  {filteredAccounts.length > 0 && (
+                    <CommandGroup heading="ACCOUNTS">
+                      {filteredAccounts.map((account) => (
+                        <CommandItem
+                          key={account.id}
+                          onSelect={() => runCommand(() => router.push("/settings"))}
+                          className="flex items-center justify-between"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <RiBankLine className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            <span className="truncate">{account.name}</span>
+                            {account.institution && (
+                              <>
+                                <span className="text-muted-foreground">·</span>
+                                <span className="text-muted-foreground truncate">
+                                  {account.institution}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                          <span className="text-muted-foreground text-sm shrink-0 ml-2">
+                            {formatAmount(account.balance, account.currency)}
+                          </span>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  )}
 
-          <CommandSeparator />
+                  {filteredAssets.length > 0 && (
+                    <>
+                      {filteredAccounts.length > 0 && <CommandSeparator />}
+                      <CommandGroup heading="ASSETS">
+                        {filteredAssets.map((asset) => (
+                          <CommandItem
+                            key={asset.id}
+                            onSelect={() => runCommand(() => router.push("/assets"))}
+                            className="flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span
+                                className="inline-block h-2 w-2 shrink-0 rounded-full"
+                                style={{ backgroundColor: asset.categoryColor }}
+                              />
+                              <span className="truncate">{asset.name}</span>
+                              {asset.subtitle && (
+                                <>
+                                  <span className="text-muted-foreground">·</span>
+                                  <span className="text-muted-foreground truncate">
+                                    {asset.subtitle}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                            <span className="text-muted-foreground text-sm shrink-0 ml-2">
+                              {formatAmount(asset.value, asset.currency)}
+                            </span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </>
+                  )}
 
-          <CommandGroup heading="Actions">
-            <CommandItem
-              onSelect={() => runCommand(() => onAddTransaction?.())}
-            >
-              <RiAddLine className="mr-2 h-4 w-4" />
-              <span>Add Transaction</span>
-              <CommandShortcut>⌘N</CommandShortcut>
-            </CommandItem>
-          </CommandGroup>
+                  {filteredTransactions.length > 0 && (
+                    <>
+                      {(filteredAccounts.length > 0 || filteredAssets.length > 0) && (
+                        <CommandSeparator />
+                      )}
+                      <CommandGroup heading="TRANSACTIONS">
+                        {filteredTransactions.slice(0, 10).map((tx) => (
+                          <CommandItem
+                            key={tx.id}
+                            onSelect={() =>
+                              runCommand(() =>
+                                router.push(`/transactions?tx=${tx.id}`)
+                              )
+                            }
+                            className="flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <RiExchangeLine className="h-4 w-4 shrink-0 text-muted-foreground" />
+                              <span className="truncate">
+                                {tx.merchant || tx.description || "Transaction"}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0 ml-2">
+                              <span
+                                className={
+                                  tx.amount < 0 ? "text-red-500" : "text-green-500"
+                                }
+                              >
+                                {formatAmount(tx.amount, tx.currency)}
+                              </span>
+                              <span className="text-muted-foreground text-xs">
+                                {formatDate(new Date(tx.bookedAt), "short")}
+                              </span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </>
+                  )}
+                </>
+              )}
 
-          <CommandSeparator />
+              {/* Navigation - filtered based on search */}
+              {filteredNavigation.length > 0 && (
+                <>
+                  {shouldSearch && hasSearchResults && <CommandSeparator />}
+                  <CommandGroup heading="NAVIGATION">
+                    {filteredNavigation.map((item) => (
+                      <CommandItem
+                        key={item.path}
+                        onSelect={() => runCommand(() => router.push(item.path))}
+                      >
+                        <item.icon className="mr-2 h-4 w-4" />
+                        <span>{item.label}</span>
+                        <CommandShortcut>{item.shortcut}</CommandShortcut>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </>
+              )}
 
-          <CommandGroup heading="Theme">
-            <CommandItem onSelect={() => runCommand(() => setTheme("light"))}>
-              <RiSunLine className="mr-2 h-4 w-4" />
-              <span>Light Mode</span>
-            </CommandItem>
-            <CommandItem onSelect={() => runCommand(() => setTheme("dark"))}>
-              <RiMoonLine className="mr-2 h-4 w-4" />
-              <span>Dark Mode</span>
-            </CommandItem>
-            <CommandItem onSelect={() => runCommand(() => setTheme("system"))}>
-              <RiComputerLine className="mr-2 h-4 w-4" />
-              <span>System Theme</span>
-              <CommandShortcut>⌘/</CommandShortcut>
-            </CommandItem>
-          </CommandGroup>
+              {/* Actions - filtered based on search */}
+              {filteredActions.length > 0 && (
+                <>
+                  <CommandSeparator />
+                  <CommandGroup heading="ACTIONS">
+                    {filteredActions.map((action) => (
+                      <CommandItem
+                        key={action.label}
+                        onSelect={() => runCommand(action.onSelect)}
+                      >
+                        <action.icon className="mr-2 h-4 w-4" />
+                        <span>{action.label}</span>
+                        {action.shortcut && (
+                          <CommandShortcut>{action.shortcut}</CommandShortcut>
+                        )}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </>
+              )}
+
+              {/* Theme - filtered based on search */}
+              {filteredTheme.length > 0 && (
+                <>
+                  <CommandSeparator />
+                  <CommandGroup heading="THEME">
+                    {filteredTheme.map((item) => (
+                      <CommandItem
+                        key={item.label}
+                        onSelect={() => runCommand(item.action)}
+                      >
+                        <item.icon className="mr-2 h-4 w-4" />
+                        <span>{item.label}</span>
+                        {item.shortcut && (
+                          <CommandShortcut>{item.shortcut}</CommandShortcut>
+                        )}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </>
+              )}
+            </>
+          )}
         </CommandList>
       </Command>
     </CommandDialog>

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { DataTable } from "@/components/ui/data-table";
 import type { TransactionWithRelations } from "@/lib/actions/transactions";
 import type { CategoryDisplay, AccountForFilter } from "@/types";
@@ -18,14 +19,29 @@ interface TransactionTableProps {
   onBulkUpdate?: (transactionIds: string[], categoryId: string | null) => void;
 }
 
-export function TransactionTable({ 
-  transactions, 
-  categories = [], 
-  accounts = [], 
+export function TransactionTable({
+  transactions,
+  categories = [],
+  accounts = [],
   onUpdateTransaction,
   onBulkUpdate,
 }: TransactionTableProps) {
   const [selectedTransaction, setSelectedTransaction] = useState<TransactionWithRelations | null>(null);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  // Handle URL query param for auto-selecting a transaction
+  useEffect(() => {
+    const txId = searchParams.get("tx");
+    if (txId) {
+      const tx = transactions.find((t) => t.id === txId);
+      if (tx) {
+        setSelectedTransaction(tx);
+        // Clear the URL param to avoid re-selecting on navigation
+        router.replace("/transactions", { scroll: false });
+      }
+    }
+  }, [searchParams, transactions, router]);
 
   const handleRowClick = (transaction: TransactionWithRelations) => {
     setSelectedTransaction(transaction);

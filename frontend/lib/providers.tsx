@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { CommandPalette } from "@/components/command-palette";
+import { CommandPaletteProvider } from "@/components/command-palette-context";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -27,9 +28,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
       disableTransitionOnChange
     >
       <QueryClientProvider client={queryClient}>
-        {children}
-        <Toaster />
-        <CommandPalette />
+        <CommandPaletteProvider>
+          {children}
+          <Toaster />
+          <CommandPalette />
+        </CommandPaletteProvider>
       </QueryClientProvider>
     </ThemeProvider>
   );
