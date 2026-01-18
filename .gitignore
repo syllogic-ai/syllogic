@@ -6,17 +6,32 @@ __pycache__/
 *.so
 .Python
 venv/
-.env
-.env.local
 *.egg-info/
 dist/
 build/
 
-# Node
+# Node / JavaScript / TypeScript
 node_modules/
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+*.tsbuildinfo
+next-env.d.ts
+
+# Next.js
 .next/
 out/
-*.tsbuildinfo
+/coverage
+
+# Production builds
+/build
+
+# Package managers
+package-lock.json
 
 # IDEs
 .idea/
@@ -28,10 +43,24 @@ out/
 # Logs
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env*
 
 # Docker
 postgres_data/
 
+# Vercel
+.vercel
+
 # Misc
-.env.local
-.env.*.local
+*.pem
+
+# User uploads (frontend)
+frontend/public/uploads/
