@@ -765,6 +765,153 @@ export async function getAssetsOverview(): Promise<AssetsOverviewData> {
   };
 }
 
+export interface SankeyData {
+  nodes: { name: string }[];
+  links: { source: number; target: number; value: number }[];
+}
+
+export async function getSankeyData(
+  dateFrom?: Date,
+  dateTo?: Date,
+  accountId?: string
+): Promise<SankeyData> {
+  const session = await getAuthenticatedSession();
+
+  if (!session?.user?.id) {
+    return { nodes: [], links: [] };
+  }
+
+  // Use provided dates or default to last 3 months from latest transaction
+  let startDate: Date;
+  let endDate: Date;
+
+  if (dateFrom && dateTo) {
+    startDate = dateFrom;
+    endDate = dateTo;
+  } else {
+    const refDate = await getLatestTransactionDate(session.user.id, accountId);
+    startDate = new Date(refDate.getFullYear(), refDate.getMonth() - 2, 1);
+    endDate = new Date(refDate.getFullYear(), refDate.getMonth() + 1, 0, 23, 59, 59, 999);
+  }
+
+  const conditions = [
+    eq(transactions.userId, session.user.id),
+    gte(transactions.bookedAt, startDate),
+    lte(transactions.bookedAt, endDate),
+  ];
+  if (accountId) {
+    conditions.push(eq(transactions.accountId, accountId));
+  }
+
+  // Get income by category (categories with type 'income' only, excludes transfers)
+  const incomeByCategory = await db
+    .select({
+      categoryId: sql<string>`COALESCE(${transactions.categoryId}, ${transactions.categorySystemId})`,
+      categoryName: categories.name,
+      total: sql<string>`COALESCE(SUM(ABS(${transactions.amount})), 0)`,
+    })
+    .from(transactions)
+    .innerJoin(
+      categories,
+      sql`${categories.id} = COALESCE(${transactions.categoryId}, ${transactions.categorySystemId})`
+    )
+    .where(
+      and(
+        ...conditions,
+        eq(categories.categoryType, "income")
+      )
+    )
+    .groupBy(
+      sql`COALESCE(${transactions.categoryId}, ${transactions.categorySystemId})`,
+      categories.name
+    )
+    .orderBy(desc(sql`SUM(ABS(${transactions.amount}))`));
+
+  // Get expenses by category (categories with type 'expense' only, excludes transfers)
+  const expensesByCategory = await db
+    .select({
+      categoryId: sql<string>`COALESCE(${transactions.categoryId}, ${transactions.categorySystemId})`,
+      categoryName: categories.name,
+      total: sql<string>`COALESCE(SUM(ABS(${transactions.amount})), 0)`,
+    })
+    .from(transactions)
+    .innerJoin(
+      categories,
+      sql`${categories.id} = COALESCE(${transactions.categoryId}, ${transactions.categorySystemId})`
+    )
+    .where(
+      and(
+        ...conditions,
+        eq(categories.categoryType, "expense")
+      )
+    )
+    .groupBy(
+      sql`COALESCE(${transactions.categoryId}, ${transactions.categorySystemId})`,
+      categories.name
+    )
+    .orderBy(desc(sql`SUM(ABS(${transactions.amount}))`));
+
+  // Build nodes and links for Sankey diagram
+  // Structure: [Income Categories] → [Expense Categories]
+  const nodes: { name: string }[] = [];
+  const links: { source: number; target: number; value: number }[] = [];
+
+  // Filter and limit categories
+  const incomeCategories = incomeByCategory
+    .filter(c => parseFloat(c.total) > 0)
+    .slice(0, 6);
+
+  const expenseCategories = expensesByCategory
+    .filter(c => parseFloat(c.total) > 0)
+    .slice(0, 8);
+
+  if (incomeCategories.length === 0 || expenseCategories.length === 0) {
+    return { nodes: [], links: [] };
+  }
+
+  // Calculate totals
+  const totalIncome = incomeCategories.reduce((sum, c) => sum + parseFloat(c.total), 0);
+  const totalExpenses = expenseCategories.reduce((sum, c) => sum + parseFloat(c.total), 0);
+
+  // Add income category nodes (left side)
+  const incomeNodeIndices: number[] = [];
+  for (const cat of incomeCategories) {
+    incomeNodeIndices.push(nodes.length);
+    nodes.push({ name: cat.categoryName || "Other Income" });
+  }
+
+  // Add expense category nodes (right side)
+  const expenseNodeIndices: number[] = [];
+  for (const cat of expenseCategories) {
+    expenseNodeIndices.push(nodes.length);
+    nodes.push({ name: cat.categoryName || "Other Expenses" });
+  }
+
+  // Create links from each income category to expense categories
+  // Each income source distributes to expenses based on expense proportions
+  for (let i = 0; i < incomeCategories.length; i++) {
+    const incomeValue = parseFloat(incomeCategories[i].total);
+    if (incomeValue <= 0) continue;
+
+    // Distribute income to each expense category proportionally
+    for (let j = 0; j < expenseCategories.length; j++) {
+      const expenseValue = parseFloat(expenseCategories[j].total);
+      // Each expense gets its share based on its proportion of total expenses
+      const linkValue = expenseValue;
+
+      if (linkValue > 0) {
+        links.push({
+          source: incomeNodeIndices[i],
+          target: expenseNodeIndices[j],
+          value: Math.round(linkValue * 100) / 100,
+        });
+      }
+    }
+  }
+
+  return { nodes, links };
+}
+
 export interface DashboardFilters {
   accountId?: string;
   dateFrom?: Date;
@@ -804,6 +951,7 @@ export async function getDashboardData(filters: DashboardFilters = {}) {
           accounts: [],
         })),
       },
+      sankeyData: { nodes: [], links: [] },
       referencePeriod: {
         month: monthNames[new Date().getMonth()],
         year: new Date().getFullYear(),
@@ -839,6 +987,7 @@ export async function getDashboardData(filters: DashboardFilters = {}) {
     incomeExpense,
     spendingByCategory,
     assetsOverview,
+    sankeyData,
   ] = await Promise.all([
     getTotalBalance(accountId),
     getBalanceHistory(horizon, referenceDate, accountId),
@@ -849,6 +998,7 @@ export async function getDashboardData(filters: DashboardFilters = {}) {
     getIncomeExpenseData(referenceDate, accountId),
     getSpendingByCategory(5, referenceDate, accountId),
     getAssetsOverview(),
+    getSankeyData(dateFrom, dateTo, accountId),
   ]);
 
   // Calculate savings rate (income - expenses = potential savings)
@@ -872,6 +1022,7 @@ export async function getDashboardData(filters: DashboardFilters = {}) {
     incomeExpense,
     spendingByCategory,
     assetsOverview,
+    sankeyData,
     referencePeriod: {
       month: monthNames[referenceDate.getMonth()],
       year: referenceDate.getFullYear(),
