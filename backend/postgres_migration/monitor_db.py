@@ -19,7 +19,7 @@ from sqlalchemy import text
 from app.database import SessionLocal, engine
 from app.models import (
     User, Account, Category, Transaction,
-    CategorizationRule, BankConnection, ExchangeRate, AuthAccount, AccountTimeseries
+    CategorizationRule, BankConnection, ExchangeRate, AuthAccount, AccountBalance
 )
 from datetime import datetime, timedelta
 
@@ -74,8 +74,8 @@ def get_table_stats():
     stats = {}
     try:
         with engine.connect() as conn:
-            tables = ['users', 'auth_accounts', 'accounts', 'categories', 'transactions', 
-                     'categorization_rules', 'bank_connections', 'exchange_rates']
+            tables = ['users', 'auth_accounts', 'accounts', 'categories', 'transactions',
+                     'categorization_rules', 'bank_connections', 'exchange_rates', 'account_balances']
             
             for table in tables:
                 try:
@@ -131,7 +131,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
     "🎯 Categorization Rules",
     "🏦 Bank Connections",
     "💱 Exchange Rates",
-    "📈 Account Timeseries"
+    "📈 Account Balances"
 ])
 
 # Tab 1: Users
@@ -786,77 +786,77 @@ with tab8:
         or manually via the `/api/exchange-rates/sync` endpoint.
         """)
 
-# Tab 9: Account Timeseries
+# Tab 9: Account Balances
 with tab9:
-    st.header("Account Timeseries Table")
-    
+    st.header("Account Balances Table")
+
     col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
     with col1:
-        st.markdown(f"**Total Timeseries Records:** {stats.get('account_timeseries', 0)}")
+        st.markdown(f"**Total Balance Records:** {stats.get('account_balances', 0)}")
     with col2:
         user_filter = st.selectbox(
             "Filter by User:",
             ["All"] + (df_users['id'].tolist() if not df_users.empty else []),
-            key="timeseries_user_filter"
+            key="balances_user_filter"
         )
-    
+
     # Get accounts for account filter (filtered by user if user filter is set)
-    account_filters_ts = {}
+    account_filters_bal = {}
     if user_filter != "All":
-        account_filters_ts['user_id'] = user_filter
-    df_accounts_for_timeseries = get_table_data(Account, account_filters_ts)
-    
+        account_filters_bal['user_id'] = user_filter
+    df_accounts_for_balances = get_table_data(Account, account_filters_bal)
+
     with col3:
         # Create account options with names
-        if not df_accounts_for_timeseries.empty:
-            account_options_ts = ["All"] + df_accounts_for_timeseries['id'].tolist()
-            account_names_ts = {acc_id: acc_name for acc_id, acc_name in 
-                           zip(df_accounts_for_timeseries['id'], df_accounts_for_timeseries['name'])}
-            account_filter_ts = st.selectbox(
+        if not df_accounts_for_balances.empty:
+            account_options_bal = ["All"] + df_accounts_for_balances['id'].tolist()
+            account_names_bal = {acc_id: acc_name for acc_id, acc_name in
+                           zip(df_accounts_for_balances['id'], df_accounts_for_balances['name'])}
+            account_filter_bal = st.selectbox(
                 "Filter by Account:",
-                account_options_ts,
-                key="timeseries_account_filter",
-                format_func=lambda x: f"{account_names_ts.get(x, 'Unknown')} ({str(x)[:8]}...)" if x != "All" and x in account_names_ts else x
+                account_options_bal,
+                key="balances_account_filter",
+                format_func=lambda x: f"{account_names_bal.get(x, 'Unknown')} ({str(x)[:8]}...)" if x != "All" and x in account_names_bal else x
             )
         else:
-            account_filter_ts = st.selectbox(
+            account_filter_bal = st.selectbox(
                 "Filter by Account:",
                 ["All"],
-                key="timeseries_account_filter"
+                key="balances_account_filter"
             )
-    
+
     with col4:
-        if st.button("🔄 Refresh", key="refresh_timeseries"):
+        if st.button("🔄 Refresh", key="refresh_balances"):
             st.rerun()
+
+    # Get balance data
+    df_balances = get_table_data(AccountBalance)
     
-    # Get timeseries data
-    df_timeseries = get_table_data(AccountTimeseries)
-    
-    if not df_timeseries.empty:
+    if not df_balances.empty:
         # Filter by account if selected
-        if account_filter_ts != "All":
-            df_timeseries = df_timeseries[df_timeseries['account_id'] == account_filter_ts]
-        
+        if account_filter_bal != "All":
+            df_balances = df_balances[df_balances['account_id'] == account_filter_bal]
+
         # If user filter is set, filter by accounts belonging to that user
-        if user_filter != "All" and not df_accounts_for_timeseries.empty:
-            user_account_ids = df_accounts_for_timeseries['id'].tolist()
-            df_timeseries = df_timeseries[df_timeseries['account_id'].isin(user_account_ids)]
+        if user_filter != "All" and not df_accounts_for_balances.empty:
+            user_account_ids = df_accounts_for_balances['id'].tolist()
+            df_balances = df_balances[df_balances['account_id'].isin(user_account_ids)]
         
         # Summary metrics
         col1, col2, col3, col4, col5 = st.columns(5)
         with col1:
-            unique_accounts = df_timeseries['account_id'].nunique() if 'account_id' in df_timeseries.columns else 0
+            unique_accounts = df_balances['account_id'].nunique() if 'account_id' in df_balances.columns else 0
             st.metric("Unique Accounts", unique_accounts)
         with col2:
-            unique_dates = df_timeseries['date'].nunique() if 'date' in df_timeseries.columns else 0
+            unique_dates = df_balances['date'].nunique() if 'date' in df_balances.columns else 0
             st.metric("Unique Dates", unique_dates)
         with col3:
-            if 'balance_in_account_currency' in df_timeseries.columns:
-                balances = pd.to_numeric(df_timeseries['balance_in_account_currency'], errors='coerce')
+            if 'balance_in_account_currency' in df_balances.columns:
+                balances = pd.to_numeric(df_balances['balance_in_account_currency'], errors='coerce')
                 # Get latest balance for each account
-                if 'date' in df_timeseries.columns and 'account_id' in df_timeseries.columns:
-                    df_timeseries['date'] = pd.to_datetime(df_timeseries['date'], errors='coerce')
-                    latest_records = df_timeseries.loc[df_timeseries.groupby('account_id')['date'].idxmax()]
+                if 'date' in df_balances.columns and 'account_id' in df_balances.columns:
+                    df_balances['date'] = pd.to_datetime(df_balances['date'], errors='coerce')
+                    latest_records = df_balances.loc[df_balances.groupby('account_id')['date'].idxmax()]
                     latest_balances = pd.to_numeric(latest_records['balance_in_account_currency'], errors='coerce')
                     total_latest = float(latest_balances.sum()) if not latest_balances.isna().all() else 0.0
                 else:
@@ -865,12 +865,12 @@ with tab9:
             else:
                 st.metric("Total Latest Balance", "N/A")
         with col4:
-            if 'balance_in_functional_currency' in df_timeseries.columns:
-                func_balances = pd.to_numeric(df_timeseries['balance_in_functional_currency'], errors='coerce')
+            if 'balance_in_functional_currency' in df_balances.columns:
+                func_balances = pd.to_numeric(df_balances['balance_in_functional_currency'], errors='coerce')
                 # Get latest balance for each account
-                if 'date' in df_timeseries.columns and 'account_id' in df_timeseries.columns:
-                    df_timeseries['date'] = pd.to_datetime(df_timeseries['date'], errors='coerce')
-                    latest_records = df_timeseries.loc[df_timeseries.groupby('account_id')['date'].idxmax()]
+                if 'date' in df_balances.columns and 'account_id' in df_balances.columns:
+                    df_balances['date'] = pd.to_datetime(df_balances['date'], errors='coerce')
+                    latest_records = df_balances.loc[df_balances.groupby('account_id')['date'].idxmax()]
                     latest_func_balances = pd.to_numeric(latest_records['balance_in_functional_currency'], errors='coerce')
                     total_latest_func = float(latest_func_balances.sum()) if not latest_func_balances.isna().all() else 0.0
                 else:
@@ -885,78 +885,78 @@ with tab9:
             else:
                 st.metric("Total Latest Balance (Functional)", "N/A")
         with col5:
-            if 'date' in df_timeseries.columns and len(df_timeseries) > 0:
-                df_timeseries['date'] = pd.to_datetime(df_timeseries['date'], errors='coerce')
-                date_range_ts = st.selectbox(
+            if 'date' in df_balances.columns and len(df_balances) > 0:
+                df_balances['date'] = pd.to_datetime(df_balances['date'], errors='coerce')
+                date_range_bal = st.selectbox(
                     "Date Range:",
                     ["All", "Last 7 days", "Last 30 days", "Last 90 days"],
-                    key="timeseries_date_filter"
+                    key="balances_date_filter"
                 )
             else:
-                date_range_ts = "All"
+                date_range_bal = "All"
         
         # Apply date filter
-        if date_range_ts != "All" and 'date' in df_timeseries.columns:
-            df_timeseries['date'] = pd.to_datetime(df_timeseries['date'], errors='coerce')
-            cutoff_date_ts = datetime.now() - timedelta(
-                days=7 if date_range_ts == "Last 7 days" else 
-                     30 if date_range_ts == "Last 30 days" else 90
+        if date_range_bal != "All" and 'date' in df_balances.columns:
+            df_balances['date'] = pd.to_datetime(df_balances['date'], errors='coerce')
+            cutoff_date_bal = datetime.now() - timedelta(
+                days=7 if date_range_bal == "Last 7 days" else
+                     30 if date_range_bal == "Last 30 days" else 90
             )
-            df_timeseries = df_timeseries[df_timeseries['date'] >= cutoff_date_ts]
-        
+            df_balances = df_balances[df_balances['date'] >= cutoff_date_bal]
+
         # Convert balances to numeric for display
-        if 'balance_in_account_currency' in df_timeseries.columns:
-            df_timeseries['balance_in_account_currency'] = pd.to_numeric(df_timeseries['balance_in_account_currency'], errors='coerce')
-        if 'balance_in_functional_currency' in df_timeseries.columns:
-            df_timeseries['balance_in_functional_currency'] = pd.to_numeric(df_timeseries['balance_in_functional_currency'], errors='coerce')
-        
+        if 'balance_in_account_currency' in df_balances.columns:
+            df_balances['balance_in_account_currency'] = pd.to_numeric(df_balances['balance_in_account_currency'], errors='coerce')
+        if 'balance_in_functional_currency' in df_balances.columns:
+            df_balances['balance_in_functional_currency'] = pd.to_numeric(df_balances['balance_in_functional_currency'], errors='coerce')
+
         # Sort by date descending
-        if 'date' in df_timeseries.columns:
-            df_timeseries = df_timeseries.sort_values('date', ascending=False)
-        
+        if 'date' in df_balances.columns:
+            df_balances = df_balances.sort_values('date', ascending=False)
+
         # Show account name if available
-        if 'account_id' in df_timeseries.columns and not df_accounts_for_timeseries.empty:
-            account_id_to_name = {acc_id: acc_name for acc_id, acc_name in 
-                                 zip(df_accounts_for_timeseries['id'], df_accounts_for_timeseries['name'])}
-            df_timeseries['account_name'] = df_timeseries['account_id'].map(account_id_to_name)
+        if 'account_id' in df_balances.columns and not df_accounts_for_balances.empty:
+            account_id_to_name = {acc_id: acc_name for acc_id, acc_name in
+                                 zip(df_accounts_for_balances['id'], df_accounts_for_balances['name'])}
+            df_balances['account_name'] = df_balances['account_id'].map(account_id_to_name)
             # Reorder columns to show account_name first
-            cols = ['account_name'] + [col for col in df_timeseries.columns if col != 'account_name']
-            df_timeseries = df_timeseries[cols]
-        
+            cols = ['account_name'] + [col for col in df_balances.columns if col != 'account_name']
+            df_balances = df_balances[cols]
+
         st.dataframe(
-            df_timeseries,
+            df_balances,
             width='stretch',
             hide_index=True,
             height=400
         )
-        
-        # Show timeseries chart if data available
-        if len(df_timeseries) > 0 and 'date' in df_timeseries.columns and account_filter_ts != "All":
+
+        # Show balance chart if data available
+        if len(df_balances) > 0 and 'date' in df_balances.columns and account_filter_bal != "All":
             st.markdown("### Balance Over Time")
-            chart_data = df_timeseries[['date', 'balance_in_account_currency', 'balance_in_functional_currency']].copy()
+            chart_data = df_balances[['date', 'balance_in_account_currency', 'balance_in_functional_currency']].copy()
             chart_data = chart_data.sort_values('date')
             chart_data = chart_data.set_index('date')
             st.line_chart(chart_data)
-        
+
         # Show statistics by account
-        if len(df_timeseries) > 0 and 'account_id' in df_timeseries.columns:
+        if len(df_balances) > 0 and 'account_id' in df_balances.columns:
             st.markdown("### Statistics by Account")
-            account_stats = df_timeseries.groupby('account_id').agg({
+            account_stats = df_balances.groupby('account_id').agg({
                 'balance_in_account_currency': ['min', 'max', 'mean', 'count'],
                 'balance_in_functional_currency': ['min', 'max', 'mean']
             }).round(2)
-            
+
             # Add account names if available
-            if not df_accounts_for_timeseries.empty:
-                account_id_to_name = {acc_id: acc_name for acc_id, acc_name in 
-                                     zip(df_accounts_for_timeseries['id'], df_accounts_for_timeseries['name'])}
+            if not df_accounts_for_balances.empty:
+                account_id_to_name = {acc_id: acc_name for acc_id, acc_name in
+                                     zip(df_accounts_for_balances['id'], df_accounts_for_balances['name'])}
                 account_stats['account_name'] = account_stats.index.map(account_id_to_name)
-            
+
             st.dataframe(account_stats, width='stretch', hide_index=False)
     else:
-        st.info("No account timeseries records found in the database.")
+        st.info("No account balance records found in the database.")
         st.markdown("""
-        **Note:** Account timeseries are calculated automatically when you import transactions 
+        **Note:** Account balances are calculated automatically when you import transactions
         via the `/api/transactions/import` endpoint with `calculate_balances=true`.
         """)
 

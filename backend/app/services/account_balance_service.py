@@ -23,18 +23,19 @@ class AccountBalanceService:
     def __init__(self, db: Session):
         self.db = db
 
-    def calculate_account_balances(self, user_id: str) -> Dict:
+    def calculate_account_balances(self, user_id: str, account_ids: Optional[list] = None) -> Dict:
         """
-        Calculate current balances for all accounts of a user.
-        
+        Calculate current balances for accounts of a user.
+
         For each account:
         - Sums all transactions in account currency
         - Adds starting_balance
         - Converts to functional currency using latest exchange rate
-        
+
         Args:
             user_id: User ID to calculate balances for
-            
+            account_ids: Optional list of specific account IDs to process. If None, processes all accounts.
+
         Returns:
             Dict with keys:
                 - accounts_updated: Number of accounts successfully updated
@@ -45,9 +46,14 @@ class AccountBalanceService:
             # Get user's functional currency
             user = self.db.query(User).filter(User.id == user_id).first()
             functional_currency = user.functional_currency if user else "EUR"
-            
-            # Get all accounts for user
-            accounts = self.db.query(Account).filter(Account.user_id == user_id).all()
+
+            # Get accounts for user (filtered by account_ids if provided)
+            query = self.db.query(Account).filter(Account.user_id == user_id)
+            if account_ids:
+                from uuid import UUID
+                query = query.filter(Account.id.in_(account_ids))
+                logger.info(f"[BALANCE] Processing {len(account_ids)} specific account(s)")
+            accounts = query.all()
             
             updated_accounts = 0
             failed_accounts = 0
@@ -137,19 +143,20 @@ class AccountBalanceService:
             logger.error(traceback.format_exc())
             return {"error": str(e)}
 
-    def calculate_account_timeseries(self, user_id: str) -> Dict:
+    def calculate_account_timeseries(self, user_id: str, account_ids: Optional[list] = None) -> Dict:
         """
-        Calculate and store daily balance snapshots (timeseries) for all accounts of a user.
-        
+        Calculate and store daily balance snapshots (timeseries) for accounts of a user.
+
         For each account:
         - Gets minimum transaction date
         - Calculates balance for each day from min date to today
         - Stores balance in both account currency and functional currency
         - Uses exchange rate for each specific date
-        
+
         Args:
             user_id: User ID to calculate timeseries for
-            
+            account_ids: Optional list of specific account IDs to process. If None, processes all accounts.
+
         Returns:
             Dict with keys:
                 - accounts_processed: Number of accounts successfully processed
@@ -162,9 +169,14 @@ class AccountBalanceService:
             # Get user's functional currency
             user = self.db.query(User).filter(User.id == user_id).first()
             functional_currency = user.functional_currency if user else "EUR"
-            
-            # Get all accounts for user
-            accounts = self.db.query(Account).filter(Account.user_id == user_id).all()
+
+            # Get accounts for user (filtered by account_ids if provided)
+            query = self.db.query(Account).filter(Account.user_id == user_id)
+            if account_ids:
+                from uuid import UUID
+                query = query.filter(Account.id.in_(account_ids))
+                logger.info(f"[TIMESERIES] Processing {len(account_ids)} specific account(s)")
+            accounts = query.all()
             
             total_days_processed = 0
             total_records_stored = 0

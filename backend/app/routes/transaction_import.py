@@ -47,8 +47,9 @@ class TransactionImportItem(BaseModel):
     merchant: Optional[str] = None
     booked_at: datetime
     transaction_type: str  # "credit" or "debit"
-    currency: str = "EUR"
+    currency: Optional[str] = None  # If not provided, will use account's currency
     external_id: Optional[str] = None
+    category_id: Optional[UUID] = None  # Pre-selected category (skips AI categorization)
 
 
 class TransactionImportRequest(BaseModel):
@@ -190,42 +191,73 @@ def import_transactions(
                 "booked_at": txn.booked_at,
                 "transaction_type": txn.transaction_type.lower(),
                 "currency": txn.currency or account.currency or "EUR",
-                "external_id": txn.external_id
+                "external_id": txn.external_id,
+                "category_id": txn.category_id  # Pre-selected category
             })
         
-        # Step 2: Get user overrides and instructions from database
-        logger.info("[IMPORT] Fetching user overrides and categorization instructions...")
-        user_overrides = _get_user_overrides_from_db(db, user_id)
-        categorization_instructions = _get_categorization_instructions_from_db(db, user_id)
-        
-        logger.info(f"[IMPORT] Found {len(user_overrides)} user overrides and {len(categorization_instructions)} instructions")
-        
-        # Step 3: Categorize transactions using batch API
-        logger.info("[IMPORT] Categorizing transactions...")
-        categorize_request = BatchCategorizeRequest(
-            transactions=[
-                TransactionInput(
-                    description=txn["description"],
-                    merchant=txn["merchant"],
-                    amount=txn["amount"]
-                )
-                for txn in normalized_transactions
-            ],
-            use_llm=True,
-            user_overrides=[UserOverride(**override) for override in user_overrides] if user_overrides else None,
-            additional_instructions=categorization_instructions if categorization_instructions else None
-        )
-        
-        # Call the categorize/batch endpoint logic directly
-        # Import here to avoid circular dependency
-        from app.routes.categories import categorize_transactions_batch
-        categorization_result: BatchCategorizeResponse = categorize_transactions_batch(categorize_request, db)
-        
-        logger.info(
-            f"[IMPORT] Categorization complete: "
-            f"{categorization_result.categorized_count} categorized, "
-            f"{categorization_result.uncategorized_count} uncategorized"
-        )
+        # Step 2: Categorize transactions (skip if category already provided)
+        # Build list of transactions needing categorization and track their indices
+        transactions_needing_categorization = []
+        categorization_index_map = []  # Maps categorization result index to normalized_transactions index
+
+        for idx, txn in enumerate(normalized_transactions):
+            if not txn.get("category_id"):
+                # No category provided, needs AI categorization
+                transactions_needing_categorization.append(txn)
+                categorization_index_map.append(idx)
+
+        categorization_results = {}  # Maps normalized_transactions index to category_id
+
+        # Only run categorization if there are transactions without categories
+        if transactions_needing_categorization:
+            logger.info(f"[IMPORT] Categorizing {len(transactions_needing_categorization)} transactions (AI)...")
+            logger.info("[IMPORT] Fetching user overrides and categorization instructions...")
+            user_overrides = _get_user_overrides_from_db(db, user_id)
+            categorization_instructions = _get_categorization_instructions_from_db(db, user_id)
+
+            logger.info(f"[IMPORT] Found {len(user_overrides)} user overrides and {len(categorization_instructions)} instructions")
+
+            categorize_request = BatchCategorizeRequest(
+                transactions=[
+                    TransactionInput(
+                        description=txn["description"],
+                        merchant=txn["merchant"],
+                        amount=txn["amount"]
+                    )
+                    for txn in transactions_needing_categorization
+                ],
+                use_llm=True,
+                user_overrides=[UserOverride(**override) for override in user_overrides] if user_overrides else None,
+                additional_instructions=categorization_instructions if categorization_instructions else None
+            )
+
+            # Call the categorize/batch endpoint logic directly
+            from app.routes.categories import categorize_transactions_batch
+            categorization_result: BatchCategorizeResponse = categorize_transactions_batch(categorize_request, db)
+
+            logger.info(
+                f"[IMPORT] Categorization complete: "
+                f"{categorization_result.categorized_count} categorized, "
+                f"{categorization_result.uncategorized_count} uncategorized"
+            )
+
+            # Map results back to original transaction indices
+            for result_idx, result in enumerate(categorization_result.results):
+                original_idx = categorization_index_map[result_idx]
+                categorization_results[original_idx] = result.category_id
+        else:
+            logger.info("[IMPORT] All transactions have pre-selected categories, skipping AI categorization")
+            categorization_result = None
+
+        # For transactions with pre-selected categories, use those
+        pre_selected_count = 0
+        for idx, txn in enumerate(normalized_transactions):
+            if txn.get("category_id"):
+                categorization_results[idx] = txn["category_id"]
+                pre_selected_count += 1
+
+        if pre_selected_count > 0:
+            logger.info(f"[IMPORT] {pre_selected_count} transactions using pre-selected categories")
         
         # Step 4: Check for and remove duplicate transactions before inserting
         logger.info("[IMPORT] Checking for existing duplicate transactions...")
@@ -346,8 +378,9 @@ def import_transactions(
         skipped_count = 0
         
         for idx, txn_data in enumerate(normalized_transactions):
-            category_result = categorization_result.results[idx]
-            
+            # Get category_id from categorization results (either AI or pre-selected)
+            category_id = categorization_results.get(idx)
+
             try:
                 # Check if transaction already exists (double-check before insert)
                 # Check 1: By external_id if available
@@ -422,6 +455,8 @@ def import_transactions(
                         continue
                 
                 # Create transaction
+                # If category was pre-selected, set both category_id and category_system_id to it
+                # If category was AI-assigned, set category_id = category_system_id initially (user can override later)
                 transaction = Transaction(
                     user_id=user_id,
                     account_id=txn_data["account_id"],  # Already a UUID from the request
@@ -432,8 +467,8 @@ def import_transactions(
                     description=txn_data["description"],
                     merchant=txn_data["merchant"],
                     booked_at=txn_data["booked_at"],
-                    category_id=category_result.category_id,  # Set equal to category_system_id initially
-                    category_system_id=category_result.category_id,  # AI-assigned category
+                    category_id=category_id,
+                    category_system_id=category_id if not txn_data.get("category_id") else None,  # Only set if AI-categorized
                     pending=False
                 )
                 
@@ -596,29 +631,24 @@ def import_transactions(
                 logger.error(traceback.format_exc())
                 exchange_rates_result = {"error": str(e)}
         
-        # Step 7: Update functional amounts
+        # Step 7: Update functional amounts for newly imported transactions only
         functional_amounts_result = None
-        if request.update_functional_amounts:
-            logger.info("[IMPORT] Updating functional amounts...")
+        if request.update_functional_amounts and inserted_transactions:
+            logger.info(f"[IMPORT] Updating functional amounts for {len(inserted_transactions)} newly imported transactions...")
             try:
                 # Get user's functional currency
                 user = db.query(User).filter(User.id == user_id).first()
                 functional_currency = user.functional_currency if user else "EUR"
-                
-                # Update functional amounts for all user transactions
-                transactions_to_update = db.query(Transaction).filter(
-                    Transaction.user_id == user_id
-                ).all()
-                
+
                 service = ExchangeRateService(db)
                 updated_count = 0
                 failed_count = 0
                 skipped_count = 0
-                
-                for txn in transactions_to_update:
+
+                for txn in inserted_transactions:
                     try:
                         txn_date = txn.booked_at.date()
-                        
+
                         if txn.currency == functional_currency:
                             txn.functional_amount = txn.amount
                             skipped_count += 1
@@ -628,7 +658,7 @@ def import_transactions(
                                 target_currency=functional_currency,
                                 for_date=txn_date
                             )
-                            
+
                             if exchange_rate:
                                 txn.functional_amount = txn.amount * exchange_rate
                                 updated_count += 1
@@ -638,7 +668,7 @@ def import_transactions(
                     except Exception as e:
                         logger.error(f"[IMPORT] Error updating functional amount for transaction {txn.id}: {e}")
                         failed_count += 1
-                
+
                 db.commit()
                 functional_amounts_result = {
                     "updated": updated_count,
@@ -646,27 +676,32 @@ def import_transactions(
                     "failed": failed_count
                 }
                 logger.info(
-                    f"[IMPORT] Functional amounts updated: "
+                    f"[IMPORT] Functional amounts updated for new transactions: "
                     f"{updated_count} updated, {skipped_count} skipped, {failed_count} failed"
                 )
             except Exception as e:
                 logger.error(f"[IMPORT] Error updating functional amounts: {e}")
                 functional_amounts_result = {"error": str(e)}
         
-        # Step 8: Calculate account balances
+        # Step 8: Calculate account balances for affected accounts only
         balances_result = None
         balance_service = None
-        if request.calculate_balances:
-            logger.info("[IMPORT] Calculating account balances...")
+
+        # Get unique account IDs from imported transactions
+        affected_account_ids = list(set([txn.account_id for txn in inserted_transactions]))
+
+        if request.calculate_balances and affected_account_ids:
+            logger.info(f"[IMPORT] Calculating account balances for {len(affected_account_ids)} affected account(s)...")
             balance_service = AccountBalanceService(db)
-            balances_result = balance_service.calculate_account_balances(user_id)
-        
-        # Step 9: Calculate and store account timeseries
+            balances_result = balance_service.calculate_account_balances(user_id, account_ids=affected_account_ids)
+
+        # Step 9: Calculate and store account timeseries for affected accounts only
         timeseries_result = None
-        logger.info("[IMPORT] Calculating account timeseries...")
-        if balance_service is None:
-            balance_service = AccountBalanceService(db)
-        timeseries_result = balance_service.calculate_account_timeseries(user_id)
+        if affected_account_ids:
+            logger.info(f"[IMPORT] Calculating account timeseries for {len(affected_account_ids)} affected account(s)...")
+            if balance_service is None:
+                balance_service = AccountBalanceService(db)
+            timeseries_result = balance_service.calculate_account_timeseries(user_id, account_ids=affected_account_ids)
         
         return TransactionImportResponse(
             success=True,
@@ -674,13 +709,13 @@ def import_transactions(
             transactions_inserted=inserted_count,
             transaction_ids=inserted_ids if inserted_ids else None,
             categorization_summary={
-                "total": categorization_result.total_transactions,
-                "categorized": categorization_result.categorized_count,
-                "deterministic": categorization_result.deterministic_count,
-                "llm": categorization_result.llm_count,
-                "uncategorized": categorization_result.uncategorized_count,
-                "tokens_used": categorization_result.total_tokens_used,
-                "cost_usd": categorization_result.total_cost_usd
+                "total": categorization_result.total_transactions if categorization_result else pre_selected_count,
+                "categorized": categorization_result.categorized_count if categorization_result else pre_selected_count,
+                "deterministic": categorization_result.deterministic_count if categorization_result else 0,
+                "llm": categorization_result.llm_count if categorization_result else 0,
+                "uncategorized": categorization_result.uncategorized_count if categorization_result else 0,
+                "tokens_used": categorization_result.total_tokens_used if categorization_result else 0,
+                "cost_usd": categorization_result.total_cost_usd if categorization_result else 0.0
             },
             exchange_rates_synced=exchange_rates_result,
             functional_amounts_updated=functional_amounts_result,

@@ -194,79 +194,54 @@ export async function createTransaction(
   }
 
   try {
-    // Verify the account belongs to the user
-    const account = await db.query.accounts.findFirst({
-      where: and(
-        eq(accounts.id, input.accountId),
-        eq(accounts.userId, userId)
-      ),
+    // Call backend API to import the transaction
+    const backendUrl = process.env.BACKEND_API_URL || "http://localhost:8000";
+
+    const response = await fetch(`${backendUrl}/api/transactions/import`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        transactions: [
+          {
+            account_id: input.accountId,
+            amount: input.amount,
+            description: input.description,
+            merchant: input.merchant || null,
+            booked_at: input.bookedAt.toISOString(),
+            transaction_type: input.transactionType,
+            category_id: input.categoryId || null, // Pre-selected category (skips AI categorization)
+          },
+        ],
+        user_id: userId,
+        sync_exchange_rates: true,
+        update_functional_amounts: true,
+        calculate_balances: true,
+      }),
     });
 
-    if (!account) {
-      return { success: false, error: "Account not found" };
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Backend import failed:", response.status, errorText);
+      return { success: false, error: `Failed to create transaction: ${response.status}` };
     }
 
-    // Verify the category belongs to the user (if provided)
-    if (input.categoryId) {
-      const category = await db.query.categories.findFirst({
-        where: and(
-          eq(categories.id, input.categoryId),
-          eq(categories.userId, userId)
-        ),
-      });
+    const backendResponse = await response.json();
 
-      if (!category) {
-        return { success: false, error: "Category not found" };
-      }
+    if (!backendResponse.success) {
+      return { success: false, error: backendResponse.message };
     }
-
-    // Create the transaction
-    const newTransaction: NewTransaction = {
-      userId,
-      accountId: input.accountId,
-      amount: input.amount.toString(),
-      description: input.description,
-      categoryId: input.categoryId || null,
-      bookedAt: input.bookedAt,
-      transactionType: input.transactionType,
-      merchant: input.merchant,
-      currency: account.currency || "EUR",
-    };
-
-    const [result] = await db.insert(transactions).values(newTransaction).returning({ id: transactions.id });
-
-    // Recalculate and update the account's functional_balance
-    const balanceResult = await db
-      .select({
-        total: sql<string>`COALESCE(SUM(${transactions.amount}), 0)`,
-      })
-      .from(transactions)
-      .where(eq(transactions.accountId, input.accountId));
-
-    const transactionSum = parseFloat(balanceResult[0]?.total || "0");
-    const startingBalance = parseFloat(account.startingBalance || "0");
-    const newFunctionalBalance = startingBalance + transactionSum;
-
-    await db
-      .update(accounts)
-      .set({
-        functionalBalance: newFunctionalBalance.toFixed(2),
-        updatedAt: new Date(),
-      })
-      .where(eq(accounts.id, input.accountId));
-
-    // Recalculate account_balances from the transaction date onwards
-    await recalculateAccountBalancesFromDate(
-      input.accountId,
-      input.bookedAt,
-      startingBalance
-    );
 
     revalidatePath("/transactions");
     revalidatePath("/");
     revalidatePath("/settings");
     revalidatePath("/assets");
-    return { success: true, transactionId: result.id };
+
+    return {
+      success: true,
+      transactionId: backendResponse.transaction_ids?.[0] || undefined
+    };
   } catch (error) {
     console.error("Failed to create transaction:", error);
     return { success: false, error: "Failed to create transaction" };
