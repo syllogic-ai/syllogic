@@ -95,11 +95,12 @@ class CategoryMatcher:
     }
 
     def __init__(
-        self, 
+        self,
         db: Session,
         user_id: Optional[str] = None,
         user_overrides: Optional[List[Dict]] = None,
-        additional_instructions: Optional[List[str]] = None
+        additional_instructions: Optional[List[str]] = None,
+        auto_load_from_db: bool = True
     ):
         """
         Initialize the CategoryMatcher.
@@ -110,15 +111,170 @@ class CategoryMatcher:
             user_overrides: List of transaction overrides with format:
                 [{"description": "...", "merchant": "...", "amount": ..., "category_name": "..."}, ...]
             additional_instructions: List of strings with user guidance for categorization
+            auto_load_from_db: If True, automatically load category instructions and user overrides from DB
         """
         self.db = db
         self.user_id = get_user_id(user_id)
         self._category_cache: Optional[Dict[str, Category]] = None
         self._keyword_rules: Optional[Dict[str, List[str]]] = None
         self._openai_client = None
+        self._category_instructions_cache: Optional[List[str]] = None
+
+        # Initialize with provided values or empty lists
         self.user_overrides = user_overrides or []
         self.additional_instructions = additional_instructions or []
-    
+
+        # Auto-load from database if enabled
+        if auto_load_from_db:
+            self._auto_load_instructions_from_db()
+
+    def _auto_load_instructions_from_db(self) -> None:
+        """
+        Automatically load categorization instructions from the database.
+
+        This method fetches:
+        1. Category-level instructions (categorization_instructions field from categories)
+        2. User overrides from transactions where the user has changed the category
+        3. Transaction-level instructions (categorization_instructions from transactions)
+
+        All instructions are merged with any existing instructions provided at init.
+        """
+        try:
+            # 1. Load category-level instructions
+            category_instructions = self._get_category_instructions_from_db()
+            if category_instructions:
+                self.additional_instructions.extend(category_instructions)
+                logger.info(f"Loaded {len(category_instructions)} category instructions from database")
+
+            # 2. Load user overrides from transactions
+            db_overrides = self._get_user_overrides_from_db()
+            if db_overrides:
+                self.user_overrides.extend(db_overrides)
+                logger.info(f"Loaded {len(db_overrides)} user overrides from database")
+
+            # 3. Load transaction-level instructions
+            tx_instructions = self._get_transaction_instructions_from_db()
+            if tx_instructions:
+                self.additional_instructions.extend(tx_instructions)
+                logger.info(f"Loaded {len(tx_instructions)} transaction instructions from database")
+
+        except Exception as e:
+            logger.warning(f"Failed to auto-load instructions from database: {e}")
+
+    def _get_category_instructions_from_db(self) -> List[str]:
+        """
+        Fetch category-level categorization instructions from the database.
+
+        Returns:
+            List of instruction strings in format:
+            "For category 'CategoryName': <instruction>"
+        """
+        instructions = []
+        try:
+            categories = self.db.query(Category).filter(
+                Category.user_id == self.user_id,
+                Category.categorization_instructions.isnot(None),
+                Category.categorization_instructions != ""
+            ).all()
+
+            for cat in categories:
+                if cat.categorization_instructions and cat.categorization_instructions.strip():
+                    instructions.append(
+                        f"For category '{cat.name}': {cat.categorization_instructions.strip()}"
+                    )
+        except Exception as e:
+            logger.warning(f"Failed to fetch category instructions from DB: {e}")
+
+        return instructions
+
+    def _get_user_overrides_from_db(self) -> List[Dict]:
+        """
+        Fetch user category overrides from transactions where user changed the AI-assigned category.
+
+        Returns:
+            List of override dictionaries with format:
+            [{"description": "...", "merchant": "...", "amount": ..., "category_name": "..."}, ...]
+        """
+        overrides = []
+        try:
+            # Get transactions where user has overridden the category
+            # (category_id is set and different from category_system_id)
+            overridden_transactions = self.db.query(Transaction).filter(
+                Transaction.user_id == self.user_id,
+                Transaction.category_id.isnot(None),
+                (
+                    (Transaction.category_system_id.is_(None)) |
+                    (Transaction.category_id != Transaction.category_system_id)
+                )
+            ).all()
+
+            # Load categories for name lookup
+            categories = self._load_categories()
+
+            for tx in overridden_transactions:
+                # Find category name by ID
+                category_name = None
+                for name, cat in categories.items():
+                    if str(cat.id) == str(tx.category_id):
+                        category_name = cat.name
+                        break
+
+                if category_name:
+                    overrides.append({
+                        "description": tx.description,
+                        "merchant": tx.merchant,
+                        "amount": float(tx.amount) if tx.amount else 0,
+                        "category_name": category_name
+                    })
+        except Exception as e:
+            logger.warning(f"Failed to fetch user overrides from DB: {e}")
+
+        return overrides
+
+    def _get_transaction_instructions_from_db(self) -> List[str]:
+        """
+        Fetch transaction-level categorization instructions from the database.
+
+        Returns:
+            List of instruction strings from transactions with categorization_instructions
+        """
+        instructions = []
+        try:
+            transactions = self.db.query(Transaction).filter(
+                Transaction.user_id == self.user_id,
+                Transaction.categorization_instructions.isnot(None),
+                Transaction.categorization_instructions != ""
+            ).all()
+
+            # Load categories for name lookup
+            categories = self._load_categories()
+
+            for tx in transactions:
+                if tx.categorization_instructions and tx.categorization_instructions.strip():
+                    # Try to get the category name for context
+                    category_name = None
+                    cat_id = tx.category_id or tx.category_system_id
+                    if cat_id:
+                        for name, cat in categories.items():
+                            if str(cat.id) == str(cat_id):
+                                category_name = cat.name
+                                break
+
+                    if category_name:
+                        instructions.append(
+                            f"For transactions similar to '{tx.description or tx.merchant}', "
+                            f"categorize as '{category_name}': {tx.categorization_instructions.strip()}"
+                        )
+                    else:
+                        instructions.append(
+                            f"For transactions like '{tx.description or tx.merchant}': "
+                            f"{tx.categorization_instructions.strip()}"
+                        )
+        except Exception as e:
+            logger.warning(f"Failed to fetch transaction instructions from DB: {e}")
+
+        return instructions
+
     def _load_categories(self) -> Dict[str, Category]:
         """
         Load all categories from database into a cache, filtered by user_id.

@@ -3,6 +3,7 @@ import { Header } from "@/components/layout/header";
 import { KpiSparkCard } from "@/components/charts/kpi-spark-card";
 import { ProfitLossChart } from "@/components/charts/profit-loss-chart";
 import { SpendingByCategoryChart } from "@/components/charts/spending-by-category-chart";
+import { SankeyFlowChart } from "@/components/charts/sankey-flow-chart";
 import { AssetsOverviewCard } from "@/components/assets";
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
 import { SearchButton } from "@/components/dashboard/search-button";
@@ -48,6 +49,22 @@ export default async function HomePage({ searchParams }: PageProps) {
     getDashboardData(filters),
     getUserAccounts(),
   ]);
+
+  // Build Sankey subtitle based on date range
+  const formatDateShort = (date: Date) => {
+    return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  };
+
+  let sankeySubtitle: string;
+  if (filters.dateFrom && filters.dateTo) {
+    sankeySubtitle = `${formatDateShort(filters.dateFrom)} - ${formatDateShort(filters.dateTo)}`;
+  } else if (filters.dateFrom) {
+    sankeySubtitle = `From ${formatDateShort(filters.dateFrom)}`;
+  } else if (filters.dateTo) {
+    sankeySubtitle = `Until ${formatDateShort(filters.dateTo)}`;
+  } else {
+    sankeySubtitle = "Last 3 months";
+  }
 
   return (
     <>
@@ -113,7 +130,16 @@ export default async function HomePage({ searchParams }: PageProps) {
           />
         </div>
 
-        {/* Row 3: Assets Overview */}
+        {/* Row 3: Cash Flow Sankey */}
+        <div className="grid gap-4">
+          <SankeyFlowChart
+            data={data.sankeyData}
+            currency={data.balance.currency}
+            subtitle={sankeySubtitle}
+          />
+        </div>
+
+        {/* Row 4: Assets Overview */}
         <div className="grid gap-4">
           <AssetsOverviewCard data={data.assetsOverview} />
         </div>
