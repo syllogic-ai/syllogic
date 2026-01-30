@@ -100,8 +100,8 @@ export const transactionColumns: ColumnDef<TransactionWithRelations>[] = [
     cell: ({ row, column }) => {
       const columnSize = column.getSize();
       return (
-        <div 
-          className="truncate" 
+        <div
+          className="truncate"
           style={{ maxWidth: `${columnSize}px` }}
           title={row.getValue("description") || ""}
         >

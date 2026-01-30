@@ -4,11 +4,20 @@ import { useState, useCallback } from "react";
 import { RiUploadCloud2Line, RiFileTextLine, RiCloseLine } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import * as XLSX from "xlsx";
 
 interface CsvUploadDropzoneProps {
   onFileSelect: (file: File, content: string) => void;
   isUploading?: boolean;
 }
+
+// Supported file extensions and MIME types
+const VALID_EXTENSIONS = [".csv", ".xls", ".xlsx"];
+const VALID_TYPES = [
+  "text/csv",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+];
 
 export function CsvUploadDropzone({ onFileSelect, isUploading }: CsvUploadDropzoneProps) {
   const [isDragging, setIsDragging] = useState(false);
@@ -16,12 +25,16 @@ export function CsvUploadDropzone({ onFileSelect, isUploading }: CsvUploadDropzo
   const [error, setError] = useState<string | null>(null);
 
   const processFile = useCallback(
-    (file: File) => {
+    async (file: File) => {
       setError(null);
 
       // Validate file type
-      if (!file.name.endsWith(".csv") && file.type !== "text/csv") {
-        setError("Please upload a CSV file");
+      const extension = file.name.toLowerCase().slice(file.name.lastIndexOf("."));
+      const isValidExtension = VALID_EXTENSIONS.includes(extension);
+      const isValidType = VALID_TYPES.includes(file.type) || file.type === "";
+
+      if (!isValidExtension && !isValidType) {
+        setError("Please upload a CSV or Excel file");
         return;
       }
 
@@ -33,16 +46,30 @@ export function CsvUploadDropzone({ onFileSelect, isUploading }: CsvUploadDropzo
 
       setSelectedFile(file);
 
-      // Read file content
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const content = e.target?.result as string;
-        onFileSelect(file, content);
-      };
-      reader.onerror = () => {
+      try {
+        // Check if it's an Excel file
+        if (file.name.match(/\.xlsx?$/i)) {
+          // Excel file - parse with xlsx library
+          const arrayBuffer = await file.arrayBuffer();
+          const workbook = XLSX.read(arrayBuffer, { type: "array" });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const csvContent = XLSX.utils.sheet_to_csv(firstSheet);
+          onFileSelect(file, csvContent);
+        } else {
+          // CSV - read as text
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const content = e.target?.result as string;
+            onFileSelect(file, content);
+          };
+          reader.onerror = () => {
+            setError("Failed to read file");
+          };
+          reader.readAsText(file);
+        }
+      } catch {
         setError("Failed to read file");
-      };
-      reader.readAsText(file);
+      }
     },
     [onFileSelect]
   );
@@ -129,7 +156,7 @@ export function CsvUploadDropzone({ onFileSelect, isUploading }: CsvUploadDropzo
       <input
         id="csv-file-input"
         type="file"
-        accept=".csv,text/csv"
+        accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         className="hidden"
         onChange={handleFileInput}
       />
@@ -139,14 +166,14 @@ export function CsvUploadDropzone({ onFileSelect, isUploading }: CsvUploadDropzo
         </div>
         <div>
           <p className="text-lg font-medium">
-            {isDragging ? "Drop your CSV file here" : "Upload your CSV file"}
+            {isDragging ? "Drop your file here" : "Upload your file"}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
             Drag and drop or click to browse
           </p>
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
-        <p className="text-xs text-muted-foreground">Maximum file size: 10MB</p>
+        <p className="text-xs text-muted-foreground">CSV or Excel (max 10MB)</p>
       </div>
     </div>
   );

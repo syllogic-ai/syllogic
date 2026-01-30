@@ -243,6 +243,61 @@ def recalculate_account_balance(
     }
 
 
+@router.post("/{account_id}/recalculate-starting-balance", status_code=200)
+def recalculate_starting_balance(
+    account_id: UUID,
+    known_balance: float = Query(..., description="The known current balance to use for recalculation"),
+    user_id: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Recalculate starting balance based on a known current balance.
+
+    This is useful when importing historical transactions - the starting_balance
+    should represent the balance BEFORE the first transaction, calculated as:
+    starting_balance = known_current_balance - sum(all_transactions)
+    """
+    from app.models import Transaction
+    from sqlalchemy import func
+    from decimal import Decimal
+    user_id = get_user_id(user_id)
+
+    account = db.query(Account).filter(
+        Account.id == account_id,
+        Account.user_id == user_id
+    ).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    # Calculate sum of all transactions for this account
+    transaction_sum = db.query(func.sum(Transaction.amount)).filter(
+        Transaction.user_id == user_id,
+        Transaction.account_id == account.id
+    ).scalar() or Decimal("0")
+
+    # Calculate new starting balance
+    # known_current_balance = starting_balance + transaction_sum
+    # Therefore: starting_balance = known_current_balance - transaction_sum
+    new_starting_balance = Decimal(str(known_balance)) - transaction_sum
+
+    # Update account
+    account.starting_balance = new_starting_balance
+    account.functional_balance = Decimal(str(known_balance))
+    db.commit()
+    db.refresh(account)
+
+    return {
+        "message": f"Recalculated starting balance for '{account.name}'",
+        "account_id": str(account.id),
+        "account_name": account.name,
+        "known_current_balance": known_balance,
+        "transaction_sum": float(transaction_sum),
+        "new_starting_balance": float(new_starting_balance),
+        "new_functional_balance": float(account.functional_balance) if account.functional_balance else None,
+        "currency": account.currency
+    }
+
+
 @router.post("/{account_id}/recalculate-timeseries", status_code=200)
 def recalculate_account_timeseries(
     account_id: UUID,
