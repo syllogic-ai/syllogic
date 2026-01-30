@@ -32,6 +32,8 @@ function MappingPageContent() {
     description: null,
     merchant: null,
     transactionType: null,
+    startingBalance: null,
+    endingBalance: null,
     typeConfig: {
       isAmountSigned: false,
     },

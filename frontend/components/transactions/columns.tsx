@@ -98,9 +98,12 @@ export const transactionColumns: ColumnDef<TransactionWithRelations>[] = [
     accessorKey: "description",
     header: "Description",
     cell: ({ row }) => (
-      <span className="max-w-xs truncate" title={row.getValue("description") || ""}>
+      <div
+        className="max-w-[280px] truncate"
+        title={row.getValue("description") || ""}
+      >
         {row.getValue("description")}
-      </span>
+      </div>
     ),
     size: 280,
     filterFn: "includesString",

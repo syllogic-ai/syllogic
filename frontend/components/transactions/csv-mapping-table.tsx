@@ -23,6 +23,8 @@ const FIELD_MAPPINGS = [
   { key: "description", label: "Description", description: "Transaction description", required: true },
   { key: "merchant", label: "Merchant", description: "Merchant/payee name", required: false },
   { key: "transactionType", label: "Type", description: "Credit/Debit indicator", required: false },
+  { key: "startingBalance", label: "Starting Balance", description: "Opening balance (for verification)", required: false },
+  { key: "endingBalance", label: "Ending Balance", description: "Closing balance (for verification)", required: false },
 ] as const;
 
 export function CsvMappingTable({

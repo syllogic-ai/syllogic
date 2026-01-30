@@ -136,6 +136,74 @@ export async function getAccounts() {
   });
 }
 
+export async function recalculateStartingBalance(
+  accountId: string,
+  knownCurrentBalance: number
+): Promise<{ success: boolean; error?: string; newStartingBalance?: number }> {
+  const userId = await requireAuth();
+
+  if (!userId) {
+    return { success: false, error: "Not authenticated" };
+  }
+
+  try {
+    // Verify account belongs to user
+    const account = await db.query.accounts.findFirst({
+      where: and(eq(accounts.id, accountId), eq(accounts.userId, userId)),
+    });
+
+    if (!account) {
+      return { success: false, error: "Account not found" };
+    }
+
+    // Get sum of all transactions for this account
+    const result = await db
+      .select({
+        total: sql<string>`COALESCE(SUM(${transactions.amount}), 0)`,
+      })
+      .from(transactions)
+      .where(eq(transactions.accountId, accountId));
+
+    const transactionSum = parseFloat(result[0]?.total || "0");
+
+    // Calculate new starting balance:
+    // known_current_balance = starting_balance + transaction_sum
+    // Therefore: starting_balance = known_current_balance - transaction_sum
+    const newStartingBalance = knownCurrentBalance - transactionSum;
+
+    // Update account's starting_balance and functional_balance
+    await db
+      .update(accounts)
+      .set({
+        startingBalance: newStartingBalance.toFixed(2),
+        functionalBalance: knownCurrentBalance.toFixed(2),
+        updatedAt: new Date(),
+      })
+      .where(eq(accounts.id, accountId));
+
+    // Trigger backend timeseries recalculation
+    try {
+      const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
+      await fetch(`${backendUrl}/api/accounts/${accountId}/recalculate-timeseries`, {
+        method: "POST",
+      });
+    } catch (backendError) {
+      console.warn("Failed to trigger backend timeseries recalculation:", backendError);
+      // Don't fail the operation if backend call fails
+    }
+
+    revalidatePath("/settings");
+    revalidatePath("/transactions");
+    revalidatePath("/");
+    revalidatePath("/assets");
+
+    return { success: true, newStartingBalance };
+  } catch (error) {
+    console.error("Failed to recalculate starting balance:", error);
+    return { success: false, error: "Failed to recalculate starting balance" };
+  }
+}
+
 export async function getAccountBalanceOnDate(
   accountId: string,
   date: Date

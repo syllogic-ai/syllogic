@@ -58,7 +58,7 @@ export default function CsvImportPage() {
     }
 
     if (!selectedFile || !fileContent) {
-      toast.error("Please upload a CSV file");
+      toast.error("Please upload a file");
       return;
     }
 
@@ -89,10 +89,10 @@ export default function CsvImportPage() {
       <div className="flex flex-1 flex-col items-center justify-center gap-4 p-4 pt-0">
         <Card className="w-full max-w-2xl">
           <CardHeader>
-            <CardTitle>Import from CSV</CardTitle>
+            <CardTitle>Import Transactions</CardTitle>
             <CardDescription>
-              Upload a CSV file with your transactions. We'll help you map the columns
-              to the correct fields.
+              Upload a CSV or Excel file with your transactions. We'll help you map
+              the columns to the correct fields.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -119,7 +119,7 @@ export default function CsvImportPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Upload CSV File</Label>
+              <Label>Upload File</Label>
               <CsvUploadDropzone
                 onFileSelect={handleFileSelect}
                 isUploading={isLoading}

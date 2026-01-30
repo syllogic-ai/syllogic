@@ -676,7 +676,9 @@ export async function createOrUpdateBalancingTransaction(
     }
 
     const transactionType = difference > 0 ? "credit" : "debit";
-    const amount = Math.abs(difference);
+    // Keep the sign! Debits should be negative, credits positive.
+    // The balance formula is: balance = starting_balance + SUM(transactions.amount)
+    const amount = difference;
 
     let transactionId: string;
     let isUpdate = false;

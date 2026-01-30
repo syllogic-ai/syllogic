@@ -2,17 +2,19 @@
 
 import { useState, useEffect, useCallback, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { RiArrowLeftLine, RiCheckLine } from "@remixicon/react";
+import { RiArrowLeftLine, RiCheckLine, RiAlertLine } from "@remixicon/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Header } from "@/components/layout/header";
 import { CsvPreviewTable } from "@/components/transactions/csv-preview-table";
+import { cn } from "@/lib/utils";
 import {
   previewImportedTransactions,
   finalizeImport,
   getCsvImportSession,
   type PreviewTransaction,
+  type BalanceVerification,
 } from "@/lib/actions/csv-import";
 
 function PreviewPageContent() {
@@ -24,6 +26,7 @@ function PreviewPageContent() {
   const [isImporting, setIsImporting] = useState(false);
   const [transactions, setTransactions] = useState<PreviewTransaction[]>([]);
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
+  const [balanceVerification, setBalanceVerification] = useState<BalanceVerification | null>(null);
 
   const loadData = useCallback(async () => {
     if (!importId) {
@@ -57,6 +60,10 @@ function PreviewPageContent() {
             .filter((tx) => !tx.isDuplicate)
             .map((tx) => tx.rowIndex)
         );
+        // Capture balance verification data if present
+        if (result.balanceVerification) {
+          setBalanceVerification(result.balanceVerification);
+        }
       } else {
         toast.error(result.error || "Failed to preview transactions");
         router.push(`/transactions/import/mapping?id=${importId}`);
@@ -125,6 +132,78 @@ function PreviewPageContent() {
     <>
       <Header title="Preview Import" />
       <div className="flex h-[calc(100vh-4rem)] flex-col p-4 pt-0">
+        {/* Balance Verification Card */}
+        {balanceVerification?.hasBalanceData && (
+          <div
+            className={cn(
+              "mb-4 rounded-lg border p-4",
+              !balanceVerification.canVerify
+                ? "border-muted bg-muted/30"
+                : balanceVerification.isVerified
+                  ? "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950"
+                  : "border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950"
+            )}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              {!balanceVerification.canVerify ? (
+                <RiAlertLine className="h-5 w-5 text-muted-foreground" />
+              ) : balanceVerification.isVerified ? (
+                <RiCheckLine className="h-5 w-5 text-green-600 dark:text-green-400" />
+              ) : (
+                <RiAlertLine className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              )}
+              <span className="font-medium">
+                {!balanceVerification.canVerify
+                  ? "Balance Info (partial)"
+                  : balanceVerification.isVerified
+                    ? "Balance Verified"
+                    : "Balance Discrepancy Detected"}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
+              {balanceVerification.fileStartingBalance !== null && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Starting Balance:</span>
+                  <span className="font-mono">
+                    {balanceVerification.fileStartingBalance.toFixed(2)}
+                  </span>
+                </div>
+              )}
+              {balanceVerification.fileEndingBalance !== null && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Ending Balance (file):</span>
+                  <span className="font-mono">
+                    {balanceVerification.fileEndingBalance.toFixed(2)}
+                  </span>
+                </div>
+              )}
+              {balanceVerification.calculatedEndingBalance !== null && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Calculated Ending:</span>
+                  <span className="font-mono">
+                    {balanceVerification.calculatedEndingBalance.toFixed(2)}
+                  </span>
+                </div>
+              )}
+              {balanceVerification.canVerify &&
+                !balanceVerification.isVerified &&
+                balanceVerification.discrepancy !== null && (
+                  <div className="flex justify-between text-amber-600 dark:text-amber-400">
+                    <span>Discrepancy:</span>
+                    <span className="font-mono font-medium">
+                      {balanceVerification.discrepancy.toFixed(2)}
+                    </span>
+                  </div>
+                )}
+            </div>
+            {!balanceVerification.canVerify && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Map both starting and ending balance columns for full verification.
+              </p>
+            )}
+          </div>
+        )}
+
         <Tabs defaultValue="to-import" className="flex min-h-0 flex-1 flex-col">
           {/* Tabs outside container */}
           <TabsList className="mb-2 w-fit">

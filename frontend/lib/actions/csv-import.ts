@@ -16,12 +16,26 @@ export interface ColumnMapping {
   description: string | null;
   merchant: string | null;
   transactionType: string | null;
+  // Balance fields for verification
+  startingBalance: string | null;
+  endingBalance: string | null;
   // For transaction type, we might need additional config
   typeConfig?: {
     creditValue?: string;
     debitValue?: string;
     isAmountSigned?: boolean; // If true, positive = credit, negative = debit
   };
+}
+
+// Balance verification result
+export interface BalanceVerification {
+  hasBalanceData: boolean;
+  canVerify: boolean; // true if both starting and ending balance are available
+  fileStartingBalance: number | null;
+  fileEndingBalance: number | null;
+  calculatedEndingBalance: number | null; // startingBalance + sum(transactions)
+  discrepancy: number | null;
+  isVerified: boolean; // true if discrepancy < 0.01
 }
 
 export interface ParsedCsvData {
@@ -205,6 +219,8 @@ Map these columns to the following transaction fields:
 - description: The transaction description/narrative column
 - merchant: The merchant/payee name column (if separate from description)
 - transactionType: The column indicating debit/credit (if exists)
+- startingBalance: Column containing opening/starting balance (if exists, e.g., "startsaldo", "opening_balance", "balance_before")
+- endingBalance: Column containing closing/ending balance (if exists, e.g., "endsaldo", "closing_balance", "balance_after", "balance")
 
 Also determine:
 - If amount is signed (positive for credits, negative for debits)
@@ -217,6 +233,8 @@ Respond ONLY with a valid JSON object in this exact format:
   "description": "column_name_or_null",
   "merchant": "column_name_or_null",
   "transactionType": "column_name_or_null",
+  "startingBalance": "column_name_or_null",
+  "endingBalance": "column_name_or_null",
   "typeConfig": {
     "creditValue": "value_that_indicates_credit_or_null",
     "debitValue": "value_that_indicates_debit_or_null",
@@ -302,7 +320,7 @@ export interface PreviewTransaction {
 
 export async function previewImportedTransactions(
   importId: string
-): Promise<{ success: boolean; error?: string; transactions?: PreviewTransaction[] }> {
+): Promise<{ success: boolean; error?: string; transactions?: PreviewTransaction[]; balanceVerification?: BalanceVerification }> {
   const userId = await requireAuth();
 
   if (!userId) {
@@ -375,19 +393,65 @@ export async function previewImportedTransactions(
       const description = row[descriptionIndex];
       const merchant = merchantIndex >= 0 ? row[merchantIndex] : undefined;
 
-      // Parse date
-      let parsedDate: Date;
+      // Parse date with multiple format support
+      let parsedDate: Date | null = null;
       try {
-        // Try various date formats
         const cleaned = dateStr.replace(/['"]/g, "").trim();
-        parsedDate = new Date(cleaned);
-        if (isNaN(parsedDate.getTime())) {
-          // Try DD/MM/YYYY format
-          const parts = cleaned.split(/[\/\-\.]/);
-          if (parts.length === 3) {
-            const [day, month, year] = parts;
-            parsedDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+
+        // Try YYYYMMDD format (e.g., 20250130)
+        if (/^\d{8}$/.test(cleaned)) {
+          const year = parseInt(cleaned.substring(0, 4));
+          const month = parseInt(cleaned.substring(4, 6)) - 1;
+          const day = parseInt(cleaned.substring(6, 8));
+          parsedDate = new Date(year, month, day);
+        }
+        // Try YYYY-MM-DD or YYYY/MM/DD (ISO format)
+        else if (/^\d{4}[\-\/]\d{2}[\-\/]\d{2}/.test(cleaned)) {
+          parsedDate = new Date(cleaned);
+        }
+        // Try DD-MM-YYYY, DD/MM/YYYY, DD.MM.YYYY
+        else if (/^\d{1,2}[\-\/\.]\d{1,2}[\-\/\.]\d{4}$/.test(cleaned)) {
+          const parts = cleaned.split(/[\-\/\.]/);
+          const day = parseInt(parts[0]);
+          const month = parseInt(parts[1]) - 1;
+          const year = parseInt(parts[2]);
+          parsedDate = new Date(year, month, day);
+        }
+        // Try DD-MM-YY, DD/MM/YY, DD.MM.YY (2-digit year)
+        else if (/^\d{1,2}[\-\/\.]\d{1,2}[\-\/\.]\d{2}$/.test(cleaned)) {
+          const parts = cleaned.split(/[\-\/\.]/);
+          const day = parseInt(parts[0]);
+          const month = parseInt(parts[1]) - 1;
+          let year = parseInt(parts[2]);
+          // Assume 20xx for years 00-50, 19xx for 51-99
+          year = year <= 50 ? 2000 + year : 1900 + year;
+          parsedDate = new Date(year, month, day);
+        }
+        // Try MM/DD/YYYY (US format) - check if first part > 12, then it's DD/MM
+        else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(cleaned)) {
+          const parts = cleaned.split("/");
+          const first = parseInt(parts[0]);
+          const second = parseInt(parts[1]);
+          const year = parseInt(parts[2]);
+          // If first > 12, it must be day (European format)
+          if (first > 12) {
+            parsedDate = new Date(year, second - 1, first);
+          } else if (second > 12) {
+            // US format: MM/DD/YYYY
+            parsedDate = new Date(year, first - 1, second);
+          } else {
+            // Ambiguous - assume European DD/MM/YYYY
+            parsedDate = new Date(year, second - 1, first);
           }
+        }
+        // Fallback: try native Date parsing
+        else {
+          parsedDate = new Date(cleaned);
+        }
+
+        // Validate the parsed date
+        if (!parsedDate || isNaN(parsedDate.getTime())) {
+          continue; // Skip invalid rows
         }
       } catch {
         continue; // Skip invalid rows
@@ -441,7 +505,56 @@ export async function previewImportedTransactions(
       })
       .where(eq(csvImports.id, importId));
 
-    return { success: true, transactions: markedTransactions };
+    // Balance verification logic
+    let balanceVerification: BalanceVerification | undefined;
+
+    if (mapping.startingBalance || mapping.endingBalance) {
+      const startBalIdx = mapping.startingBalance ? headers.indexOf(mapping.startingBalance) : -1;
+      const endBalIdx = mapping.endingBalance ? headers.indexOf(mapping.endingBalance) : -1;
+
+      // Helper to clean and parse balance amounts
+      const cleanAmount = (str: string | undefined): number | null => {
+        if (!str) return null;
+        const cleaned = str.replace(/[^0-9.\-,]/g, "").replace(",", ".");
+        const parsed = parseFloat(cleaned);
+        return isNaN(parsed) ? null : parsed;
+      };
+
+      // Get first row's starting balance, last row's ending balance
+      const firstRow = rows[0];
+      const lastRow = rows[rows.length - 1];
+
+      const fileStartingBalance = startBalIdx >= 0 ? cleanAmount(firstRow?.[startBalIdx]) : null;
+      const fileEndingBalance = endBalIdx >= 0 ? cleanAmount(lastRow?.[endBalIdx]) : null;
+
+      // Calculate sum of transactions (credits positive, debits negative)
+      const transactionSum = previewTransactions.reduce((sum, tx) => {
+        return sum + (tx.transactionType === "credit" ? tx.amount : -Math.abs(tx.amount));
+      }, 0);
+
+      // Calculate expected ending balance
+      const calculatedEndingBalance = fileStartingBalance !== null
+        ? Math.round((fileStartingBalance + transactionSum) * 100) / 100
+        : null;
+
+      const discrepancy = (fileEndingBalance !== null && calculatedEndingBalance !== null)
+        ? Math.round((fileEndingBalance - calculatedEndingBalance) * 100) / 100
+        : null;
+
+      const canVerify = fileStartingBalance !== null && fileEndingBalance !== null;
+
+      balanceVerification = {
+        hasBalanceData: fileEndingBalance !== null || fileStartingBalance !== null,
+        canVerify,
+        fileStartingBalance,
+        fileEndingBalance,
+        calculatedEndingBalance,
+        discrepancy,
+        isVerified: canVerify && discrepancy !== null && Math.abs(discrepancy) < 0.01,
+      };
+    }
+
+    return { success: true, transactions: markedTransactions, balanceVerification };
   } catch (error) {
     console.error("Failed to preview transactions:", error);
     return { success: false, error: "Failed to preview transactions" };
