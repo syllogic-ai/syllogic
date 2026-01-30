@@ -1,17 +1,9 @@
 "use client";
 
-import type { RecurringTransaction } from "@/lib/db/schema";
-
-interface SubscriptionWithCategory extends RecurringTransaction {
-  category?: {
-    id: string;
-    name: string;
-    color: string | null;
-  } | null;
-}
+import type { SubscriptionOrSuggestion } from "./subscriptions-client";
 
 interface SubscriptionsSummaryRowProps {
-  subscriptions: SubscriptionWithCategory[];
+  data: SubscriptionOrSuggestion[];
 }
 
 /**
@@ -28,29 +20,29 @@ const frequencyMultipliers: Record<string, number> = {
 /**
  * Calculate the monthly equivalent for a subscription
  */
-function calculateMonthlyEquivalent(subscription: SubscriptionWithCategory): number {
-  const amount = Math.abs(parseFloat(subscription.amount || "0"));
-  const multiplier = frequencyMultipliers[subscription.frequency] || 1;
+function calculateMonthlyEquivalent(item: SubscriptionOrSuggestion): number {
+  const amount = Math.abs(parseFloat(item.amount || "0"));
+  const multiplier = frequencyMultipliers[item.frequency] || 1;
   return amount * multiplier;
 }
 
 export function SubscriptionsSummaryRow({
-  subscriptions,
+  data,
 }: SubscriptionsSummaryRowProps) {
-  // Only sum active subscriptions
-  const activeSubscriptions = subscriptions.filter((s) => s.isActive);
+  // Only sum active subscriptions (exclude suggestions)
+  const activeSubscriptions = data.filter((s) => !s.isSuggestion && s.isActive);
 
   const monthlyTotal = activeSubscriptions.reduce((sum, subscription) => {
     return sum + calculateMonthlyEquivalent(subscription);
   }, 0);
 
   // Get currency from first subscription (assuming all use same currency)
-  const currency = subscriptions[0]?.currency || "EUR";
+  const currency = data.find((d) => !d.isSuggestion)?.currency || "EUR";
 
   return (
     <div className="border-t bg-muted/30 px-4 py-3 flex items-center justify-between">
       <span className="text-sm font-medium text-muted-foreground">
-        Total
+        Monthly Total
       </span>
       <span className="text-sm font-mono font-semibold">
         {monthlyTotal.toFixed(2)} {currency}

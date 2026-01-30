@@ -10,27 +10,22 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { RecurringTransaction } from "@/lib/db/schema";
 import {
   RiMoreLine,
   RiEditLine,
   RiDeleteBinLine,
   RiCheckLine,
   RiCloseLine,
+  RiLightbulbLine,
 } from "@remixicon/react";
-
-interface SubscriptionWithCategory extends RecurringTransaction {
-  category?: {
-    id: string;
-    name: string;
-    color: string | null;
-  } | null;
-}
+import type { SubscriptionOrSuggestion } from "./subscriptions-client";
 
 interface ColumnsProps {
-  onEdit: (subscription: SubscriptionWithCategory) => void;
-  onDelete: (subscription: SubscriptionWithCategory) => void;
-  onToggleActive: (subscription: SubscriptionWithCategory) => void;
+  onEdit: (row: SubscriptionOrSuggestion) => void;
+  onDelete: (row: SubscriptionOrSuggestion) => void;
+  onToggleActive: (row: SubscriptionOrSuggestion) => void;
+  onVerify: (row: SubscriptionOrSuggestion) => void;
+  onDismiss: (row: SubscriptionOrSuggestion) => void;
 }
 
 // Frequency badge colors
@@ -54,19 +49,38 @@ export const createSubscriptionColumns = ({
   onEdit,
   onDelete,
   onToggleActive,
-}: ColumnsProps): ColumnDef<SubscriptionWithCategory>[] => [
+  onVerify,
+  onDismiss,
+}: ColumnsProps): ColumnDef<SubscriptionOrSuggestion>[] => [
   {
     accessorKey: "name",
     header: "Name",
     cell: ({ row }) => {
+      const isSuggestion = row.original.isSuggestion;
       const merchant = row.original.merchant;
       const isActive = row.original.isActive;
+      const confidence = row.original.confidence;
+      const matchCount = row.original.matchCount;
+
       return (
-        <div className={isActive ? "" : "opacity-50"}>
-          <div className="font-medium">{row.getValue("name")}</div>
-          {merchant && (
-            <div className="text-sm text-muted-foreground">{merchant}</div>
-          )}
+        <div className={!isSuggestion && !isActive ? "opacity-50" : ""}>
+          <div className="flex items-center gap-2">
+            {isSuggestion && (
+              <RiLightbulbLine className="h-4 w-4 text-yellow-500 flex-shrink-0" />
+            )}
+            <div>
+              <div className="font-medium">{row.getValue("name")}</div>
+              {merchant && (
+                <div className="text-sm text-muted-foreground">{merchant}</div>
+              )}
+              {isSuggestion && (
+                <div className="text-xs text-muted-foreground">
+                  {confidence}% confidence
+                  {matchCount && ` | ${matchCount} transaction${matchCount !== 1 ? "s" : ""}`}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       );
     },
@@ -78,9 +92,10 @@ export const createSubscriptionColumns = ({
     cell: ({ row }) => {
       const amount = parseFloat(row.getValue("amount"));
       const currency = row.original.currency || "EUR";
+      const isSuggestion = row.original.isSuggestion;
       const isActive = row.original.isActive;
       return (
-        <span className={`font-mono ${isActive ? "" : "opacity-50"}`}>
+        <span className={`font-mono ${!isSuggestion && !isActive ? "opacity-50" : ""}`}>
           {amount.toFixed(2)} {currency}
         </span>
       );
@@ -92,7 +107,15 @@ export const createSubscriptionColumns = ({
     header: "Category",
     cell: ({ row }) => {
       const category = row.original.category;
+      const isSuggestion = row.original.isSuggestion;
       const isActive = row.original.isActive;
+
+      if (isSuggestion) {
+        return (
+          <span className="text-muted-foreground text-sm">-</span>
+        );
+      }
+
       return category ? (
         <span
           className={`inline-flex items-center px-2 py-0.5 text-xs text-white ${
@@ -114,8 +137,14 @@ export const createSubscriptionColumns = ({
     accessorKey: "importance",
     header: "Importance",
     cell: ({ row }) => {
+      const isSuggestion = row.original.isSuggestion;
+
+      if (isSuggestion) {
+        return <span className="text-muted-foreground text-sm">-</span>;
+      }
+
       // Cap display at 3 for existing subscriptions with higher values
-      const importance = Math.min(row.getValue("importance") as number, 3);
+      const importance = Math.min((row.getValue("importance") as number) || 2, 3);
       const isActive = row.original.isActive;
       const importanceLabel = importance === 3 ? "High importance" : importance === 2 ? "Medium importance" : "Low importance";
       return (
@@ -143,12 +172,13 @@ export const createSubscriptionColumns = ({
     header: "Frequency",
     cell: ({ row }) => {
       const frequency = row.getValue("frequency") as string;
+      const isSuggestion = row.original.isSuggestion;
       const isActive = row.original.isActive;
       const colorClass = frequencyColors[frequency] || "bg-gray-500/10 text-gray-700";
       return (
         <Badge
           variant="secondary"
-          className={`${colorClass} ${isActive ? "" : "opacity-50"}`}
+          className={`${colorClass} ${!isSuggestion && !isActive ? "opacity-50" : ""}`}
         >
           {frequencyLabels[frequency] || frequency}
         </Badge>
@@ -160,6 +190,17 @@ export const createSubscriptionColumns = ({
     accessorKey: "isActive",
     header: "Status",
     cell: ({ row }) => {
+      const isSuggestion = row.original.isSuggestion;
+
+      if (isSuggestion) {
+        return (
+          <Badge variant="outline" className="bg-yellow-500/10 text-yellow-700 border-yellow-300">
+            <RiLightbulbLine className="mr-1 h-3 w-3" />
+            Suggested
+          </Badge>
+        );
+      }
+
       const isActive = row.getValue("isActive") as boolean;
       return isActive ? (
         <Badge variant="default" className="bg-green-500/10 text-green-700">
@@ -178,7 +219,33 @@ export const createSubscriptionColumns = ({
   {
     id: "actions",
     cell: ({ row }) => {
-      const subscription = row.original;
+      const item = row.original;
+      const isSuggestion = item.isSuggestion;
+
+      if (isSuggestion) {
+        // Show Verify and Dismiss buttons for suggestions
+        return (
+          <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1">
+            <Button
+              size="sm"
+              variant="default"
+              onClick={() => onVerify(item)}
+            >
+              <RiCheckLine className="mr-1 h-3 w-3" />
+              Verify
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onDismiss(item)}
+            >
+              <RiCloseLine className="h-4 w-4" />
+            </Button>
+          </div>
+        );
+      }
+
+      // Regular subscription actions
       return (
         <div onClick={(e) => e.stopPropagation()}>
           <DropdownMenu>
@@ -188,12 +255,12 @@ export const createSubscriptionColumns = ({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onEdit(subscription)}>
+              <DropdownMenuItem onClick={() => onEdit(item)}>
                 <RiEditLine className="mr-2 h-4 w-4" />
                 Edit
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onToggleActive(subscription)}>
-                {subscription.isActive ? (
+              <DropdownMenuItem onClick={() => onToggleActive(item)}>
+                {item.isActive ? (
                   <>
                     <RiCloseLine className="mr-2 h-4 w-4" />
                     Deactivate
@@ -207,7 +274,7 @@ export const createSubscriptionColumns = ({
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => onDelete(subscription)}
+                onClick={() => onDelete(item)}
                 className="text-destructive"
               >
                 <RiDeleteBinLine className="mr-2 h-4 w-4" />
@@ -218,7 +285,7 @@ export const createSubscriptionColumns = ({
         </div>
       );
     },
-    size: 50,
+    size: 120,
     enableSorting: false,
     enableHiding: false,
   },

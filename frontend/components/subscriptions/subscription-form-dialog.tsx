@@ -27,14 +27,19 @@ import {
   type SubscriptionCreateInput,
   type SubscriptionUpdateInput,
 } from "@/lib/actions/subscriptions";
+import {
+  verifySuggestion,
+  type SubscriptionSuggestionWithMeta,
+} from "@/lib/actions/subscription-suggestions";
 import type { RecurringTransaction } from "@/lib/db/schema";
 
 interface SubscriptionFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   subscription?: RecurringTransaction | null;
+  suggestion?: SubscriptionSuggestionWithMeta | null;
   categories: Array<{ id: string; name: string; color: string | null }>;
-  onSuccess?: () => void;
+  onSuccess?: (suggestionId?: string) => void;
 }
 
 const frequencyOptions = [
@@ -49,6 +54,7 @@ export function SubscriptionFormDialog({
   open,
   onOpenChange,
   subscription,
+  suggestion,
   categories,
   onSuccess,
 }: SubscriptionFormDialogProps) {
@@ -62,8 +68,9 @@ export function SubscriptionFormDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isEditMode = !!subscription;
+  const isVerifyMode = !!suggestion;
 
-  // Reset form when dialog opens/closes or subscription changes
+  // Reset form when dialog opens/closes or subscription/suggestion changes
   useEffect(() => {
     if (open) {
       if (subscription) {
@@ -76,6 +83,15 @@ export function SubscriptionFormDialog({
         setImportance(Math.min(subscription.importance, 3));
         setFrequency(subscription.frequency);
         setDescription(subscription.description || "");
+      } else if (suggestion) {
+        // Verify mode - populate with suggestion data
+        setName(suggestion.suggestedName);
+        setMerchant(suggestion.suggestedMerchant || "");
+        setAmount(suggestion.suggestedAmount);
+        setCategoryId("");
+        setImportance(2);
+        setFrequency(suggestion.detectedFrequency);
+        setDescription("");
       } else {
         // Create mode - reset to defaults
         setName("");
@@ -87,7 +103,7 @@ export function SubscriptionFormDialog({
         setDescription("");
       }
     }
-  }, [open, subscription]);
+  }, [open, subscription, suggestion]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,6 +149,19 @@ export function SubscriptionFormDialog({
         } else {
           toast.error(result.error || "Failed to update");
         }
+      } else if (isVerifyMode) {
+        // Verify suggestion - creates subscription and links transactions
+        const result = await verifySuggestion(suggestion.id);
+
+        if (result.success) {
+          toast.success(
+            `Subscription created and ${result.linkedCount || 0} transaction(s) linked`
+          );
+          onOpenChange(false);
+          onSuccess?.(suggestion.id);
+        } else {
+          toast.error(result.error || "Failed to verify");
+        }
       } else {
         // Create new
         const input: SubscriptionCreateInput = {
@@ -168,11 +197,17 @@ export function SubscriptionFormDialog({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>
-            {isEditMode ? "Edit Subscription" : "Add Subscription"}
+            {isEditMode
+              ? "Edit Subscription"
+              : isVerifyMode
+              ? "Verify Subscription"
+              : "Add Subscription"}
           </DialogTitle>
           <DialogDescription>
             {isEditMode
               ? "Update the details of this subscription."
+              : isVerifyMode
+              ? `We detected this recurring payment pattern. Review and confirm the details to create it as a subscription. ${suggestion?.matchCount || 0} transaction(s) will be linked.`
               : "Create a new subscription to track recurring payments and bills."}
           </DialogDescription>
         </DialogHeader>
@@ -312,9 +347,13 @@ export function SubscriptionFormDialog({
               {isSubmitting
                 ? isEditMode
                   ? "Updating..."
+                  : isVerifyMode
+                  ? "Verifying..."
                   : "Creating..."
                 : isEditMode
                 ? "Update"
+                : isVerifyMode
+                ? "Confirm & Create"
                 : "Create"}
             </Button>
           </DialogFooter>

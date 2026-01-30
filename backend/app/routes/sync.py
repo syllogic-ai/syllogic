@@ -21,6 +21,7 @@ class SyncResponse(BaseModel):
     accounts_synced: int
     transactions_created: int
     transactions_updated: int
+    suggestions_count: int = 0
     message: str
 
 
@@ -66,17 +67,21 @@ async def sync_revolut_csv(
             start_date=start_date,
             end_date=end_date,
         )
-        
+
+        suggestions_count = result.get('suggestions_count', 0)
         message = (
             f"Successfully synced {result['accounts_synced']} account(s). "
             f"Created {result['transactions_created']} new transactions, "
             f"updated {result['transactions_updated']} existing transactions."
         )
-        
+        if suggestions_count > 0:
+            message += f" Found {suggestions_count} subscription suggestion(s)."
+
         return SyncResponse(
             accounts_synced=result['accounts_synced'],
             transactions_created=result['transactions_created'],
             transactions_updated=result['transactions_updated'],
+            suggestions_count=suggestions_count,
             message=message,
         )
     except Exception as e:
@@ -137,17 +142,21 @@ def sync_plaid(
             start_date=start_date,
             end_date=end_date,
         )
-        
+
+        suggestions_count = result.get('suggestions_count', 0)
         message = (
             f"Successfully synced {result['accounts_synced']} account(s). "
             f"Created {result['transactions_created']} new transactions, "
             f"updated {result['transactions_updated']} existing transactions."
         )
-        
+        if suggestions_count > 0:
+            message += f" Found {suggestions_count} subscription suggestion(s)."
+
         return SyncResponse(
             accounts_synced=result['accounts_synced'],
             transactions_created=result['transactions_created'],
             transactions_updated=result['transactions_updated'],
+            suggestions_count=suggestions_count,
             message=message,
         )
     except ImportError:

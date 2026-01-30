@@ -352,6 +352,44 @@ class Vehicle(Base):
     )
 
 
+class SubscriptionSuggestion(Base):
+    """
+    Subscription suggestion model matching Drizzle schema.
+    Stores detected subscription patterns for user review.
+    """
+    __tablename__ = "subscription_suggestions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Suggestion details
+    suggested_name = Column(String(255), nullable=False)
+    suggested_merchant = Column(String(255), nullable=True)
+    suggested_amount = Column(Numeric(15, 2), nullable=False)
+    currency = Column(String(3), default="EUR", nullable=False)
+    detected_frequency = Column(String(20), nullable=False)  # weekly, biweekly, monthly, quarterly, yearly
+    confidence = Column(Integer, nullable=False)  # 0-100
+
+    # Linked transactions (stored as JSON array of IDs)
+    matched_transaction_ids = Column(Text, nullable=False)  # JSON array
+
+    # Status
+    status = Column(String(20), default="pending", nullable=False)  # pending, approved, dismissed
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user = relationship("User", back_populates="subscription_suggestions")
+
+    # Indexes
+    __table_args__ = (
+        Index("idx_subscription_suggestions_user", "user_id"),
+        Index("idx_subscription_suggestions_status", "status"),
+    )
+
+
 # ============================================================================
 # BetterAuth Tables (minimal models for foreign key relationships)
 # ============================================================================
@@ -451,3 +489,4 @@ class User(Base):
     csv_imports = relationship("CsvImport", back_populates="user", cascade="all, delete-orphan")
     properties = relationship("Property", back_populates="user", cascade="all, delete-orphan")
     vehicles = relationship("Vehicle", back_populates="user", cascade="all, delete-orphan")
+    subscription_suggestions = relationship("SubscriptionSuggestion", back_populates="user", cascade="all, delete-orphan")

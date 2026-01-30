@@ -5,7 +5,6 @@ import { DataTable } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
 import { createSubscriptionColumns } from "./columns";
 import { SubscriptionsSummaryRow } from "./subscriptions-summary-row";
-import type { RecurringTransaction } from "@/lib/db/schema";
 import { RiAddLine } from "@remixicon/react";
 import {
   AlertDialog,
@@ -17,60 +16,62 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-
-interface SubscriptionWithCategory extends RecurringTransaction {
-  category?: {
-    id: string;
-    name: string;
-    color: string | null;
-  } | null;
-}
+import type { SubscriptionOrSuggestion } from "./subscriptions-client";
 
 interface SubscriptionsTableProps {
-  subscriptions: SubscriptionWithCategory[];
+  data: SubscriptionOrSuggestion[];
   onAdd: () => void;
-  onEdit: (subscription: SubscriptionWithCategory) => void;
-  onDelete: (subscription: SubscriptionWithCategory) => void;
-  onToggleActive: (subscription: SubscriptionWithCategory) => void;
-  onRowClick: (subscription: SubscriptionWithCategory) => void;
+  onEdit: (row: SubscriptionOrSuggestion) => void;
+  onDelete: (row: SubscriptionOrSuggestion) => void;
+  onToggleActive: (row: SubscriptionOrSuggestion) => void;
+  onRowClick: (row: SubscriptionOrSuggestion) => void;
+  onVerify: (row: SubscriptionOrSuggestion) => void;
+  onDismiss: (row: SubscriptionOrSuggestion) => void;
 }
 
 export function SubscriptionsTable({
-  subscriptions,
+  data,
   onAdd,
   onEdit,
   onDelete,
   onToggleActive,
   onRowClick,
+  onVerify,
+  onDismiss,
 }: SubscriptionsTableProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [subscriptionToDelete, setSubscriptionToDelete] =
-    useState<SubscriptionWithCategory | null>(null);
+  const [rowToDelete, setRowToDelete] = useState<SubscriptionOrSuggestion | null>(null);
 
-  const handleDeleteClick = (subscription: SubscriptionWithCategory) => {
-    setSubscriptionToDelete(subscription);
+  const handleDeleteClick = (row: SubscriptionOrSuggestion) => {
+    setRowToDelete(row);
     setDeleteDialogOpen(true);
   };
 
   const handleConfirmDelete = () => {
-    if (subscriptionToDelete) {
-      onDelete(subscriptionToDelete);
+    if (rowToDelete) {
+      onDelete(rowToDelete);
     }
     setDeleteDialogOpen(false);
-    setSubscriptionToDelete(null);
+    setRowToDelete(null);
   };
+
+  // Count only verified subscriptions (not suggestions)
+  const subscriptionCount = data.filter((d) => !d.isSuggestion).length;
+  const suggestionCount = data.filter((d) => d.isSuggestion).length;
 
   const columns = createSubscriptionColumns({
     onEdit,
     onDelete: handleDeleteClick,
     onToggleActive,
+    onVerify,
+    onDismiss,
   });
 
   return (
     <>
       <DataTable
         columns={columns}
-        data={subscriptions}
+        data={data}
         onRowClick={onRowClick}
         enableColumnResizing={true}
         enableRowSelection={false}
@@ -81,8 +82,13 @@ export function SubscriptionsTable({
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-semibold">Subscriptions</h2>
               <span className="text-sm text-muted-foreground">
-                ({subscriptions.length})
+                ({subscriptionCount})
               </span>
+              {suggestionCount > 0 && (
+                <span className="text-sm text-yellow-600">
+                  +{suggestionCount} suggestion{suggestionCount !== 1 ? "s" : ""}
+                </span>
+              )}
             </div>
             <Button onClick={onAdd}>
               <RiAddLine className="mr-2 h-4 w-4" />
@@ -90,7 +96,7 @@ export function SubscriptionsTable({
             </Button>
           </div>
         )}
-        footer={<SubscriptionsSummaryRow subscriptions={subscriptions} />}
+        footer={<SubscriptionsSummaryRow data={data} />}
       />
 
       {/* Delete Confirmation Dialog */}
@@ -99,7 +105,7 @@ export function SubscriptionsTable({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Subscription?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{subscriptionToDelete?.name}"? This
+              Are you sure you want to delete "{rowToDelete?.name}"? This
               action cannot be undone. Linked transactions will be unlinked but not
               deleted.
             </AlertDialogDescription>
