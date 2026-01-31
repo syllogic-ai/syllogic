@@ -260,10 +260,9 @@ export const transactionColumns: ColumnDef<TransactionWithRelations>[] = [
       }
       return (
         <div className="flex justify-center">
-          <RiCheckLine
-            className="h-4 w-4 text-emerald-600"
-            title={`${recurring.name} (${recurring.frequency})`}
-          />
+          <span title={`${recurring.name} (${recurring.frequency})`}>
+            <RiCheckLine className="h-4 w-4 text-emerald-600" />
+          </span>
         </div>
       );
     },
