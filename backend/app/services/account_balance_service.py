@@ -3,10 +3,11 @@ Service for calculating and managing account balances.
 Handles:
 1. Current account balance calculation (in account currency and functional currency)
 2. Account timeseries calculation (daily balance snapshots)
+3. Importing daily balances from CSV files
 """
 from datetime import datetime, date, timedelta
 from decimal import Decimal
-from typing import Dict, Optional
+from typing import Dict, Optional, List, Set
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 import logging
@@ -143,7 +144,12 @@ class AccountBalanceService:
             logger.error(traceback.format_exc())
             return {"error": str(e)}
 
-    def calculate_account_timeseries(self, user_id: str, account_ids: Optional[list] = None) -> Dict:
+    def calculate_account_timeseries(
+        self,
+        user_id: str,
+        account_ids: Optional[list] = None,
+        skip_dates: Optional[Dict[str, Set[date]]] = None
+    ) -> Dict:
         """
         Calculate and store daily balance snapshots (timeseries) for accounts of a user.
 
@@ -156,6 +162,8 @@ class AccountBalanceService:
         Args:
             user_id: User ID to calculate timeseries for
             account_ids: Optional list of specific account IDs to process. If None, processes all accounts.
+            skip_dates: Optional dict mapping account_id (string) to set of dates to skip.
+                       These dates already have authoritative balance data from CSV import.
 
         Returns:
             Dict with keys:
@@ -216,8 +224,22 @@ class AccountBalanceService:
                     current_date = min_date
                     days_processed = 0
                     records_stored = 0
-                    
+                    skipped_count = 0
+
+                    # Get skip dates for this account (if any)
+                    account_skip_dates = skip_dates.get(str(account.id), set()) if skip_dates else set()
+
                     while current_date <= end_date:
+                        # Skip dates that already have authoritative balance data from CSV
+                        if current_date in account_skip_dates:
+                            logger.debug(
+                                f"[TIMESERIES] Skipping {current_date} for account {account.name} "
+                                f"(has authoritative balance from CSV)"
+                            )
+                            current_date += timedelta(days=1)
+                            skipped_count += 1
+                            continue
+
                         # Calculate cumulative balance up to this date (in account currency)
                         # Sum all transactions up to and including this date
                         transaction_sum_result = self.db.query(func.sum(Transaction.amount)).filter(
@@ -301,11 +323,17 @@ class AccountBalanceService:
                     
                     total_days_processed += days_processed
                     total_records_stored += records_stored
-                    
-                    logger.info(
-                        f"[TIMESERIES] Stored {records_stored} timeseries records for account {account.name} "
-                        f"({days_processed} days)"
-                    )
+
+                    if skipped_count > 0:
+                        logger.info(
+                            f"[TIMESERIES] Stored {records_stored} timeseries records for account {account.name} "
+                            f"({days_processed} days calculated, {skipped_count} days skipped - using CSV balances)"
+                        )
+                    else:
+                        logger.info(
+                            f"[TIMESERIES] Stored {records_stored} timeseries records for account {account.name} "
+                            f"({days_processed} days)"
+                        )
                     
                 except Exception as e:
                     logger.error(f"[TIMESERIES] Error calculating timeseries for account {account.name}: {e}")
@@ -331,3 +359,141 @@ class AccountBalanceService:
             logger.error(f"[TIMESERIES] Error calculating timeseries: {e}")
             logger.error(traceback.format_exc())
             return {"error": str(e)}
+
+    def import_daily_balances(
+        self,
+        account_id: str,
+        daily_balances: List[Dict],
+        functional_currency: str
+    ) -> Dict:
+        """
+        Store provided daily balances directly in account_balances table.
+        These balances are authoritative values from the CSV file.
+
+        Args:
+            account_id: Account ID to store balances for
+            daily_balances: List of dicts with 'date' (YYYY-MM-DD) and 'balance' keys
+            functional_currency: User's functional currency for conversion
+
+        Returns:
+            Dict with keys:
+                - imported_dates: Set of dates that were imported
+                - records_stored: Number of balance records stored
+                - error: Error message if operation failed
+        """
+        try:
+            # Get account for currency info
+            account = self.db.query(Account).filter(Account.id == account_id).first()
+            if not account:
+                return {"error": f"Account {account_id} not found", "imported_dates": set()}
+
+            account_currency = account.currency or "EUR"
+
+            imported_dates: Set[date] = set()
+            records_stored = 0
+
+            logger.info(
+                f"[BALANCE_IMPORT] Importing {len(daily_balances)} daily balances for account {account.name}"
+            )
+
+            for balance_data in daily_balances:
+                try:
+                    # Parse date
+                    date_str = balance_data.get("date")
+                    if not date_str:
+                        continue
+
+                    # Parse the date string (YYYY-MM-DD format)
+                    balance_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+                    balance_value = Decimal(str(balance_data.get("balance", 0)))
+
+                    # Convert to functional currency if needed
+                    if account_currency == functional_currency:
+                        functional_balance = balance_value
+                    else:
+                        # Get exchange rate for this specific date
+                        rate_datetime = datetime.combine(balance_date, datetime.min.time())
+                        exchange_rate_record = self.db.query(ExchangeRate).filter(
+                            ExchangeRate.date == rate_datetime,
+                            ExchangeRate.base_currency == account_currency,
+                            ExchangeRate.target_currency == functional_currency
+                        ).first()
+
+                        if exchange_rate_record:
+                            functional_balance = balance_value * exchange_rate_record.rate
+                        else:
+                            # Try to find closest available rate (within 7 days)
+                            found_rate = None
+                            for days_back in range(8):
+                                check_date = rate_datetime - timedelta(days=days_back)
+                                closest_rate = self.db.query(ExchangeRate).filter(
+                                    ExchangeRate.date == check_date,
+                                    ExchangeRate.base_currency == account_currency,
+                                    ExchangeRate.target_currency == functional_currency
+                                ).first()
+                                if closest_rate:
+                                    found_rate = closest_rate.rate
+                                    break
+
+                            if found_rate:
+                                functional_balance = balance_value * found_rate
+                            else:
+                                # No rate found - use account currency balance
+                                logger.warning(
+                                    f"[BALANCE_IMPORT] No exchange rate found for {account_currency} -> "
+                                    f"{functional_currency} on {balance_date}. Using account currency balance."
+                                )
+                                functional_balance = balance_value
+
+                    # Upsert into account_balances
+                    rate_datetime = datetime.combine(balance_date, datetime.min.time())
+                    existing = self.db.query(AccountBalance).filter(
+                        AccountBalance.account_id == account_id,
+                        AccountBalance.date == rate_datetime
+                    ).first()
+
+                    if existing:
+                        # Update existing record
+                        existing.balance_in_account_currency = balance_value
+                        existing.balance_in_functional_currency = functional_balance
+                        existing.updated_at = datetime.utcnow()
+                        logger.debug(
+                            f"[BALANCE_IMPORT] Updated balance for {balance_date}: {balance_value} {account_currency}"
+                        )
+                    else:
+                        # Create new record
+                        new_balance = AccountBalance(
+                            account_id=account_id,
+                            date=rate_datetime,
+                            balance_in_account_currency=balance_value,
+                            balance_in_functional_currency=functional_balance
+                        )
+                        self.db.add(new_balance)
+                        logger.debug(
+                            f"[BALANCE_IMPORT] Created balance for {balance_date}: {balance_value} {account_currency}"
+                        )
+
+                    imported_dates.add(balance_date)
+                    records_stored += 1
+
+                except Exception as e:
+                    logger.error(f"[BALANCE_IMPORT] Error importing balance for date {balance_data}: {e}")
+                    continue
+
+            self.db.commit()
+
+            logger.info(
+                f"[BALANCE_IMPORT] Imported {records_stored} daily balances for account {account.name} "
+                f"({len(imported_dates)} unique dates)"
+            )
+
+            return {
+                "imported_dates": imported_dates,
+                "records_stored": records_stored
+            }
+
+        except Exception as e:
+            logger.error(f"[BALANCE_IMPORT] Error importing daily balances: {e}")
+            logger.error(traceback.format_exc())
+            self.db.rollback()
+            return {"error": str(e), "imported_dates": set()}

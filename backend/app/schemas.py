@@ -222,3 +222,10 @@ class BatchCategorizeResponse(BaseModel):
     total_cost_usd: float
     llm_errors: Optional[List[str]] = None
     llm_warnings: Optional[List[str]] = None
+
+
+# Daily Balance Import Schemas
+class DailyBalanceImport(BaseModel):
+    """Daily balance data extracted from CSV for import."""
+    date: str  # ISO date format YYYY-MM-DD
+    balance: Decimal

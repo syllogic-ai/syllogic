@@ -69,25 +69,35 @@ export function SubscriptionsClient({
     useState<SubscriptionWithCategory | null>(null);
 
   // Combine subscriptions and suggestions for table display
+  // Order: Active subscriptions first, then suggestions, then inactive subscriptions
+  const activeSubscriptions = subscriptions
+    .filter((s) => s.isActive)
+    .map((s) => ({ ...s, isSuggestion: false }));
+
+  const inactiveSubscriptions = subscriptions
+    .filter((s) => !s.isActive)
+    .map((s) => ({ ...s, isSuggestion: false }));
+
+  const suggestionRows = suggestions.map((s) => ({
+    id: s.id,
+    name: s.suggestedName,
+    amount: s.suggestedAmount,
+    currency: s.currency,
+    frequency: s.detectedFrequency,
+    isActive: null, // Suggestions don't have active status
+    isSuggestion: true,
+    confidence: s.confidence,
+    matchCount: s.matchCount,
+    category: null,
+  }));
+
   const tableData: SubscriptionOrSuggestion[] = [
-    // Suggestions first (at the top)
-    ...suggestions.map((s) => ({
-      id: s.id,
-      name: s.suggestedName,
-      amount: s.suggestedAmount,
-      currency: s.currency,
-      frequency: s.detectedFrequency,
-      isActive: null, // Suggestions don't have active status
-      isSuggestion: true,
-      confidence: s.confidence,
-      matchCount: s.matchCount,
-      category: null,
-    })),
-    // Then regular subscriptions
-    ...subscriptions.map((s) => ({
-      ...s,
-      isSuggestion: false,
-    })),
+    // Active subscriptions first
+    ...activeSubscriptions,
+    // Then suggestions
+    ...suggestionRows,
+    // Then inactive subscriptions
+    ...inactiveSubscriptions,
   ];
 
   const handleAdd = () => {

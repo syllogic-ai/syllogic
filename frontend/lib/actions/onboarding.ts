@@ -184,3 +184,28 @@ export async function completeOnboarding(): Promise<{ success: boolean; error?: 
 
 // Note: getUserCategories has been consolidated in lib/actions/categories.ts
 // Use: import { getUserCategories } from "@/lib/actions/categories"
+
+export async function completeOnboarding(): Promise<{ success: boolean; error?: string }> {
+  const session = await getAuthenticatedSession();
+
+  if (!session?.user?.id) {
+    return { success: false, error: "Not authenticated" };
+  }
+
+  try {
+    await db
+      .update(users)
+      .set({
+        onboardingStatus: "completed",
+        onboardingCompletedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, session.user.id));
+
+    revalidatePath("/");
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to complete onboarding:", error);
+    return { success: false, error: "Failed to complete onboarding" };
+  }
+}

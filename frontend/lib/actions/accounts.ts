@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq, and, lte, desc, sql } from "drizzle-orm";
+import { eq, and, lte, gte, lt, desc, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { accounts, accountBalances, transactions, type NewAccount } from "@/lib/db/schema";
 import { requireAuth } from "@/lib/auth-helpers";
@@ -202,6 +202,133 @@ export async function recalculateStartingBalance(
     console.error("Failed to recalculate starting balance:", error);
     return { success: false, error: "Failed to recalculate starting balance" };
   }
+}
+
+export async function getAccountById(accountId: string) {
+  const userId = await requireAuth();
+
+  if (!userId) {
+    return null;
+  }
+
+  const account = await db.query.accounts.findFirst({
+    where: and(
+      eq(accounts.id, accountId),
+      eq(accounts.userId, userId),
+      eq(accounts.isActive, true)
+    ),
+  });
+
+  return account ?? null;
+}
+
+export interface BalanceHistoryPoint {
+  date: string;
+  balance: number;
+}
+
+export async function getAccountBalanceHistory(
+  accountId: string,
+  days: number = 90
+): Promise<BalanceHistoryPoint[]> {
+  const userId = await requireAuth();
+
+  if (!userId) {
+    return [];
+  }
+
+  // Verify the account belongs to the user
+  const account = await db.query.accounts.findFirst({
+    where: and(
+      eq(accounts.id, accountId),
+      eq(accounts.userId, userId)
+    ),
+  });
+
+  if (!account) {
+    return [];
+  }
+
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+  startDate.setHours(0, 0, 0, 0);
+
+  // Try to get balance history from accountBalances table
+  const balanceHistory = await db.query.accountBalances.findMany({
+    where: and(
+      eq(accountBalances.accountId, accountId),
+      gte(accountBalances.date, startDate)
+    ),
+    orderBy: [desc(accountBalances.date)],
+  });
+
+  if (balanceHistory.length > 0) {
+    // Reverse to get chronological order (oldest first)
+    return balanceHistory.reverse().map((b) => ({
+      date: b.date.toISOString().split("T")[0],
+      balance: parseFloat(b.balanceInAccountCurrency),
+    }));
+  }
+
+  // Fallback: Calculate running balance from transactions
+  const startingBalance = parseFloat(account.startingBalance || "0");
+  const txResults = await db
+    .select({
+      date: sql<string>`DATE(${transactions.bookedAt})`,
+      dailySum: sql<string>`SUM(${transactions.amount})`,
+    })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.accountId, accountId),
+        gte(transactions.bookedAt, startDate)
+      )
+    )
+    .groupBy(sql`DATE(${transactions.bookedAt})`)
+    .orderBy(sql`DATE(${transactions.bookedAt})`);
+
+  // Build running balance for each day
+  const result: BalanceHistoryPoint[] = [];
+  let runningBalance = startingBalance;
+
+  // Get sum of all transactions before start date
+  const priorSum = await db
+    .select({
+      total: sql<string>`COALESCE(SUM(${transactions.amount}), 0)`,
+    })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.accountId, accountId),
+        lt(transactions.bookedAt, startDate)
+      )
+    );
+
+  runningBalance += parseFloat(priorSum[0]?.total || "0");
+
+  // Create a map of date -> daily sum
+  const dailySums = new Map<string, number>();
+  for (const tx of txResults) {
+    dailySums.set(tx.date, parseFloat(tx.dailySum));
+  }
+
+  // Fill in all dates from startDate to today
+  const currentDate = new Date(startDate);
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+
+  while (currentDate <= today) {
+    const dateStr = currentDate.toISOString().split("T")[0];
+    const dailyChange = dailySums.get(dateStr) || 0;
+    runningBalance += dailyChange;
+    result.push({
+      date: dateStr,
+      balance: runningBalance,
+    });
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  return result;
 }
 
 export async function getAccountBalanceOnDate(

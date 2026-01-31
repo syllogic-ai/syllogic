@@ -270,7 +270,11 @@ export function SubscriptionFormDialog({
               <Label htmlFor="category">Category</Label>
               <Select value={categoryId} onValueChange={(value) => setCategoryId(value ?? "")}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a category" />
+                  <SelectValue placeholder="Select a category">
+                    {categoryId
+                      ? categories.find((c) => c.id === categoryId)?.name || "Uncategorized"
+                      : "Uncategorized"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">Uncategorized</SelectItem>
@@ -307,7 +311,7 @@ export function SubscriptionFormDialog({
               <Label>
                 Importance <span className="text-destructive">*</span>
               </Label>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
                 {Array.from({ length: 3 }).map((_, i) => {
                   const blockValue = i + 1;
                   const isSelected = blockValue <= importance;
@@ -316,7 +320,7 @@ export function SubscriptionFormDialog({
                       key={i}
                       type="button"
                       onClick={() => setImportance(blockValue)}
-                      className={`h-6 w-8 border transition-colors cursor-pointer hover:border-foreground ${
+                      className={`h-3 w-5 border transition-colors cursor-pointer hover:border-foreground ${
                         isSelected
                           ? "bg-foreground border-foreground"
                           : "bg-background border-border"

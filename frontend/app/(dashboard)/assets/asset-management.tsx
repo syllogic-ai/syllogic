@@ -13,6 +13,7 @@ import {
   RiMoreLine,
   RiScalesLine,
   RiCalculatorLine,
+  RiEyeLine,
 } from "@remixicon/react";
 import {
   Card,
@@ -409,6 +410,13 @@ export function AssetManagement({
                       <p className="font-medium">{formatCurrency(account.functionalBalance, account.currency)}</p>
                       <p className="text-xs text-muted-foreground">{account.currency}</p>
                     </div>
+                    <Button
+                      className="cursor-pointer"
+                      onClick={() => router.push(`/accounts/${account.id}`)}
+                    >
+                      <RiEyeLine className="h-5 w-5" />
+                      View
+                    </Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm">

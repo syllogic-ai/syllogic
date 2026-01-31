@@ -9,6 +9,7 @@ import {
   RiMoreLine,
   RiScalesLine,
   RiRefreshLine,
+  RiEyeLine,
 } from "@remixicon/react";
 import {
   Card,
@@ -198,7 +199,7 @@ export function AccountList({ accounts, onAccountUpdated }: AccountListProps) {
         <CardHeader>
           <CardTitle>Accounts</CardTitle>
           <CardDescription>
-            Manage your financial accounts. Click on an account to edit or delete it.
+            Your financial accounts and cash holdings.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -230,6 +231,13 @@ export function AccountList({ accounts, onAccountUpdated }: AccountListProps) {
                     </p>
                     <p className="text-xs text-muted-foreground">{account.currency}</p>
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.location.href = `/accounts/${account.id}`}
+                  >
+                    <RiEyeLine className="h-4 w-4" />
+                  </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="sm">

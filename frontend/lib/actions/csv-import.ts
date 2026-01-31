@@ -37,6 +37,9 @@ export interface BalanceVerification {
   calculatedEndingBalance: number | null; // startingBalance + sum(transactions)
   discrepancy: number | null;
   isVerified: boolean; // true if discrepancy < 0.01
+  // Fields for starting balance recalculation
+  importedTransactionSum: number | null;
+  suggestedStartingBalance: number | null; // fileEndingBalance - transactionSum
 }
 
 export interface ParsedCsvData {
@@ -321,9 +324,15 @@ export interface PreviewTransaction {
   duplicateOf?: string;
 }
 
+// Daily balance extracted from CSV
+export interface DailyBalance {
+  date: string;  // ISO date string (YYYY-MM-DD)
+  balance: number;
+}
+
 export async function previewImportedTransactions(
   importId: string
-): Promise<{ success: boolean; error?: string; transactions?: PreviewTransaction[]; balanceVerification?: BalanceVerification }> {
+): Promise<{ success: boolean; error?: string; transactions?: PreviewTransaction[]; balanceVerification?: BalanceVerification; dailyBalances?: DailyBalance[] }> {
   const userId = await requireAuth();
 
   if (!userId) {
@@ -565,21 +574,22 @@ export async function previewImportedTransactions(
       })
       .where(eq(csvImports.id, importId));
 
-    // Balance verification logic
+    // Balance verification logic and daily balance extraction
     let balanceVerification: BalanceVerification | undefined;
+    let dailyBalances: DailyBalance[] = [];
+
+    const startBalIdx = mapping.startingBalance ? headers.indexOf(mapping.startingBalance) : -1;
+    const endBalIdx = mapping.endingBalance ? headers.indexOf(mapping.endingBalance) : -1;
+
+    // Helper to clean and parse balance amounts
+    const cleanAmount = (str: string | undefined): number | null => {
+      if (!str) return null;
+      const cleaned = str.replace(/[^0-9.\-,]/g, "").replace(",", ".");
+      const parsed = parseFloat(cleaned);
+      return isNaN(parsed) ? null : parsed;
+    };
 
     if (mapping.startingBalance || mapping.endingBalance) {
-      const startBalIdx = mapping.startingBalance ? headers.indexOf(mapping.startingBalance) : -1;
-      const endBalIdx = mapping.endingBalance ? headers.indexOf(mapping.endingBalance) : -1;
-
-      // Helper to clean and parse balance amounts
-      const cleanAmount = (str: string | undefined): number | null => {
-        if (!str) return null;
-        const cleaned = str.replace(/[^0-9.\-,]/g, "").replace(",", ".");
-        const parsed = parseFloat(cleaned);
-        return isNaN(parsed) ? null : parsed;
-      };
-
       // Get first row's starting balance, last row's ending balance
       const firstRow = rows[0];
       const lastRow = rows[rows.length - 1];
@@ -603,6 +613,12 @@ export async function previewImportedTransactions(
 
       const canVerify = fileStartingBalance !== null && fileEndingBalance !== null;
 
+      // Calculate suggested starting balance for recalculation
+      // Formula: startingBalance = fileEndingBalance - transactionSum
+      const suggestedStartingBalance = fileEndingBalance !== null
+        ? Math.round((fileEndingBalance - transactionSum) * 100) / 100
+        : null;
+
       balanceVerification = {
         hasBalanceData: fileEndingBalance !== null || fileStartingBalance !== null,
         canVerify,
@@ -611,10 +627,116 @@ export async function previewImportedTransactions(
         calculatedEndingBalance,
         discrepancy,
         isVerified: canVerify && discrepancy !== null && Math.abs(discrepancy) < 0.01,
+        importedTransactionSum: Math.round(transactionSum * 100) / 100,
+        suggestedStartingBalance,
       };
+
+      // Extract daily balances from CSV rows
+      // For each row, we extract the ending balance (or calculate from starting balance + transaction)
+      // The last transaction of each day becomes the authoritative balance for that day
+      const dailyBalanceMap = new Map<string, number>();
+      const dateIndex = mapping.date ? headers.indexOf(mapping.date) : -1;
+      const amountIndex = mapping.amount ? headers.indexOf(mapping.amount) : -1;
+
+      if (dateIndex >= 0 && (endBalIdx >= 0 || startBalIdx >= 0)) {
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          if (!row || row.length === 0) continue;
+
+          const dateStr = row[dateIndex];
+          if (!dateStr) continue;
+
+          // Parse the date to get YYYY-MM-DD format
+          let parsedDate: Date | null = null;
+          try {
+            const cleaned = dateStr.replace(/['"]/g, "").trim();
+
+            // Try YYYYMMDD format
+            if (/^\d{8}$/.test(cleaned)) {
+              const year = parseInt(cleaned.substring(0, 4));
+              const month = parseInt(cleaned.substring(4, 6)) - 1;
+              const day = parseInt(cleaned.substring(6, 8));
+              parsedDate = new Date(year, month, day);
+            }
+            // Try YYYY-MM-DD or YYYY/MM/DD
+            else if (/^\d{4}[\-\/]\d{2}[\-\/]\d{2}/.test(cleaned)) {
+              parsedDate = new Date(cleaned);
+            }
+            // Try DD-MM-YYYY, DD/MM/YYYY, DD.MM.YYYY
+            else if (/^\d{1,2}[\-\/\.]\d{1,2}[\-\/\.]\d{4}$/.test(cleaned)) {
+              const parts = cleaned.split(/[\-\/\.]/);
+              const day = parseInt(parts[0]);
+              const month = parseInt(parts[1]) - 1;
+              const year = parseInt(parts[2]);
+              parsedDate = new Date(year, month, day);
+            }
+            // Try DD-MM-YY, DD/MM/YY, DD.MM.YY
+            else if (/^\d{1,2}[\-\/\.]\d{1,2}[\-\/\.]\d{2}$/.test(cleaned)) {
+              const parts = cleaned.split(/[\-\/\.]/);
+              const day = parseInt(parts[0]);
+              const month = parseInt(parts[1]) - 1;
+              let year = parseInt(parts[2]);
+              year = year <= 50 ? 2000 + year : 1900 + year;
+              parsedDate = new Date(year, month, day);
+            }
+            // Fallback
+            else {
+              parsedDate = new Date(cleaned);
+            }
+
+            if (!parsedDate || isNaN(parsedDate.getTime())) continue;
+          } catch {
+            continue;
+          }
+
+          // Format as YYYY-MM-DD
+          const isoDate = parsedDate.toISOString().split("T")[0];
+
+          // Get balance for this row
+          let dayBalance: number | null = null;
+
+          if (endBalIdx >= 0) {
+            // Use ending balance directly if available
+            dayBalance = cleanAmount(row[endBalIdx]);
+          } else if (startBalIdx >= 0 && amountIndex >= 0) {
+            // Calculate ending balance from starting balance + transaction amount
+            const startBal = cleanAmount(row[startBalIdx]);
+            const amountStr = row[amountIndex];
+            const cleanedAmount = amountStr?.replace(/[^0-9.\-,]/g, "").replace(",", ".");
+            const txAmount = cleanedAmount ? parseFloat(cleanedAmount) : null;
+
+            if (startBal !== null && txAmount !== null) {
+              // For signed amounts, just add directly. For type-based, need to check type
+              if (mapping.typeConfig?.isAmountSigned) {
+                dayBalance = startBal + txAmount;
+              } else {
+                // Need to determine if credit or debit
+                const typeIndex = mapping.transactionType ? headers.indexOf(mapping.transactionType) : -1;
+                let isCredit = false;
+                if (typeIndex >= 0 && mapping.typeConfig) {
+                  const typeValue = row[typeIndex]?.toLowerCase();
+                  if (mapping.typeConfig.creditValue && typeValue?.includes(mapping.typeConfig.creditValue.toLowerCase())) {
+                    isCredit = true;
+                  }
+                }
+                dayBalance = startBal + (isCredit ? Math.abs(txAmount) : -Math.abs(txAmount));
+              }
+            }
+          }
+
+          if (dayBalance !== null) {
+            // Store balance - last transaction of each day wins (CSV is processed in order)
+            dailyBalanceMap.set(isoDate, Math.round(dayBalance * 100) / 100);
+          }
+        }
+
+        // Convert map to array
+        dailyBalances = Array.from(dailyBalanceMap.entries())
+          .map(([date, balance]) => ({ date, balance }));
+      }
     }
 
-    return { success: true, transactions: markedTransactions, balanceVerification };
+    return { success: true, transactions: markedTransactions, balanceVerification, dailyBalances };
   } catch (error) {
     console.error("Failed to preview transactions:", error);
     return { success: false, error: "Failed to preview transactions" };
@@ -683,6 +805,12 @@ interface BackendTransactionImportItem {
   external_id: string | null;
 }
 
+// Backend daily balance import format
+interface BackendDailyBalance {
+  date: string;  // ISO date string (YYYY-MM-DD)
+  balance: number;
+}
+
 // Backend API request format
 interface BackendTransactionImportRequest {
   transactions: BackendTransactionImportItem[];
@@ -690,6 +818,8 @@ interface BackendTransactionImportRequest {
   sync_exchange_rates: boolean;
   update_functional_amounts: boolean;
   calculate_balances: boolean;
+  daily_balances?: BackendDailyBalance[];
+  starting_balance?: number;  // Starting balance from CSV to update account
 }
 
 // Backend API response format
@@ -802,6 +932,10 @@ export async function finalizeImport(
       sync_exchange_rates: true,
       update_functional_amounts: true,
       calculate_balances: true,
+      // Include daily balances from CSV for accurate balance storage
+      daily_balances: previewResult.dailyBalances || undefined,
+      // Include starting balance from CSV to update account's starting balance
+      starting_balance: previewResult.balanceVerification?.fileStartingBalance ?? undefined,
     };
 
     // Call backend API with 10-minute timeout
@@ -847,7 +981,7 @@ export async function finalizeImport(
       revalidatePath("/");
       revalidatePath("/dashboard");
       revalidatePath("/settings");
-      
+
       return {
         success: true,
         importedCount: backendResponse.transactions_inserted,
