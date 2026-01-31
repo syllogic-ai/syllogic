@@ -65,7 +65,6 @@ export function AccountDetail({
       <AccountHeader account={account} currency={currency} />
       <AccountBalanceChart data={balanceHistory} currency={currency} />
       <div className="min-h-[400px]">
-        <h3 className="text-sm font-medium mb-3">Transactions</h3>
         {transactions.length === 0 ? (
           <div className="flex h-48 items-center justify-center rounded border border-dashed">
             <p className="text-sm text-muted-foreground">No transactions yet</p>

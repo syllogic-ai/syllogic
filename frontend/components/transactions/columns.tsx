@@ -252,17 +252,19 @@ export const transactionColumns: ColumnDef<TransactionWithRelations>[] = [
   },
   {
     accessorKey: "recurringTransaction",
-    header: "Sub",
+    header: () => <div className="text-center">Sub</div>,
     cell: ({ row }) => {
       const recurring = row.original.recurringTransaction;
       if (!recurring) {
-        return <span className="text-muted-foreground">-</span>;
+        return <div className="text-center text-muted-foreground">-</div>;
       }
       return (
-        <RiCheckLine
-          className="h-4 w-4 text-emerald-600"
-          title={`${recurring.name} (${recurring.frequency})`}
-        />
+        <div className="flex justify-center">
+          <RiCheckLine
+            className="h-4 w-4 text-emerald-600"
+            title={`${recurring.name} (${recurring.frequency})`}
+          />
+        </div>
       );
     },
     size: 60,
