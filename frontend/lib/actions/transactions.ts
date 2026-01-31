@@ -423,6 +423,87 @@ export async function getTransactions(): Promise<TransactionWithRelations[]> {
   }));
 }
 
+export async function getTransactionsForAccount(
+  accountId: string
+): Promise<TransactionWithRelations[]> {
+  const userId = await requireAuth();
+
+  if (!userId) {
+    return [];
+  }
+
+  // Verify the account belongs to the user
+  const account = await db.query.accounts.findFirst({
+    where: and(
+      eq(accounts.id, accountId),
+      eq(accounts.userId, userId)
+    ),
+  });
+
+  if (!account) {
+    return [];
+  }
+
+  const result = await db.query.transactions.findMany({
+    where: and(
+      eq(transactions.userId, userId),
+      eq(transactions.accountId, accountId)
+    ),
+    orderBy: [desc(transactions.bookedAt)],
+    with: {
+      account: true,
+      category: true,
+      categorySystem: true,
+      recurringTransaction: true,
+    },
+  });
+
+  return result.map((tx) => ({
+    id: tx.id,
+    accountId: tx.accountId,
+    account: {
+      id: tx.account.id,
+      name: tx.account.name,
+      institution: tx.account.institution,
+      accountType: tx.account.accountType,
+    },
+    description: tx.description,
+    merchant: tx.merchant,
+    amount: parseFloat(tx.amount),
+    currency: tx.currency,
+    categoryId: tx.categoryId,
+    category: tx.category
+      ? {
+          id: tx.category.id,
+          name: tx.category.name,
+          color: tx.category.color,
+          icon: tx.category.icon,
+        }
+      : null,
+    categorySystemId: tx.categorySystemId,
+    categorySystem: tx.categorySystem
+      ? {
+          id: tx.categorySystem.id,
+          name: tx.categorySystem.name,
+          color: tx.categorySystem.color,
+          icon: tx.categorySystem.icon,
+        }
+      : null,
+    recurringTransactionId: tx.recurringTransactionId,
+    recurringTransaction: tx.recurringTransaction
+      ? {
+          id: tx.recurringTransaction.id,
+          name: tx.recurringTransaction.name,
+          merchant: tx.recurringTransaction.merchant,
+          frequency: tx.recurringTransaction.frequency,
+        }
+      : null,
+    bookedAt: tx.bookedAt,
+    pending: tx.pending,
+    transactionType: tx.transactionType,
+  }));
+}
+
 export async function bulkUpdateTransactionCategory(
   transactionIds: string[],
   categoryId: string | null

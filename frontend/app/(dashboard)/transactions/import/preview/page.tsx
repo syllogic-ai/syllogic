@@ -204,6 +204,11 @@ function PreviewPageContent() {
                 Map both starting and ending balance columns for full verification.
               </p>
             )}
+            {balanceVerification.hasBalanceData && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Daily balances from the CSV will be used to update the account balance history.
+              </p>
+            )}
           </div>
         )}
 

@@ -4,24 +4,38 @@ import { useState } from "react";
 import { RiArrowDownSLine, RiArrowRightSLine } from "@remixicon/react";
 import { formatCurrency } from "@/lib/utils";
 import { WeightBarVisualizer } from "./weight-bar-visualizer";
-import type { AssetCategory, AssetAccount } from "./types";
+import type { AssetCategory, AssetAccount, AssetCategoryKey } from "./types";
 
 interface AssetsTableProps {
   categories: AssetCategory[];
   currency: string;
 }
 
+// Asset categories that are bank accounts (navigable to account detail)
+const ACCOUNT_CATEGORY_KEYS: AssetCategoryKey[] = ["cash", "investment", "crypto"];
+
 function AccountRow({
   account,
   currency,
   color,
+  isLinkable = false,
 }: {
   account: AssetAccount;
   currency: string;
   color: string;
+  isLinkable?: boolean;
 }) {
+  const handleClick = () => {
+    if (isLinkable) {
+      window.location.href = `/accounts/${account.id}`;
+    }
+  };
+
   return (
-    <div className="flex items-center py-2 pl-8 pr-4 border-t border-border/50">
+    <div
+      className={`flex items-center py-2 pl-8 pr-4 border-t border-border/50 ${isLinkable ? "hover:bg-muted/50 cursor-pointer transition-colors" : ""}`}
+      onClick={handleClick}
+    >
       <div className="flex items-center gap-2 flex-1 min-w-0">
         <div
           className="h-3 w-3 shrink-0 rounded-sm"
@@ -121,6 +135,7 @@ function CategoryRow({
               account={account}
               currency={currency}
               color={category.color}
+              isLinkable={ACCOUNT_CATEGORY_KEYS.includes(category.key)}
             />
           ))}
         </div>

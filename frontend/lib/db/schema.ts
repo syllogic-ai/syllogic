@@ -89,6 +89,7 @@ export const accounts = pgTable(
     currency: char("currency", { length: 3 }).default("EUR"),
     provider: varchar("provider", { length: 50 }), // gocardless, manual
     externalId: varchar("external_id", { length: 255 }), // Provider's account ID
+    bankConnectionId: uuid("bank_connection_id").references(() => bankConnections.id, { onDelete: "set null" }),
     balanceAvailable: decimal("balance_available", { precision: 15, scale: 2 }),
     startingBalance: decimal("starting_balance", { precision: 15, scale: 2 }).default("0"), // Starting balance for calculation
     functionalBalance: decimal("functional_balance", { precision: 15, scale: 2 }), // Calculated balance (sum of transactions + starting_balance)
@@ -218,6 +219,10 @@ export const bankConnections = pgTable("bank_connections", {
   status: varchar("status", { length: 50 }), // pending, linked, expired, revoked
   agreementId: varchar("agreement_id", { length: 255 }),
   link: text("link"), // Authorization link
+  provider: varchar("provider", { length: 50 }), // gocardless, ponto, etc.
+  syncStatus: varchar("sync_status", { length: 50 }), // syncing, synced, failed
+  lastSyncedAt: timestamp("last_synced_at"),
+  errorMessage: text("error_message"),
   createdAt: timestamp("created_at").defaultNow(),
   expiresAt: timestamp("expires_at"),
 });

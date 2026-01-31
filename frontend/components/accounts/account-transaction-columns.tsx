@@ -2,54 +2,28 @@
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { TransactionWithRelations } from "@/lib/actions/transactions";
-import { RiArrowUpDownLine, RiArrowUpLine, RiArrowDownLine, RiCheckLine } from "@remixicon/react";
+import { RiArrowUpLine, RiArrowDownLine, RiCheckLine } from "@remixicon/react";
 import { format } from "date-fns";
 
-function AccountCell({ accountId, accountName, maxWidth }: { accountId: string; accountName: string; maxWidth: number }) {
-  const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    window.location.href = `/accounts/${accountId}`;
-  };
-
-  return (
-    <button
-      onClick={handleClick}
-      className="block truncate text-muted-foreground hover:text-foreground hover:underline transition-colors text-left"
-      style={{ maxWidth: `${maxWidth}px` }}
-      title={accountName}
-    >
-      {accountName}
-    </button>
-  );
-}
-
-export const transactionColumns: ColumnDef<TransactionWithRelations>[] = [
+export const accountTransactionColumns: ColumnDef<TransactionWithRelations>[] = [
   {
     id: "select",
     header: ({ table }) => {
       const allRowsSelected = table.getIsAllRowsSelected();
       const allPageRowsSelected = table.getIsAllPageRowsSelected();
       const someRowsSelected = table.getIsSomeRowsSelected();
-      
-      // Determine checkbox state:
-      // - Checked (✓): all rows across all pages are selected
-      // - Indeterminate (-): only current page is selected (or some rows)
-      // - Unchecked: nothing selected
+
       const isChecked = allRowsSelected;
       const isIndeterminate = !allRowsSelected && (allPageRowsSelected || someRowsSelected);
-      
+
       const handleClick = () => {
         if (allRowsSelected) {
-          // All selected -> deselect all
           table.toggleAllRowsSelected(false);
         } else if (allPageRowsSelected) {
-          // Page selected -> select all rows
           table.toggleAllRowsSelected(true);
         } else {
-          // Nothing/some selected -> select current page
           table.toggleAllPageRowsSelected(true);
         }
       };
@@ -127,7 +101,7 @@ export const transactionColumns: ColumnDef<TransactionWithRelations>[] = [
         </div>
       );
     },
-    size: 280,
+    size: 300,
     filterFn: "includesString",
   },
   {
@@ -137,8 +111,8 @@ export const transactionColumns: ColumnDef<TransactionWithRelations>[] = [
       const merchant = row.original.merchant;
       const columnSize = column.getSize();
       return merchant ? (
-        <div 
-          className="truncate" 
+        <div
+          className="truncate"
           style={{ maxWidth: `${columnSize}px` }}
           title={merchant}
         >
@@ -159,7 +133,7 @@ export const transactionColumns: ColumnDef<TransactionWithRelations>[] = [
       return category ? (
         <span
           className="inline-flex items-center px-2 py-0.5 text-xs text-white truncate"
-          style={{ 
+          style={{
             backgroundColor: category.color ?? "#6B7280",
             maxWidth: `${columnSize}px`
           }}
@@ -222,7 +196,7 @@ export const transactionColumns: ColumnDef<TransactionWithRelations>[] = [
         </span>
       );
     },
-    size: 110,
+    size: 120,
     filterFn: (row, id, filterValue) => {
       if (!filterValue || (!filterValue.min && !filterValue.max)) return true;
       const amount = Math.abs(row.getValue("amount") as number);
@@ -232,38 +206,17 @@ export const transactionColumns: ColumnDef<TransactionWithRelations>[] = [
     },
   },
   {
-    accessorKey: "account",
-    header: "Account",
-    cell: ({ row, column }) => {
-      const columnSize = column.getSize();
-      return (
-        <AccountCell
-          accountId={row.original.account.id}
-          accountName={row.original.account.name}
-          maxWidth={columnSize}
-        />
-      );
-    },
-    size: 140,
-    filterFn: (row, id, filterValue) => {
-      if (!filterValue || !Array.isArray(filterValue) || filterValue.length === 0) return true;
-      return filterValue.includes(row.original.account.id);
-    },
-  },
-  {
     accessorKey: "recurringTransaction",
-    header: () => <div className="text-center">Sub</div>,
+    header: "Sub",
     cell: ({ row }) => {
       const recurring = row.original.recurringTransaction;
       if (!recurring) {
-        return <div className="text-center text-muted-foreground">-</div>;
+        return <span className="text-muted-foreground">-</span>;
       }
       return (
-        <div className="flex justify-center">
-          <span title={`${recurring.name} (${recurring.frequency})`}>
-            <RiCheckLine className="h-4 w-4 text-emerald-600" />
-          </span>
-        </div>
+        <span title={`${recurring.name} (${recurring.frequency})`}>
+          <RiCheckLine className="h-4 w-4 text-emerald-600" />
+        </span>
       );
     },
     size: 60,

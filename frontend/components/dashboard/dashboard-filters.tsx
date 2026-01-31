@@ -93,7 +93,7 @@ export function DashboardFilters({
       {/* Account Selector */}
       <Select
         value={currentAccount}
-        onValueChange={(value) => updateFilters("account", value)}
+        onValueChange={(value) => updateFilters("account", value || undefined)}
       >
         <SelectTrigger className="!h-9 w-[160px]">
           {currentAccount === "all" ? (

@@ -13,7 +13,7 @@ Handles the complete workflow:
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Dict
 from uuid import UUID
 from decimal import Decimal
 from datetime import datetime, date
@@ -28,7 +28,8 @@ from app.schemas import (
     TransactionInput,
     BatchCategorizeRequest,
     BatchCategorizeResponse,
-    UserOverride
+    UserOverride,
+    DailyBalanceImport
 )
 from app.models import Category
 from app.services.category_matcher import CategoryMatcher
@@ -64,6 +65,8 @@ class TransactionImportRequest(BaseModel):
     update_functional_amounts: bool = True
     calculate_balances: bool = True
     detect_subscriptions: bool = True
+    daily_balances: Optional[List[DailyBalanceImport]] = None  # Daily balances from CSV
+    starting_balance: Optional[Decimal] = None  # Starting balance from CSV to update account
 
 
 class TransactionImportResponse(BaseModel):
@@ -762,25 +765,77 @@ def import_transactions(
                 logger.error(f"[IMPORT] Error updating functional amounts: {e}")
                 functional_amounts_result = {"error": str(e)}
         
-        # Step 8: Calculate account balances for affected accounts only
-        balances_result = None
-        balance_service = None
-
         # Get unique account IDs from imported transactions
         affected_account_ids = list(set([txn.account_id for txn in inserted_transactions]))
+
+        # Step 8a: Update account starting balance if provided from CSV
+        # IMPORTANT: This must happen BEFORE balance calculation so the calculation uses the correct starting balance
+        if request.starting_balance is not None and affected_account_ids:
+            logger.info(f"[IMPORT] Updating account starting balance to {request.starting_balance}...")
+            for account_id in affected_account_ids:
+                account = db.query(Account).filter(Account.id == account_id).first()
+                if account:
+                    account.starting_balance = request.starting_balance
+                    logger.info(f"[IMPORT] Updated starting balance for account {account.name} to {request.starting_balance}")
+            db.commit()
+
+        # Step 8b: Calculate account balances for affected accounts only
+        balances_result = None
+        balance_service = None
 
         if request.calculate_balances and affected_account_ids:
             logger.info(f"[IMPORT] Calculating account balances for {len(affected_account_ids)} affected account(s)...")
             balance_service = AccountBalanceService(db)
             balances_result = balance_service.calculate_account_balances(user_id, account_ids=affected_account_ids)
 
+        # Step 8c: Import daily balances from CSV if provided
+        # This stores authoritative balance values from the CSV file
+        skip_dates_by_account: Dict[str, set] = {}
+        daily_balances_result = None
+
+        if request.daily_balances and affected_account_ids:
+            logger.info(f"[IMPORT] Importing {len(request.daily_balances)} daily balances from CSV...")
+
+            if balance_service is None:
+                balance_service = AccountBalanceService(db)
+
+            # Get user's functional currency
+            user = db.query(User).filter(User.id == user_id).first()
+            functional_currency = user.functional_currency if user else "EUR"
+
+            # Import daily balances for each affected account
+            # Since all transactions in this import are for the same account(s),
+            # we apply the daily balances to each affected account
+            for account_id in affected_account_ids:
+                import_result = balance_service.import_daily_balances(
+                    account_id=str(account_id),
+                    daily_balances=[{"date": db.date, "balance": float(db.balance)} for db in request.daily_balances],
+                    functional_currency=functional_currency
+                )
+
+                if "imported_dates" in import_result and import_result["imported_dates"]:
+                    skip_dates_by_account[str(account_id)] = import_result["imported_dates"]
+                    logger.info(
+                        f"[IMPORT] Imported {import_result.get('records_stored', 0)} daily balances for account {account_id}"
+                    )
+
+            daily_balances_result = {
+                "total_dates_imported": len(request.daily_balances),
+                "accounts_updated": len(affected_account_ids)
+            }
+
         # Step 9: Calculate and store account timeseries for affected accounts only
+        # Skip dates that already have authoritative balance data from CSV
         timeseries_result = None
         if affected_account_ids:
             logger.info(f"[IMPORT] Calculating account timeseries for {len(affected_account_ids)} affected account(s)...")
             if balance_service is None:
                 balance_service = AccountBalanceService(db)
-            timeseries_result = balance_service.calculate_account_timeseries(user_id, account_ids=affected_account_ids)
+            timeseries_result = balance_service.calculate_account_timeseries(
+                user_id,
+                account_ids=affected_account_ids,
+                skip_dates=skip_dates_by_account if skip_dates_by_account else None
+            )
         
         return TransactionImportResponse(
             success=True,
