@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useTransition, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   RiArrowLeftLine,
   RiCheckLine,
+  RiLoader4Line,
   RiBankLine,
-  RiArrowRightLine,
+  RiSkipForwardLine,
 } from "@remixicon/react";
-import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -17,171 +19,132 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { OnboardingProgress } from "@/components/onboarding/onboarding-progress";
-import { ConnectBankButton } from "@/components/bank-connect";
-import { BankConnectionStatus } from "@/components/bank-connect";
+import { ConnectBankButton } from "@/components/bank-connect/connect-bank-button";
+import { BankConnectionStatus } from "@/components/bank-connect/bank-connection-status";
 import { completeOnboarding } from "@/lib/actions/onboarding";
-import {
-  getBankConnections,
-  type BankConnection,
-} from "@/lib/actions/bank-connections";
+import { getBankConnections, type BankConnection } from "@/lib/actions/bank-connections";
 
-export default function Step3Page() {
+export default function OnboardingStep3Page() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const [connections, setConnections] = useState<BankConnection[]>([]);
-  const [isLoadingConnections, setIsLoadingConnections] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Check for successful connection from callback
-  const connected = searchParams.get("connected") === "true";
-
+  // Load bank connections on mount
   useEffect(() => {
-    const loadConnections = async () => {
-      setIsLoadingConnections(true);
-      const data = await getBankConnections();
-      setConnections(data);
-      setIsLoadingConnections(false);
-    };
-
     loadConnections();
+  }, []);
 
-    if (connected) {
-      toast.success("Bank connected successfully!");
-    }
-  }, [connected]);
-
-  const handleComplete = async () => {
-    setIsLoading(true);
-
+  const loadConnections = async () => {
     try {
-      const result = await completeOnboarding();
-
-      if (result.success) {
-        toast.success("Setup complete! Welcome to your dashboard.");
-        router.push("/");
-      } else {
-        toast.error(result.error || "Failed to complete setup");
-      }
-    } catch {
-      toast.error("An error occurred. Please try again.");
+      const bankConnections = await getBankConnections();
+      setConnections(bankConnections);
+    } catch (error) {
+      console.error("Failed to load bank connections:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleRefreshConnections = async () => {
-    const data = await getBankConnections();
-    setConnections(data);
+  const handleComplete = async () => {
+    startTransition(async () => {
+      const result = await completeOnboarding();
+
+      if (result.success) {
+        toast.success("Onboarding complete! Welcome to your finance dashboard.");
+        router.push("/");
+      } else {
+        toast.error(result.error || "Failed to complete onboarding");
+      }
+    });
+  };
+
+  const handleBack = () => {
+    router.push("/step-2");
   };
 
   const hasConnections = connections.length > 0;
 
+  if (isLoading) {
+    return (
+      <div className="space-y-8">
+        <OnboardingProgress currentStep={3} />
+        <Card>
+          <CardContent className="flex items-center justify-center py-12">
+            <RiLoader4Line className="h-8 w-8 animate-spin text-muted-foreground" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col h-full">
+    <div className="space-y-8">
       <OnboardingProgress currentStep={3} />
 
-      <Card className="flex flex-col flex-1 mt-8">
+      <Card>
         <CardHeader>
-          <CardTitle>Connect Your Bank (Optional)</CardTitle>
+          <CardTitle>Connect your bank accounts</CardTitle>
           <CardDescription>
-            Securely connect your bank account to automatically sync transactions.
-            You can skip this step and add accounts manually later.
+            Link your bank accounts to automatically import and categorize your
+            transactions. This step is optional - you can skip it and add accounts
+            manually later.
           </CardDescription>
         </CardHeader>
-
-        <CardContent className="flex-1">
-          {isLoadingConnections ? (
-            <div className="flex items-center justify-center py-12">
-              <p className="text-muted-foreground">Loading...</p>
-            </div>
-          ) : hasConnections ? (
+        <CardContent className="space-y-6">
+          {hasConnections ? (
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                You have connected the following bank(s):
-              </p>
               {connections.map((connection) => (
                 <BankConnectionStatus
                   key={connection.id}
                   connection={connection}
-                  onUpdate={handleRefreshConnections}
+                  onUpdate={loadConnections}
                 />
               ))}
-              <div className="pt-4 border-t">
-                <p className="text-sm text-muted-foreground mb-4">
-                  Want to connect another bank?
-                </p>
+              <div className="flex justify-center pt-4">
                 <ConnectBankButton variant="outline" />
               </div>
             </div>
           ) : (
-            <div className="text-center space-y-6 py-8">
-              <div className="h-20 w-20 mx-auto bg-muted rounded-full flex items-center justify-center">
-                <RiBankLine className="h-10 w-10 text-muted-foreground" />
+            <div className="flex flex-col items-center justify-center py-8 space-y-6">
+              <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
+                <RiBankLine className="h-8 w-8 text-muted-foreground" />
               </div>
-
-              <div className="space-y-2 max-w-md mx-auto">
-                <h3 className="text-lg font-semibold">
-                  Automatic Transaction Sync
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Connect your bank account securely via Ponto to automatically
-                  import and sync your transactions. Your credentials are never
-                  stored on our servers.
+              <div className="text-center space-y-2">
+                <h3 className="font-medium">No bank accounts connected</h3>
+                <p className="text-sm text-muted-foreground max-w-md">
+                  Connect your bank to automatically sync your transactions. We use
+                  secure open banking protocols to keep your data safe.
                 </p>
               </div>
-
-              <div className="space-y-3">
-                <ConnectBankButton size="lg" />
-                <p className="text-xs text-muted-foreground">
-                  Powered by Ponto Connect (Isabel Group)
-                </p>
-              </div>
-
-              <div className="pt-6 border-t max-w-md mx-auto">
-                <p className="text-xs text-muted-foreground">
-                  <strong>Why connect?</strong>
-                  <br />
-                  Automatic sync means less manual data entry. Transactions are
-                  synced daily, and you can trigger manual syncs anytime.
-                </p>
-              </div>
+              <ConnectBankButton size="lg" />
             </div>
           )}
         </CardContent>
-
-        <CardFooter className="justify-between border-t pt-6">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => router.push("/step-2")}
-          >
+        <CardFooter className="flex justify-between">
+          <Button variant="outline" onClick={handleBack}>
             <RiArrowLeftLine className="mr-2 h-4 w-4" />
             Back
           </Button>
-
-          <div className="flex gap-3">
-            {!hasConnections && (
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={handleComplete}
-                disabled={isLoading}
-              >
-                Skip for now
-                <RiArrowRightLine className="ml-2 h-4 w-4" />
-              </Button>
+          <Button onClick={handleComplete} disabled={isPending}>
+            {isPending ? (
+              <>
+                <RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
+                Completing...
+              </>
+            ) : hasConnections ? (
+              <>
+                <RiCheckLine className="mr-2 h-4 w-4" />
+                Complete Setup
+              </>
+            ) : (
+              <>
+                <RiSkipForwardLine className="mr-2 h-4 w-4" />
+                Skip for Now
+              </>
             )}
-            <Button
-              type="button"
-              onClick={handleComplete}
-              disabled={isLoading}
-            >
-              {isLoading ? "Completing..." : hasConnections ? "Complete Setup" : "Complete Setup"}
-              <RiCheckLine className="ml-2 h-4 w-4" />
-            </Button>
-          </div>
+          </Button>
         </CardFooter>
       </Card>
     </div>

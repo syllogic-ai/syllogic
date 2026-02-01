@@ -88,39 +88,6 @@ export async function updateUserProfile(
 }
 
 /**
- * Reset onboarding status to pending and delete all user categories.
- * This allows the user to go through the onboarding flow again.
- */
-export async function resetOnboarding(): Promise<{ success: boolean; error?: string }> {
-  const userId = await requireAuth();
-
-  if (!userId) {
-    return { success: false, error: "Not authenticated" };
-  }
-
-  try {
-    // Delete all user categories
-    await db.delete(categories).where(eq(categories.userId, userId));
-
-    // Reset onboarding status
-    await db
-      .update(users)
-      .set({
-        onboardingStatus: "pending",
-        onboardingCompletedAt: null,
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, userId));
-
-    revalidatePath("/");
-    return { success: true };
-  } catch (error) {
-    console.error("Failed to reset onboarding:", error);
-    return { success: false, error: "Failed to reset onboarding" };
-  }
-}
-
-/**
  * Delete all transactions and reset account balances to starting balance.
  * This is a destructive operation that cannot be undone.
  */

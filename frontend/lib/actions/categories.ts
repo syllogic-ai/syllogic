@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq, and } from "drizzle-orm";
+import { eq, and, count } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { categories, type Category, type NewCategory } from "@/lib/db/schema";
+import { categories, transactions, type Category, type NewCategory } from "@/lib/db/schema";
 import { requireAuth } from "@/lib/auth-helpers";
 
 export interface CategoryCreateInput {
@@ -13,6 +13,17 @@ export interface CategoryCreateInput {
   icon: string;
   description?: string;
   categorizationInstructions?: string;
+}
+
+export interface CategoryInput {
+  name: string;
+  categoryType: "expense" | "income" | "transfer";
+  color: string;
+  icon: string;
+  description?: string;
+  categorizationInstructions?: string;
+  isSystem?: boolean;
+  hideFromSelection?: boolean;
 }
 
 export interface CategoryUpdateInput {
@@ -218,4 +229,122 @@ export async function getCategoryByName(name: string): Promise<Category | null> 
   });
 
   return category || null;
+}
+
+/**
+ * Get the count of transactions assigned to a category
+ */
+export async function getCategoryTransactionCount(
+  categoryId: string
+): Promise<{ count: number; error?: string }> {
+  const userId = await requireAuth();
+
+  if (!userId) {
+    return { count: 0, error: "Not authenticated" };
+  }
+
+  try {
+    const result = await db
+      .select({ count: count() })
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.userId, userId),
+          eq(transactions.categoryId, categoryId)
+        )
+      );
+
+    return { count: result[0]?.count ?? 0 };
+  } catch (error) {
+    console.error("Failed to count category transactions:", error);
+    return { count: 0, error: "Failed to count transactions" };
+  }
+}
+
+/**
+ * Delete a category with optional reassignment of transactions
+ * @param categoryId - The category to delete
+ * @param reassignToCategoryId - If provided, reassign transactions to this category; if null, set to uncategorized
+ */
+export async function deleteCategoryWithReassignment(
+  categoryId: string,
+  reassignToCategoryId: string | null
+): Promise<{ success: boolean; error?: string; reassignedCount?: number }> {
+  const userId = await requireAuth();
+
+  if (!userId) {
+    return { success: false, error: "Not authenticated" };
+  }
+
+  try {
+    // Get the category to delete
+    const categoryToDelete = await db.query.categories.findFirst({
+      where: and(
+        eq(categories.id, categoryId),
+        eq(categories.userId, userId)
+      ),
+    });
+
+    if (!categoryToDelete) {
+      return { success: false, error: "Category not found" };
+    }
+
+    if (categoryToDelete.isSystem) {
+      return { success: false, error: "System categories cannot be deleted" };
+    }
+
+    // If reassigning to another category, verify it exists and belongs to user
+    if (reassignToCategoryId) {
+      const targetCategory = await db.query.categories.findFirst({
+        where: and(
+          eq(categories.id, reassignToCategoryId),
+          eq(categories.userId, userId)
+        ),
+      });
+
+      if (!targetCategory) {
+        return { success: false, error: "Target category not found" };
+      }
+
+      // Verify same category type
+      if (targetCategory.categoryType !== categoryToDelete.categoryType) {
+        return { success: false, error: "Cannot reassign to a different category type" };
+      }
+    }
+
+    // Count affected transactions before update
+    const countResult = await db
+      .select({ count: count() })
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.userId, userId),
+          eq(transactions.categoryId, categoryId)
+        )
+      );
+    const reassignedCount = countResult[0]?.count ?? 0;
+
+    // Reassign transactions
+    await db
+      .update(transactions)
+      .set({ categoryId: reassignToCategoryId })
+      .where(
+        and(
+          eq(transactions.userId, userId),
+          eq(transactions.categoryId, categoryId)
+        )
+      );
+
+    // Delete the category
+    await db.delete(categories).where(eq(categories.id, categoryId));
+
+    revalidatePath("/");
+    revalidatePath("/settings");
+    revalidatePath("/transactions");
+
+    return { success: true, reassignedCount };
+  } catch (error) {
+    console.error("Failed to delete category:", error);
+    return { success: false, error: "Failed to delete category" };
+  }
 }

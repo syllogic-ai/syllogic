@@ -2,7 +2,7 @@
 
 import { RiDeleteBinLine, RiEditLine, RiLockLine } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
-import { type CategoryInput } from "@/lib/actions/onboarding";
+import { type CategoryInput } from "@/lib/actions/categories";
 
 interface CategoryRowProps {
   category: CategoryInput;

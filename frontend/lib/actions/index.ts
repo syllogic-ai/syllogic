@@ -1,4 +1,3 @@
-export * from "./onboarding";
 export {
   createTransaction,
   updateTransactionCategory,
@@ -11,3 +10,4 @@ export * from "./accounts";
 export * from "./properties";
 export * from "./vehicles";
 export * from "./command-palette";
+export * from "./onboarding";

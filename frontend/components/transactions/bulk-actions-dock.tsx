@@ -28,6 +28,7 @@ import { bulkUpdateTransactionCategory, bulkUpdateTransactionIncludeInAnalytics 
 import { exportTransactionsToCSV } from "@/lib/utils/csv-export";
 import type { CategoryDisplay } from "@/types";
 import type { TransactionWithRelations } from "@/lib/actions/transactions";
+import { filterSelectableCategories } from "@/lib/utils/category-utils";
 
 interface BulkActionsDockProps {
   selectedCount: number;
@@ -54,12 +55,15 @@ export function BulkActionsDock({
   const [analyticsPopoverOpen, setAnalyticsPopoverOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Filter out categories hidden from selection, then apply search filter
+  const selectableCategories = useMemo(() => filterSelectableCategories(categories), [categories]);
+
   const filteredCategories = useMemo(() => {
-    if (!searchQuery.trim()) return categories;
-    return categories.filter((cat) =>
+    if (!searchQuery.trim()) return selectableCategories;
+    return selectableCategories.filter((cat) =>
       cat.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
-  }, [categories, searchQuery]);
+  }, [selectableCategories, searchQuery]);
 
   if (selectedCount === 0) {
     return null;

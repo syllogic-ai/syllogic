@@ -123,6 +123,7 @@ export const categories = pgTable(
     description: text("description"),
     categorizationInstructions: text("categorization_instructions"),
     isSystem: boolean("is_system").default(false),
+    hideFromSelection: boolean("hide_from_selection").default(false),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => [

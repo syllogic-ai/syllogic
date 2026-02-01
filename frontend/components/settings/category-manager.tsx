@@ -15,15 +15,17 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CategoryRow } from "@/components/onboarding/category-row";
 import { CategoryFormDialog } from "@/components/onboarding/category-form-dialog";
+import { DeleteCategoryDialog } from "./delete-category-dialog";
 import {
   createCategory,
   updateCategory,
-  deleteCategory as deleteCategoryAction,
+  getCategoryTransactionCount,
+  deleteCategoryWithReassignment,
   type CategoryCreateInput,
   type CategoryUpdateInput,
+  type CategoryInput,
 } from "@/lib/actions/categories";
 import type { Category } from "@/lib/db/schema";
-import { type CategoryInput } from "@/lib/actions/onboarding";
 import { groupCategoriesByType, getCategoryTypeLabel, type CategoryType } from "@/lib/utils/category-utils";
 
 interface CategoryManagerProps {
@@ -37,6 +39,12 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Delete dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
+  const [deleteTransactionCount, setDeleteTransactionCount] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const groupedCategories = groupCategoriesByType(categories);
 
@@ -53,20 +61,41 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
       return;
     }
 
+    // Fetch transaction count and open delete dialog
     setIsLoading(true);
     try {
-      const result = await deleteCategoryAction(category.id);
+      const { count } = await getCategoryTransactionCount(category.id);
+      setDeletingCategory(category);
+      setDeleteTransactionCount(count);
+      setDeleteDialogOpen(true);
+    } catch {
+      toast.error("Failed to check category usage");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleConfirmDelete = async (reassignToCategoryId: string | null) => {
+    if (!deletingCategory) return;
+
+    setIsDeleting(true);
+    try {
+      const result = await deleteCategoryWithReassignment(deletingCategory.id, reassignToCategoryId);
       if (result.success) {
-        setCategories(categories.filter((c) => c.id !== category.id));
-        toast.success("Category deleted");
+        setCategories(categories.filter((c) => c.id !== deletingCategory.id));
+        const message = result.reassignedCount && result.reassignedCount > 0
+          ? `Category deleted. ${result.reassignedCount} transaction${result.reassignedCount !== 1 ? "s" : ""} ${reassignToCategoryId ? "reassigned" : "set to uncategorized"}.`
+          : "Category deleted";
+        toast.success(message);
         router.refresh();
+        setDeleteDialogOpen(false);
       } else {
         toast.error(result.error || "Failed to delete category");
       }
     } catch {
       toast.error("An error occurred. Please try again.");
     } finally {
-      setIsLoading(false);
+      setIsDeleting(false);
     }
   };
 
@@ -134,6 +163,7 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
             description: categoryInput.description || null,
             categorizationInstructions: categoryInput.categorizationInstructions || null,
             isSystem: false,
+            hideFromSelection: false,
             createdAt: new Date(),
           };
           setCategories([...categories, newCategory]);
@@ -255,6 +285,20 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
         category={categoryToInput(editingCategory)}
         onSave={handleSaveCategory}
         existingCount={getCategoriesByType(activeTab).length}
+      />
+
+      <DeleteCategoryDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        category={deletingCategory}
+        transactionCount={deleteTransactionCount}
+        sameTypeCategories={
+          deletingCategory?.categoryType
+            ? getCategoriesByType(deletingCategory.categoryType as CategoryType)
+            : []
+        }
+        onConfirm={handleConfirmDelete}
+        isLoading={isDeleting}
       />
     </>
   );

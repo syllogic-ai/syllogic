@@ -503,6 +503,7 @@ export async function getTransactionsForAccount(
     bookedAt: tx.bookedAt,
     pending: tx.pending,
     transactionType: tx.transactionType,
+    includeInAnalytics: tx.includeInAnalytics,
   }));
 }
 

@@ -35,6 +35,7 @@ import type { TransactionWithRelations } from "@/lib/actions/transactions";
 import { updateTransactionCategory, updateTransactionIncludeInAnalytics, deleteBalancingTransaction } from "@/lib/actions/transactions";
 import { Switch } from "@/components/ui/switch";
 import type { CategoryDisplay } from "@/types";
+import { filterSelectableCategories } from "@/lib/utils/category-utils";
 import { RiDeleteBinLine, RiLoopRightLine } from "@remixicon/react";
 import { toast } from "sonner";
 import { SubscriptionDetectionDialog } from "./subscription-detection-dialog";
@@ -57,6 +58,9 @@ export function TransactionSheet({
   onDeleteTransaction,
   categories = [],
 }: TransactionSheetProps) {
+  // Filter out categories hidden from manual selection (e.g., Balancing Transfer)
+  const selectableCategories = filterSelectableCategories(categories);
+
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [includeInAnalytics, setIncludeInAnalytics] = useState<boolean>(true);
   const [instructions, setInstructions] = useState<string>("");
@@ -179,12 +183,12 @@ export function TransactionSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="sm:max-w-md overflow-y-auto px-2.5">
+      <SheetContent side="right" className="sm:max-w-md overflow-y-auto overflow-x-hidden px-2.5">
         <SheetHeader className="space-y-1 p-0 pt-4">
           <SheetDescription className="text-muted-foreground">
             {formatDate(transaction.bookedAt)}
           </SheetDescription>
-          <SheetTitle className="text-lg font-medium">
+          <SheetTitle className="text-lg font-medium break-all">
             {transaction.description}
           </SheetTitle>
           <div
@@ -239,7 +243,7 @@ export function TransactionSheet({
                     <span>Uncategorized</span>
                   </div>
                 </SelectItem>
-                {categories.map((category) => (
+                {selectableCategories.map((category) => (
                   <SelectItem key={category.id} value={category.id}>
                     <div className="flex items-center gap-2">
                       <div

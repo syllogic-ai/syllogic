@@ -5,7 +5,7 @@ import { RiAddLine } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { CategoryRow } from "./category-row";
 import { CategoryFormDialog } from "./category-form-dialog";
-import { type CategoryInput } from "@/lib/actions/onboarding";
+import { type CategoryInput } from "@/lib/actions/categories";
 import { groupCategoriesByType, type CategoryType } from "@/lib/utils/category-utils";
 
 interface CategoryListEditorProps {

@@ -19,6 +19,11 @@ const steps: Step[] = [
     title: "Categories",
     description: "Customize spending categories",
   },
+  {
+    number: 3,
+    title: "Bank",
+    description: "Connect your accounts",
+  },
 ];
 
 interface OnboardingProgressProps {

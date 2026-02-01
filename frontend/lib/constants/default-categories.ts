@@ -9,6 +9,7 @@ export interface DefaultCategory {
   icon: string;
   description?: string;
   isSystem?: boolean;
+  hideFromSelection?: boolean;
 }
 
 export const DEFAULT_EXPENSE_CATEGORIES: DefaultCategory[] = [
@@ -145,6 +146,7 @@ export const DEFAULT_TRANSFER_CATEGORIES: DefaultCategory[] = [
     icon: "RiScalesLine",
     description: "Balance adjustments for account reconciliation",
     isSystem: true,
+    hideFromSelection: true,
   },
 ];
 

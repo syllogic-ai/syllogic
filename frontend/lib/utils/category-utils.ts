@@ -6,6 +6,16 @@
 export type CategoryType = "expense" | "income" | "transfer";
 
 /**
+ * Filter out categories that should be hidden from manual selection
+ * (e.g., "Balancing Transfer" which is system-assigned only)
+ */
+export function filterSelectableCategories<T extends { hideFromSelection?: boolean | null; name?: string }>(
+  categories: T[]
+): T[] {
+  return categories.filter((c) => !c.hideFromSelection);
+}
+
+/**
  * Filter categories by a specific type
  */
 export function filterCategoriesByType<T extends { categoryType: string | null }>(
@@ -34,17 +44,19 @@ export function groupCategoriesByType<T extends { categoryType: string | null }>
  * Get categories that apply to a transaction type
  * For debits: expense and transfer categories
  * For credits: income and transfer categories
+ * Automatically filters out categories hidden from selection
  */
-export function getCategoriesForTransactionType<T extends { categoryType: string | null }>(
+export function getCategoriesForTransactionType<T extends { categoryType: string | null; hideFromSelection?: boolean | null }>(
   categories: T[],
   transactionType: "debit" | "credit"
 ): T[] {
+  const selectableCategories = filterSelectableCategories(categories);
   if (transactionType === "debit") {
-    return categories.filter(
+    return selectableCategories.filter(
       (c) => c.categoryType === "expense" || c.categoryType === "transfer"
     );
   }
-  return categories.filter(
+  return selectableCategories.filter(
     (c) => c.categoryType === "income" || c.categoryType === "transfer"
   );
 }

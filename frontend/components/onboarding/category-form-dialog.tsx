@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CategoryColorPicker } from "./category-color-picker";
 import { CATEGORY_COLORS } from "@/lib/constants";
-import { type CategoryInput } from "@/lib/actions/onboarding";
+import { type CategoryInput } from "@/lib/actions/categories";
 
 interface CategoryFormDialogProps {
   open: boolean;
