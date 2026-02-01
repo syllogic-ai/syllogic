@@ -16,14 +16,50 @@ Personal Finance MCP Server - Access financial data and manage transactions.
 The `user_id` parameter is optional on all tools - it defaults to the configured user.
 You can omit it for single-user setups.
 
-Available functionality:
-- Accounts: List, view, and check balance history
-- Categories: List, view, and get category tree structure
-- Transactions: List, search, view, and update categories
-- Analytics: Spending/income by category, monthly cashflow, financial summary
-- Recurring: List and view subscriptions/bills
+## Available functionality
+- **Accounts**: List, view, and check balance history
+- **Categories**: List, view, and get category tree structure
+- **Transactions**: List, search, view, and update categories
+- **Analytics**: Spending/income by category, monthly cashflow, financial summary
+- **Recurring**: List and view subscriptions/bills
 
-The only write operation available is `update_transaction_category`.
+## Bulk recategorization workflow (recommended)
+
+Use `search_transactions_multi` for efficient bulk operations:
+
+```
+# Step 1: Get category ID
+categories = list_categories()
+groceries_id = <find groceries category id>
+
+# Step 2: Find all matching transactions in ONE call
+result = search_transactions_multi(
+    queries=["Jumbo", "Albert Heijn", "ALDI", "LIDL"],
+    exclude_category_id=groceries_id,  # Skip already-categorized
+    match_mode="word",  # Avoid false positives
+    ids_only=True  # Faster, fewer tokens
+)
+
+# Step 3: Bulk update
+bulk_update_transaction_categories(
+    category_id=groceries_id,
+    transaction_ids=result["transaction_ids"]
+)
+```
+
+## Search options
+
+- `match_mode="contains"` (default): Substring match - "Action" matches "Transaction"
+- `match_mode="starts_with"`: "Action" matches "Action Store" but not "Reaction"
+- `match_mode="word"`: Word boundary - "Action" matches "Action Store" but NOT "Transaction"
+
+Use `match_mode="word"` for merchant names to avoid false positives!
+
+## ⚠️ Pagination warning
+
+When using `search_transactions`, ALWAYS check `has_more` in the response.
+If true, you MUST call again with page=2, 3, etc. until has_more=false.
+The `total_count` field tells you how many total results exist.
 """
 )
 
@@ -184,19 +220,104 @@ def get_transaction(transaction_id: str, user_id: str | None = None) -> dict | N
 
 
 @mcp.tool
-def search_transactions(query: str, limit: int = 20, user_id: str | None = None) -> list[dict]:
+def search_transactions(
+    query: str,
+    exclude_category_id: str | None = None,
+    match_mode: str = "contains",
+    ids_only: bool = False,
+    limit: int = 50,
+    page: int = 1,
+    user_id: str | None = None
+) -> dict:
     """
     Search transactions by description or merchant name.
 
+    ⚠️ PAGINATION WARNING: Always check `has_more` in the response!
+    If true, you MUST call again with page=2, page=3, etc. until has_more=false.
+
     Args:
-        query: Search query string
-        limit: Max results (default: 20, max: 50)
+        query: Search query string (case-insensitive)
+        exclude_category_id: Skip transactions already in this category (useful for recategorization)
+        match_mode: How to match the query:
+            - "contains" (default): Substring match - "Action" matches "Transaction"
+            - "starts_with": Must start with query - "Action" won't match "Transaction"
+            - "word": Word boundary match - "Action" matches "Action Store" but NOT "Transaction"
+        ids_only: If True, return only transaction IDs (faster, less tokens for bulk ops)
+        limit: Max results per page (default: 50, max: 100)
+        page: Page number (default: 1)
         user_id: The user's ID (optional, defaults to configured user)
 
     Returns:
-        List of matching transactions
+        Dict with:
+        - transactions: List of matching transactions (or transaction_ids if ids_only=True)
+        - page: Current page number
+        - limit: Results per page
+        - has_more: Boolean - KEEP PAGINATING until this is false!
+        - total_count: Total matches across all pages (use to plan pagination)
+
+    Example - find transactions to recategorize:
+        search_transactions(
+            query="Jumbo",
+            exclude_category_id="<groceries-uuid>",  # Skip already-categorized
+            match_mode="word",  # Avoid matching "Jumbo" in unrelated text
+            ids_only=True  # Just need IDs for bulk update
+        )
     """
-    return transactions.search_transactions(get_user_id(user_id), query, limit)
+    return transactions.search_transactions(
+        get_user_id(user_id), query, exclude_category_id, match_mode, ids_only, limit, page
+    )
+
+
+@mcp.tool
+def search_transactions_multi(
+    queries: list[str],
+    exclude_category_id: str | None = None,
+    match_mode: str = "contains",
+    ids_only: bool = False,
+    max_results: int = 500,
+    user_id: str | None = None
+) -> dict:
+    """
+    Search transactions matching ANY of multiple queries in a single call.
+
+    Use this instead of multiple search_transactions calls when you need to find
+    transactions from several merchants at once (e.g., for bulk recategorization).
+
+    Args:
+        queries: List of search terms (e.g., ["Jumbo", "Albert Heijn", "ALDI", "LIDL"])
+        exclude_category_id: Skip transactions already in this category
+        match_mode: How to match queries:
+            - "contains" (default): Substring match
+            - "starts_with": Must start with query
+            - "word": Word boundary match (recommended for merchant names)
+        ids_only: If True, return only transaction IDs (recommended for bulk updates)
+        max_results: Maximum results to return (default: 500, max: 1000)
+        user_id: The user's ID (optional, defaults to configured user)
+
+    Returns:
+        Dict with:
+        - transactions (or transaction_ids): All matching transactions
+        - total_count: Total matches found
+        - capped: True if results hit max_results limit
+        - query_counts: Matches per query (e.g., {"Jumbo": 127, "ALDI": 45})
+
+    Example - recategorize grocery store transactions:
+        # Step 1: Find all grocery transactions not yet categorized
+        result = search_transactions_multi(
+            queries=["Jumbo", "Albert Heijn", "ALDI", "LIDL", "Action"],
+            exclude_category_id="<groceries-uuid>",
+            match_mode="word",
+            ids_only=True
+        )
+        # Step 2: Bulk update
+        bulk_update_transaction_categories(
+            category_id="<groceries-uuid>",
+            transaction_ids=result["transaction_ids"]
+        )
+    """
+    return transactions.search_transactions_multi(
+        get_user_id(user_id), queries, exclude_category_id, match_mode, ids_only, max_results
+    )
 
 
 @mcp.tool
@@ -220,6 +341,42 @@ def update_transaction_category(
         Dict with success status and updated transaction, or error message
     """
     return transactions.update_transaction_category(get_user_id(user_id), transaction_id, category_id)
+
+
+@mcp.tool
+def bulk_update_transaction_categories(
+    category_id: str,
+    transaction_ids: list[str],
+    user_id: str | None = None
+) -> dict:
+    """
+    Bulk update category for multiple transactions.
+
+    Args:
+        category_id: The category ID to assign to all transactions
+        transaction_ids: List of transaction IDs to update
+        user_id: The user's ID (optional, defaults to configured user)
+
+    Returns:
+        Dict with success status, updated_count, and any errors
+
+    Recommended workflow using search_transactions_multi:
+        # Find all grocery store transactions not yet categorized
+        result = search_transactions_multi(
+            queries=["Jumbo", "Albert Heijn", "ALDI"],
+            exclude_category_id="<groceries-id>",
+            match_mode="word",
+            ids_only=True
+        )
+        # Update them all at once
+        bulk_update_transaction_categories(
+            category_id="<groceries-id>",
+            transaction_ids=result["transaction_ids"]
+        )
+    """
+    return transactions.bulk_update_transaction_categories(
+        get_user_id(user_id), category_id, transaction_ids
+    )
 
 
 # ============================================================================
