@@ -209,13 +209,18 @@ export async function getMonthlySpending(referenceDate?: Date, accountId?: strin
     conditions.push(eq(transactions.accountId, accountId));
   }
 
+  // Only count transactions categorized as 'expense' (excludes transfers)
   const [result, currency] = await Promise.all([
     db
       .select({
         total: sql<string>`COALESCE(SUM(ABS(${transactions.amount})), 0)`,
       })
       .from(transactions)
-      .where(and(...conditions)),
+      .innerJoin(
+        categories,
+        sql`${categories.id} = COALESCE(${transactions.categoryId}, ${transactions.categorySystemId})`
+      )
+      .where(and(...conditions, eq(categories.categoryType, "expense"))),
     getUserCurrency(session.user.id),
   ]);
 
@@ -247,13 +252,18 @@ export async function getMonthlyIncome(referenceDate?: Date, accountId?: string)
     conditions.push(eq(transactions.accountId, accountId));
   }
 
+  // Only count transactions categorized as 'income' (excludes transfers)
   const [result, currency] = await Promise.all([
     db
       .select({
         total: sql<string>`COALESCE(SUM(${transactions.amount}), 0)`,
       })
       .from(transactions)
-      .where(and(...conditions)),
+      .innerJoin(
+        categories,
+        sql`${categories.id} = COALESCE(${transactions.categoryId}, ${transactions.categorySystemId})`
+      )
+      .where(and(...conditions, eq(categories.categoryType, "income"))),
     getUserCurrency(session.user.id),
   ]);
 
@@ -285,13 +295,18 @@ export async function getSpendingHistory(days: number = 7, referenceDate?: Date,
     conditions.push(eq(transactions.accountId, accountId));
   }
 
+  // Only count transactions categorized as 'expense' (excludes transfers)
   const result = await db
     .select({
       date: sql<string>`DATE(${transactions.bookedAt})`,
       value: sql<string>`COALESCE(SUM(ABS(${transactions.amount})), 0)`,
     })
     .from(transactions)
-    .where(and(...conditions))
+    .innerJoin(
+      categories,
+      sql`${categories.id} = COALESCE(${transactions.categoryId}, ${transactions.categorySystemId})`
+    )
+    .where(and(...conditions, eq(categories.categoryType, "expense")))
     .groupBy(sql`DATE(${transactions.bookedAt})`)
     .orderBy(sql`DATE(${transactions.bookedAt})`);
 
@@ -323,13 +338,18 @@ export async function getIncomeHistory(days: number = 7, referenceDate?: Date, a
     conditions.push(eq(transactions.accountId, accountId));
   }
 
+  // Only count transactions categorized as 'income' (excludes transfers)
   const result = await db
     .select({
       date: sql<string>`DATE(${transactions.bookedAt})`,
       value: sql<string>`COALESCE(SUM(${transactions.amount}), 0)`,
     })
     .from(transactions)
-    .where(and(...conditions))
+    .innerJoin(
+      categories,
+      sql`${categories.id} = COALESCE(${transactions.categoryId}, ${transactions.categorySystemId})`
+    )
+    .where(and(...conditions, eq(categories.categoryType, "income")))
     .groupBy(sql`DATE(${transactions.bookedAt})`)
     .orderBy(sql`DATE(${transactions.bookedAt})`);
 
@@ -364,18 +384,23 @@ export async function getIncomeExpenseData(referenceDate?: Date, accountId?: str
   }
 
   // Get monthly income and expenses for the last 12 months
+  // Filter by category type to exclude transfers
   const result = await db
     .select({
       year: sql<number>`EXTRACT(YEAR FROM ${transactions.bookedAt})::int`,
       month: sql<number>`EXTRACT(MONTH FROM ${transactions.bookedAt})::int`,
       income: sql<string>`COALESCE(SUM(
-        CASE WHEN ${transactions.transactionType} = 'credit' THEN ${transactions.amount} ELSE 0 END
+        CASE WHEN ${categories.categoryType} = 'income' THEN ABS(${transactions.amount}) ELSE 0 END
       ), 0)`,
       expenses: sql<string>`COALESCE(SUM(
-        CASE WHEN ${transactions.transactionType} = 'debit' THEN ABS(${transactions.amount}) ELSE 0 END
+        CASE WHEN ${categories.categoryType} = 'expense' THEN ABS(${transactions.amount}) ELSE 0 END
       ), 0)`,
     })
     .from(transactions)
+    .innerJoin(
+      categories,
+      sql`${categories.id} = COALESCE(${transactions.categoryId}, ${transactions.categorySystemId})`
+    )
     .where(and(...conditions))
     .groupBy(
       sql`EXTRACT(YEAR FROM ${transactions.bookedAt})`,
@@ -457,7 +482,7 @@ export async function getSpendingByCategory(limit: number = 5, referenceDate?: D
     baseConditions.push(eq(transactions.accountId, accountId));
   }
 
-  // Get spending by category, including uncategorized transactions
+  // Get spending by category (only expense categories, excludes transfers)
   // Use COALESCE to fall back to categorySystemId when categoryId is null
   const categorizedResult = await db
     .select({
@@ -468,14 +493,14 @@ export async function getSpendingByCategory(limit: number = 5, referenceDate?: D
       amount: sql<string>`COALESCE(SUM(ABS(${transactions.amount})), 0)`,
     })
     .from(transactions)
-    .leftJoin(
+    .innerJoin(
       categories,
       sql`${categories.id} = COALESCE(${transactions.categoryId}, ${transactions.categorySystemId})`
     )
     .where(
       and(
         ...baseConditions,
-        sql`COALESCE(${transactions.categoryId}, ${transactions.categorySystemId}) IS NOT NULL`
+        eq(categories.categoryType, "expense")
       )
     )
     .groupBy(categories.id, categories.name, categories.icon, categories.color)
@@ -495,13 +520,17 @@ export async function getSpendingByCategory(limit: number = 5, referenceDate?: D
       )
     );
 
-  // Get total spending for the month
+  // Get total spending for the month (only expense categories)
   const totalResult = await db
     .select({
       total: sql<string>`COALESCE(SUM(ABS(${transactions.amount})), 0)`,
     })
     .from(transactions)
-    .where(and(...baseConditions));
+    .innerJoin(
+      categories,
+      sql`${categories.id} = COALESCE(${transactions.categoryId}, ${transactions.categorySystemId})`
+    )
+    .where(and(...baseConditions, eq(categories.categoryType, "expense")));
 
   const categorizedCategories = categorizedResult.map((row) => ({
     id: row.id,
