@@ -33,6 +33,7 @@ function MappingPageContent() {
     merchant: null,
     transactionType: null,
     fee: null,
+    state: null,
     startingBalance: null,
     endingBalance: null,
     typeConfig: {

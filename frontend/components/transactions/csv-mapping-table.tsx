@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import type { ColumnMapping } from "@/lib/actions/csv-import";
 
 interface CsvMappingTableProps {
@@ -24,6 +25,7 @@ const FIELD_MAPPINGS = [
   { key: "merchant", label: "Merchant", description: "Merchant/payee name", required: false },
   { key: "transactionType", label: "Type", description: "Credit/Debit indicator", required: false },
   { key: "fee", label: "Fee", description: "Transaction fee (deducted from balance)", required: false },
+  { key: "state", label: "State/Status", description: "Transaction status (e.g., COMPLETED, PENDING)", required: false },
   { key: "startingBalance", label: "Starting Balance", description: "Opening balance (for verification)", required: false },
   { key: "endingBalance", label: "Ending Balance", description: "Closing balance (for verification)", required: false },
 ] as const;
@@ -137,6 +139,26 @@ export function CsvMappingTable({
             </Select>
           </div>
         </div>
+
+        {/* Completed State Value Configuration - only shown when State column is mapped */}
+        {mapping.state && (
+          <div className="rounded-lg border bg-card p-4">
+            <div className="space-y-3">
+              <div>
+                <Label className="font-medium">Completed State Value</Label>
+                <p className="text-xs text-muted-foreground">
+                  Value that indicates a completed transaction (e.g., &quot;COMPLETED&quot;, &quot;settled&quot;).
+                  Pending/reverted transactions will be excluded from import.
+                </p>
+              </div>
+              <Input
+                placeholder="e.g., COMPLETED"
+                value={mapping.typeConfig?.completedStateValue ?? ""}
+                onChange={(e) => updateTypeConfig("completedStateValue", e.target.value)}
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

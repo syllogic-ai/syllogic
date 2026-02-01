@@ -385,15 +385,40 @@ export async function getIncomeExpenseData(referenceDate?: Date, accountId?: str
 
   // Get monthly income and expenses for the last 12 months
   // Filter by category type to exclude transfers
+  // Also exclude:
+  // - Categories explicitly named "Internal Transfer" or "Balancing Transfer"
+  // - Transactions that look like transfers based on description patterns
   const result = await db
     .select({
       year: sql<number>`EXTRACT(YEAR FROM ${transactions.bookedAt})::int`,
       month: sql<number>`EXTRACT(MONTH FROM ${transactions.bookedAt})::int`,
       income: sql<string>`COALESCE(SUM(
-        CASE WHEN ${categories.categoryType} = 'income' THEN ABS(${transactions.amount}) ELSE 0 END
+        CASE
+          WHEN ${categories.categoryType} = 'income'
+            AND ${categories.name} NOT IN ('Internal Transfer', 'Balancing Transfer')
+            AND ${transactions.description} NOT ILIKE '%transfer from%'
+            AND ${transactions.description} NOT ILIKE '%transfer to%'
+            AND ${transactions.description} NOT ILIKE 'apple pay deposit%'
+            AND ${transactions.description} NOT ILIKE '%pocket withdrawal%'
+            AND ${transactions.description} NOT ILIKE '%to pocket%'
+            AND ${transactions.description} NOT ILIKE '%from pocket%'
+          THEN ABS(${transactions.amount})
+          ELSE 0
+        END
       ), 0)`,
       expenses: sql<string>`COALESCE(SUM(
-        CASE WHEN ${categories.categoryType} = 'expense' THEN ABS(${transactions.amount}) ELSE 0 END
+        CASE
+          WHEN ${categories.categoryType} = 'expense'
+            AND ${categories.name} NOT IN ('Internal Transfer', 'Balancing Transfer')
+            AND ${transactions.description} NOT ILIKE '%transfer from%'
+            AND ${transactions.description} NOT ILIKE '%transfer to%'
+            AND ${transactions.description} NOT ILIKE 'apple pay deposit%'
+            AND ${transactions.description} NOT ILIKE '%pocket withdrawal%'
+            AND ${transactions.description} NOT ILIKE '%to pocket%'
+            AND ${transactions.description} NOT ILIKE '%from pocket%'
+          THEN ABS(${transactions.amount})
+          ELSE 0
+        END
       ), 0)`,
     })
     .from(transactions)

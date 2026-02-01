@@ -18,6 +18,8 @@ export interface ColumnMapping {
   transactionType: string | null;
   // Fee column - fees are deducted from balance
   fee: string | null;
+  // State column - for filtering COMPLETED vs PENDING/REVERTED transactions
+  state: string | null;
   // Balance fields for verification
   startingBalance: string | null;
   endingBalance: string | null;
@@ -27,6 +29,7 @@ export interface ColumnMapping {
     debitValue?: string;
     isAmountSigned?: boolean; // If true, positive = credit, negative = debit
     dateFormat?: "DD-MM-YYYY" | "MM-DD-YYYY"; // Date format for ambiguous dates
+    completedStateValue?: string; // Value that indicates a completed transaction (e.g., "COMPLETED")
   };
 }
 
@@ -220,12 +223,13 @@ Sample data (first 3 rows):
 ${JSON.stringify(sampleData, null, 2)}
 
 Map these columns to the following transaction fields:
-- date: The transaction date column
+- date: The transaction date column (prefer "Completed Date" over "Started Date" if both exist)
 - amount: The transaction amount column
 - description: The transaction description/narrative column
 - merchant: The merchant/payee name column (if separate from description)
 - transactionType: The column indicating debit/credit (if exists)
 - fee: Column containing transaction fees (if exists, e.g., "fee", "fees", "charge", "commission") - these are additional charges deducted from balance
+- state: Column containing transaction state/status (if exists, e.g., "state", "status") - used to filter out pending/reverted transactions
 - startingBalance: Column containing opening/starting balance (if exists, e.g., "startsaldo", "opening_balance", "balance_before")
 - endingBalance: Column containing closing/ending balance (if exists, e.g., "endsaldo", "closing_balance", "balance_after", "balance")
 
@@ -233,6 +237,7 @@ Also determine:
 - If amount is signed (positive for credits, negative for debits)
 - If there's a separate column for transaction type, what values indicate credit vs debit
 - The date format: analyze the date column values to determine if dates are in "DD-MM-YYYY" (European) or "MM-DD-YYYY" (US) format. Look at the date values carefully - if you see dates like "13/05/2025" or "25/12/2024", these are clearly DD-MM-YYYY. If all dates have first value ≤12, try to infer from context or default to "DD-MM-YYYY".
+- If there's a state column, what value indicates a completed transaction (e.g., "COMPLETED", "Completed", "settled", "posted")
 
 Respond ONLY with a valid JSON object in this exact format:
 {
@@ -242,13 +247,15 @@ Respond ONLY with a valid JSON object in this exact format:
   "merchant": "column_name_or_null",
   "transactionType": "column_name_or_null",
   "fee": "column_name_or_null",
+  "state": "column_name_or_null",
   "startingBalance": "column_name_or_null",
   "endingBalance": "column_name_or_null",
   "typeConfig": {
     "creditValue": "value_that_indicates_credit_or_null",
     "debitValue": "value_that_indicates_debit_or_null",
     "isAmountSigned": true_or_false,
-    "dateFormat": "DD-MM-YYYY" or "MM-DD-YYYY"
+    "dateFormat": "DD-MM-YYYY" or "MM-DD-YYYY",
+    "completedStateValue": "value_that_indicates_completed_or_null"
   }
 }
 
@@ -392,6 +399,7 @@ export async function previewImportedTransactions(
     const descriptionIndex = mapping.description ? headers.indexOf(mapping.description) : -1;
     const merchantIndex = mapping.merchant ? headers.indexOf(mapping.merchant) : -1;
     const typeIndex = mapping.transactionType ? headers.indexOf(mapping.transactionType) : -1;
+    const stateIndex = mapping.state ? headers.indexOf(mapping.state) : -1;
 
     if (dateIndex === -1 || amountIndex === -1 || descriptionIndex === -1) {
       return { success: false, error: "Required columns not mapped" };
@@ -399,10 +407,20 @@ export async function previewImportedTransactions(
 
     // Parse transactions
     const previewTransactions: PreviewTransaction[] = [];
+    const completedStateValue = mapping.typeConfig?.completedStateValue?.toLowerCase();
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       if (!row || row.length === 0) continue;
+
+      // Filter by state if state column is mapped
+      // Skip non-completed transactions (PENDING, REVERTED, CANCELLED, etc.)
+      if (stateIndex >= 0 && completedStateValue) {
+        const rowState = row[stateIndex]?.toLowerCase()?.trim();
+        if (rowState !== completedStateValue) {
+          continue; // Skip non-completed transactions
+        }
+      }
 
       const dateStr = row[dateIndex];
       const amountStr = row[amountIndex];
@@ -594,10 +612,17 @@ export async function previewImportedTransactions(
       return isNaN(parsed) ? null : parsed;
     };
 
-    // Calculate total fees from CSV if fee column is mapped
+    // Calculate total fees from CSV if fee column is mapped (only from COMPLETED transactions)
     let totalFees = 0;
     if (feeIdx >= 0) {
       for (const row of rows) {
+        // Only count fees from completed transactions
+        if (stateIndex >= 0 && completedStateValue) {
+          const rowState = row[stateIndex]?.toLowerCase()?.trim();
+          if (rowState !== completedStateValue) {
+            continue; // Skip fees from non-completed transactions
+          }
+        }
         const fee = cleanAmount(row[feeIdx]);
         if (fee !== null && fee > 0) {
           totalFees += fee;
@@ -641,11 +666,10 @@ export async function previewImportedTransactions(
       const effectiveStartingBalance = fileStartingBalance ?? calculatedStartingBalance;
 
       // Calculate expected ending balance
-      // Note: We don't subtract fees here because the transactionSum already reflects
-      // the actual amounts from the CSV. Fees affect the balance separately and are
-      // captured in the daily balances from the CSV which are the source of truth.
+      // Subtract fees since they affect the balance but aren't in the transaction amounts
+      // (e.g., Premium plan fee with Amount=0.00 but Fee=9.99 reduces balance by 9.99)
       const calculatedEndingBalance = effectiveStartingBalance !== null
-        ? Math.round((effectiveStartingBalance + transactionSum) * 100) / 100
+        ? Math.round((effectiveStartingBalance + transactionSum - totalFees) * 100) / 100
         : null;
 
       const discrepancy = (fileEndingBalance !== null && calculatedEndingBalance !== null)
@@ -683,6 +707,14 @@ export async function previewImportedTransactions(
         for (let i = 0; i < rows.length; i++) {
           const row = rows[i];
           if (!row || row.length === 0) continue;
+
+          // Only extract balances from completed transactions
+          if (stateIndex >= 0 && completedStateValue) {
+            const rowState = row[stateIndex]?.toLowerCase()?.trim();
+            if (rowState !== completedStateValue) {
+              continue; // Skip non-completed transactions for balance extraction
+            }
+          }
 
           const dateStr = row[dateIndex];
           if (!dateStr) continue;
@@ -966,45 +998,90 @@ export async function finalizeImport(
       };
     });
 
-    // Build the backend request
-    const backendRequest: BackendTransactionImportRequest = {
-      transactions: backendTransactions,
-      user_id: session.user.id,
-      sync_exchange_rates: true,
-      update_functional_amounts: true,
-      calculate_balances: true,
-      // Include daily balances from CSV for accurate balance storage
-      daily_balances: previewResult.dailyBalances || undefined,
-      // Include starting balance from CSV to update account's starting balance
-      starting_balance: previewResult.balanceVerification?.fileStartingBalance ?? undefined,
-    };
-
-    // Call backend API with 10-minute timeout
+    // Batch the transactions to avoid request timeouts and large payload issues
+    // For large imports (>500 transactions), split into batches
+    const BATCH_SIZE = 500;
     const backendUrl = process.env.BACKEND_API_URL || "http://localhost:8000";
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000); // 10 minutes
+
+    let totalImported = 0;
+    let aggregatedCategorizationSummary: BackendTransactionImportResponse["categorization_summary"] = null;
+
+    // Split transactions into batches
+    const batches: BackendTransactionImportItem[][] = [];
+    for (let i = 0; i < backendTransactions.length; i += BATCH_SIZE) {
+      batches.push(backendTransactions.slice(i, i + BATCH_SIZE));
+    }
+
+    console.log(`Importing ${backendTransactions.length} transactions in ${batches.length} batch(es)`);
 
     try {
-      const response = await fetch(`${backendUrl}/api/transactions/import`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(backendRequest),
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
+      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+        const batch = batches[batchIndex];
+        const isLastBatch = batchIndex === batches.length - 1;
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Backend import failed:", response.status, errorText);
-        return { success: false, error: `Backend import failed: ${response.status} - ${errorText}` };
-      }
+        // Build the backend request for this batch
+        const backendRequest: BackendTransactionImportRequest = {
+          transactions: batch,
+          user_id: session.user.id,
+          // Only sync exchange rates and calculate balances on the last batch for efficiency
+          sync_exchange_rates: isLastBatch,
+          update_functional_amounts: isLastBatch,
+          calculate_balances: isLastBatch,
+          // Only include daily balances and starting balance on the last batch
+          daily_balances: isLastBatch ? (previewResult.dailyBalances || undefined) : undefined,
+          starting_balance: isLastBatch ? (previewResult.balanceVerification?.fileStartingBalance ?? undefined) : undefined,
+        };
 
-      const backendResponse: BackendTransactionImportResponse = await response.json();
+        // Call backend API with 5-minute timeout per batch
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000); // 5 minutes per batch
 
-      if (!backendResponse.success) {
-        return { success: false, error: backendResponse.message };
+        const response = await fetch(`${backendUrl}/api/transactions/import`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(backendRequest),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Backend import failed for batch ${batchIndex + 1}/${batches.length}:`, response.status, errorText);
+          return {
+            success: false,
+            error: `Import failed on batch ${batchIndex + 1}/${batches.length}: ${response.status} - ${errorText}. ${totalImported} transactions were imported before the failure.`
+          };
+        }
+
+        const backendResponse: BackendTransactionImportResponse = await response.json();
+
+        if (!backendResponse.success) {
+          return {
+            success: false,
+            error: `Batch ${batchIndex + 1}/${batches.length} failed: ${backendResponse.message}. ${totalImported} transactions were imported before the failure.`
+          };
+        }
+
+        totalImported += backendResponse.transactions_inserted;
+
+        // Aggregate categorization summary from all batches
+        if (backendResponse.categorization_summary) {
+          if (!aggregatedCategorizationSummary) {
+            aggregatedCategorizationSummary = { ...backendResponse.categorization_summary };
+          } else {
+            aggregatedCategorizationSummary.total += backendResponse.categorization_summary.total;
+            aggregatedCategorizationSummary.categorized += backendResponse.categorization_summary.categorized;
+            aggregatedCategorizationSummary.deterministic += backendResponse.categorization_summary.deterministic;
+            aggregatedCategorizationSummary.llm += backendResponse.categorization_summary.llm;
+            aggregatedCategorizationSummary.uncategorized += backendResponse.categorization_summary.uncategorized;
+            aggregatedCategorizationSummary.tokens_used += backendResponse.categorization_summary.tokens_used;
+            aggregatedCategorizationSummary.cost_usd += backendResponse.categorization_summary.cost_usd;
+          }
+        }
+
+        console.log(`Batch ${batchIndex + 1}/${batches.length} completed: ${backendResponse.transactions_inserted} transactions imported`);
       }
 
       // Update import session
@@ -1012,7 +1089,7 @@ export async function finalizeImport(
         .update(csvImports)
         .set({
           status: "completed",
-          importedRows: backendResponse.transactions_inserted,
+          importedRows: totalImported,
           completedAt: new Date(),
         })
         .where(eq(csvImports.id, importId));
@@ -1025,14 +1102,16 @@ export async function finalizeImport(
 
       return {
         success: true,
-        importedCount: backendResponse.transactions_inserted,
-        categorizationSummary: backendResponse.categorization_summary,
+        importedCount: totalImported,
+        categorizationSummary: aggregatedCategorizationSummary,
       };
     } catch (fetchError) {
-      clearTimeout(timeoutId);
       if (fetchError instanceof Error && fetchError.name === "AbortError") {
-        console.error("Import timeout after 10 minutes");
-        return { success: false, error: "Import timeout: The operation took too long to complete. Please try with fewer transactions." };
+        console.error("Import timeout during batch processing");
+        return {
+          success: false,
+          error: `Import timeout: The operation took too long. ${totalImported} transactions were imported before the timeout.`
+        };
       }
       throw fetchError; // Re-throw to outer catch
     }

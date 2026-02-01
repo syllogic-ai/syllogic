@@ -97,6 +97,14 @@ function PreviewPageContent() {
     }
 
     setIsImporting(true);
+
+    // Show batch info toast for large imports
+    const batchSize = 500;
+    const totalBatches = Math.ceil(selectedIndices.length / batchSize);
+    if (totalBatches > 1) {
+      toast.info(`Importing ${selectedIndices.length} transactions in ${totalBatches} batches. This may take a moment...`);
+    }
+
     try {
       const result = await finalizeImport(importId, selectedIndices);
       if (result.success) {
