@@ -72,6 +72,26 @@ export const verificationTokens = pgTable("verification_tokens", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const apiKeys = pgTable(
+  "api_keys",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    keyHash: varchar("key_hash", { length: 64 }).notNull(),
+    keyPrefix: varchar("key_prefix", { length: 12 }).notNull(),
+    lastUsedAt: timestamp("last_used_at"),
+    expiresAt: timestamp("expires_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_api_keys_user").on(table.userId),
+    index("idx_api_keys_hash").on(table.keyHash),
+  ]
+);
+
 // ============================================================================
 // Application Tables
 // ============================================================================
@@ -391,6 +411,14 @@ export const usersRelations = relations(users, ({ many }) => ({
   properties: many(properties),
   vehicles: many(vehicles),
   subscriptionSuggestions: many(subscriptionSuggestions),
+  apiKeys: many(apiKeys),
+}));
+
+export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
+  user: one(users, {
+    fields: [apiKeys.userId],
+    references: [users.id],
+  }),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -574,3 +602,6 @@ export type NewAccountBalance = typeof accountBalances.$inferInsert;
 
 export type SubscriptionSuggestion = typeof subscriptionSuggestions.$inferSelect;
 export type NewSubscriptionSuggestion = typeof subscriptionSuggestions.$inferInsert;
+
+export type ApiKey = typeof apiKeys.$inferSelect;
+export type NewApiKey = typeof apiKeys.$inferInsert;

@@ -495,3 +495,30 @@ class User(Base):
     properties = relationship("Property", back_populates="user", cascade="all, delete-orphan")
     vehicles = relationship("Vehicle", back_populates="user", cascade="all, delete-orphan")
     subscription_suggestions = relationship("SubscriptionSuggestion", back_populates="user", cascade="all, delete-orphan")
+    api_keys = relationship("ApiKey", back_populates="user", cascade="all, delete-orphan")
+
+
+class ApiKey(Base):
+    """
+    API Key model for MCP server authentication.
+    Stores hashed API keys for secure authentication.
+    """
+    __tablename__ = "api_keys"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    key_hash = Column(String(64), nullable=False, index=True)
+    key_prefix = Column(String(12), nullable=False)
+    last_used_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="api_keys")
+
+    # Indexes
+    __table_args__ = (
+        Index("idx_api_keys_user", "user_id"),
+        Index("idx_api_keys_hash", "key_hash"),
+    )

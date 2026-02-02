@@ -1,17 +1,26 @@
 "use client";
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { RiUserLine, RiFolderLine } from "@remixicon/react";
+import { RiUserLine, RiFolderLine, RiKeyLine } from "@remixicon/react";
 import { ProfileEditor } from "./profile-editor";
 import { CategoryManager } from "./category-manager";
+import { ApiKeysManager } from "./api-keys-manager";
 import type { User, Category } from "@/lib/db/schema";
 
 interface SettingsTabsProps {
   user: User;
   categories: Category[];
+  apiKeys: Array<{
+    id: string;
+    name: string;
+    keyPrefix: string;
+    lastUsedAt: Date | null;
+    expiresAt: Date | null;
+    createdAt: Date | null;
+  }>;
 }
 
-export function SettingsTabs({ user, categories }: SettingsTabsProps) {
+export function SettingsTabs({ user, categories, apiKeys }: SettingsTabsProps) {
   return (
     <Tabs defaultValue="profile" className="flex-1">
       <TabsList variant="line" className="mb-6">
@@ -23,6 +32,10 @@ export function SettingsTabs({ user, categories }: SettingsTabsProps) {
           <RiFolderLine className="mr-1.5 h-4 w-4" />
           Categories
         </TabsTrigger>
+        <TabsTrigger value="api-keys">
+          <RiKeyLine className="mr-1.5 h-4 w-4" />
+          API Keys
+        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="profile">
@@ -31,6 +44,10 @@ export function SettingsTabs({ user, categories }: SettingsTabsProps) {
 
       <TabsContent value="categories">
         <CategoryManager initialCategories={categories} />
+      </TabsContent>
+
+      <TabsContent value="api-keys">
+        <ApiKeysManager initialKeys={apiKeys} />
       </TabsContent>
     </Tabs>
   );
