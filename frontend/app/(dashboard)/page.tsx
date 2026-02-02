@@ -87,24 +87,24 @@ export default async function HomePage({ searchParams }: PageProps) {
             sparkData={data.balanceHistory}
           />
           <KpiSparkCard
-            title="Monthly Spending"
-            value={data.monthlySpending.total}
-            currency={data.monthlySpending.currency}
-            subtitle={data.referencePeriod.label}
+            title={`${data.periodLabel.title} Spending`}
+            value={data.periodSpending.total}
+            currency={data.periodSpending.currency}
+            subtitle={data.periodLabel.subtitle}
             sparkData={data.spendingHistory}
           />
           <KpiSparkCard
-            title="Monthly Income"
-            value={data.monthlyIncome.total}
-            currency={data.monthlyIncome.currency}
-            subtitle={data.referencePeriod.label}
+            title={`${data.periodLabel.title} Income`}
+            value={data.periodIncome.total}
+            currency={data.periodIncome.currency}
+            subtitle={data.periodLabel.subtitle}
             sparkData={data.incomeHistory}
           />
           <KpiSparkCard
             title="Savings Rate"
             value={data.savingsRate.amount}
             currency={data.savingsRate.currency}
-            subtitle={data.referencePeriod.label}
+            subtitle={data.periodLabel.subtitle}
             sparkData={[]}
             trend={
               data.savingsRate.amount !== 0
@@ -127,6 +127,7 @@ export default async function HomePage({ searchParams }: PageProps) {
             data={data.spendingByCategory.categories}
             total={data.spendingByCategory.total}
             currency={data.balance.currency}
+            periodTitle={data.periodLabel.title}
           />
         </div>
 

@@ -39,7 +39,7 @@ export function DashboardFilters({
 
   // Get current filter values from URL or use defaults
   const currentAccount = searchParams.get("account") || "all";
-  const currentHorizon = searchParams.get("horizon") || "7";
+  const currentHorizon = searchParams.get("horizon") || "30";
 
   // Parse date range from URL
   const dateFromParam = searchParams.get("from");
@@ -56,7 +56,7 @@ export function DashboardFilters({
   const updateFilters = React.useCallback(
     (key: string, value: string | undefined) => {
       const params = new URLSearchParams(searchParams.toString());
-      if (!value || value === "all" || (key === "horizon" && value === "7")) {
+      if (!value || value === "all" || (key === "horizon" && value === "30")) {
         params.delete(key);
       } else {
         params.set(key, value);

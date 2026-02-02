@@ -187,7 +187,7 @@ export async function getBalanceHistory(days: number = 7, referenceDate?: Date, 
   }));
 }
 
-export async function getMonthlySpending(referenceDate?: Date, accountId?: string) {
+export async function getPeriodSpending(referenceDate?: Date, accountId?: string, horizon: number = 30) {
   const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
@@ -195,15 +195,20 @@ export async function getMonthlySpending(referenceDate?: Date, accountId?: strin
   }
 
   const refDate = referenceDate || await getLatestTransactionDate(session.user.id, accountId);
-  const startOfMonth = new Date(refDate.getFullYear(), refDate.getMonth(), 1);
-  const endOfMonth = new Date(refDate.getFullYear(), refDate.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  // Use rolling period based on horizon
+  const startDate = new Date(refDate);
+  startDate.setDate(startDate.getDate() - horizon);
+  startDate.setHours(0, 0, 0, 0);
+  const endDate = new Date(refDate);
+  endDate.setHours(23, 59, 59, 999);
 
   const conditions = [
     eq(transactions.userId, session.user.id),
     eq(transactions.transactionType, "debit"),
     eq(transactions.includeInAnalytics, true),
-    gte(transactions.bookedAt, startOfMonth),
-    lte(transactions.bookedAt, endOfMonth),
+    gte(transactions.bookedAt, startDate),
+    lte(transactions.bookedAt, endDate),
   ];
   if (accountId) {
     conditions.push(eq(transactions.accountId, accountId));
@@ -230,7 +235,7 @@ export async function getMonthlySpending(referenceDate?: Date, accountId?: strin
   };
 }
 
-export async function getMonthlyIncome(referenceDate?: Date, accountId?: string) {
+export async function getPeriodIncome(referenceDate?: Date, accountId?: string, horizon: number = 30) {
   const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
@@ -238,15 +243,20 @@ export async function getMonthlyIncome(referenceDate?: Date, accountId?: string)
   }
 
   const refDate = referenceDate || await getLatestTransactionDate(session.user.id, accountId);
-  const startOfMonth = new Date(refDate.getFullYear(), refDate.getMonth(), 1);
-  const endOfMonth = new Date(refDate.getFullYear(), refDate.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  // Use rolling period based on horizon
+  const startDate = new Date(refDate);
+  startDate.setDate(startDate.getDate() - horizon);
+  startDate.setHours(0, 0, 0, 0);
+  const endDate = new Date(refDate);
+  endDate.setHours(23, 59, 59, 999);
 
   const conditions = [
     eq(transactions.userId, session.user.id),
     eq(transactions.transactionType, "credit"),
     eq(transactions.includeInAnalytics, true),
-    gte(transactions.bookedAt, startOfMonth),
-    lte(transactions.bookedAt, endOfMonth),
+    gte(transactions.bookedAt, startDate),
+    lte(transactions.bookedAt, endDate),
   ];
   if (accountId) {
     conditions.push(eq(transactions.accountId, accountId));
@@ -484,7 +494,7 @@ export async function getIncomeExpenseData(referenceDate?: Date, accountId?: str
   return months;
 }
 
-export async function getSpendingByCategory(limit: number = 5, referenceDate?: Date, accountId?: string) {
+export async function getSpendingByCategory(limit: number = 5, referenceDate?: Date, accountId?: string, horizon: number = 30) {
   const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
@@ -492,16 +502,21 @@ export async function getSpendingByCategory(limit: number = 5, referenceDate?: D
   }
 
   const refDate = referenceDate || await getLatestTransactionDate(session.user.id, accountId);
-  const startOfMonth = new Date(refDate.getFullYear(), refDate.getMonth(), 1);
-  const endOfMonth = new Date(refDate.getFullYear(), refDate.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  // Use rolling period based on horizon
+  const startDate = new Date(refDate);
+  startDate.setDate(startDate.getDate() - horizon);
+  startDate.setHours(0, 0, 0, 0);
+  const endDate = new Date(refDate);
+  endDate.setHours(23, 59, 59, 999);
 
   // Build base conditions
   const baseConditions = [
     eq(transactions.userId, session.user.id),
     eq(transactions.transactionType, "debit"),
     eq(transactions.includeInAnalytics, true),
-    gte(transactions.bookedAt, startOfMonth),
-    lte(transactions.bookedAt, endOfMonth),
+    gte(transactions.bookedAt, startDate),
+    lte(transactions.bookedAt, endDate),
   ];
   if (accountId) {
     baseConditions.push(eq(transactions.accountId, accountId));
@@ -992,8 +1007,8 @@ export async function getDashboardData(filters: DashboardFilters = {}) {
     return {
       balance: { total: 0, currency: "EUR" },
       balanceHistory: [],
-      monthlySpending: { total: 0, currency: "EUR" },
-      monthlyIncome: { total: 0, currency: "EUR" },
+      periodSpending: { total: 0, currency: "EUR" },
+      periodIncome: { total: 0, currency: "EUR" },
       savingsRate: { amount: 0, percentage: 0, currency: "EUR" },
       spendingHistory: [],
       incomeHistory: [],
@@ -1013,6 +1028,8 @@ export async function getDashboardData(filters: DashboardFilters = {}) {
         })),
       },
       sankeyData: { nodes: [], links: [] },
+      periodLabel: { title: "30-Day", subtitle: "Last 30 days" },
+      horizon: 30,
       referencePeriod: {
         month: monthNames[new Date().getMonth()],
         year: new Date().getFullYear(),
@@ -1021,7 +1038,7 @@ export async function getDashboardData(filters: DashboardFilters = {}) {
     };
   }
 
-  const { accountId, dateFrom, dateTo, horizon = 7 } = filters;
+  const { accountId, dateFrom, dateTo, horizon = 30 } = filters;
 
   // Determine the reference date: use dateTo if provided, otherwise detect from latest transaction
   let referenceDate: Date;
@@ -1041,8 +1058,8 @@ export async function getDashboardData(filters: DashboardFilters = {}) {
   const [
     balance,
     balanceHistory,
-    monthlySpending,
-    monthlyIncome,
+    periodSpending,
+    periodIncome,
     spendingHistory,
     incomeHistory,
     incomeExpense,
@@ -1052,27 +1069,35 @@ export async function getDashboardData(filters: DashboardFilters = {}) {
   ] = await Promise.all([
     getTotalBalance(accountId),
     getBalanceHistory(horizon, referenceDate, accountId),
-    getMonthlySpending(referenceDate, accountId),
-    getMonthlyIncome(referenceDate, accountId),
+    getPeriodSpending(referenceDate, accountId, horizon),
+    getPeriodIncome(referenceDate, accountId, horizon),
     getSpendingHistory(horizon, referenceDate, accountId),
     getIncomeHistory(horizon, referenceDate, accountId),
     getIncomeExpenseData(referenceDate, accountId),
-    getSpendingByCategory(5, referenceDate, accountId),
+    getSpendingByCategory(5, referenceDate, accountId, horizon),
     getAssetsOverview(),
     getSankeyData(dateFrom, dateTo, accountId),
   ]);
 
   // Calculate savings rate (income - expenses = potential savings)
-  const savingsAmount = monthlyIncome.total - monthlySpending.total;
-  const savingsPercentage = monthlyIncome.total > 0
-    ? (savingsAmount / monthlyIncome.total) * 100
+  const savingsAmount = periodIncome.total - periodSpending.total;
+  const savingsPercentage = periodIncome.total > 0
+    ? (savingsAmount / periodIncome.total) * 100
     : 0;
+
+  // Generate period label based on horizon
+  const getPeriodLabel = (h: number) => {
+    if (h <= 7) return { title: "7-Day", subtitle: "Last 7 days" };
+    if (h <= 30) return { title: "30-Day", subtitle: "Last 30 days" };
+    return { title: "12-Month", subtitle: "Last 12 months" };
+  };
+  const periodLabel = getPeriodLabel(horizon);
 
   return {
     balance,
     balanceHistory,
-    monthlySpending,
-    monthlyIncome,
+    periodSpending,
+    periodIncome,
     savingsRate: {
       amount: savingsAmount,
       percentage: savingsPercentage,
@@ -1084,6 +1109,8 @@ export async function getDashboardData(filters: DashboardFilters = {}) {
     spendingByCategory,
     assetsOverview,
     sankeyData,
+    periodLabel,
+    horizon,
     referencePeriod: {
       month: monthNames[referenceDate.getMonth()],
       year: referenceDate.getFullYear(),

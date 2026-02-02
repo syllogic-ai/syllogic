@@ -19,6 +19,7 @@ interface SpendingByCategoryChartProps {
   currency: string;
   limit?: number;
   isLoading?: boolean;
+  periodTitle?: string;
 }
 
 // Graduated opacity levels for grayscale bars (highest first)
@@ -52,6 +53,7 @@ export function SpendingByCategoryChart({
   currency,
   limit = 5,
   isLoading = false,
+  periodTitle = "30-Day",
 }: SpendingByCategoryChartProps) {
   if (isLoading) {
     return <SpendingByCategoryChartSkeleton />;
@@ -63,7 +65,7 @@ export function SpendingByCategoryChart({
   return (
     <Card className="col-span-2">
       <CardHeader className="flex flex-row items-center justify-between pb-4">
-        <CardTitle className="text-sm font-medium">Monthly Expenses</CardTitle>
+        <CardTitle className="text-sm font-medium">{periodTitle} Expenses</CardTitle>
         <span className="font-mono text-2xl font-semibold tracking-tight">
           {formatCurrency(total, currency)}
         </span>
