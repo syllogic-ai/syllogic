@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { Header } from "@/components/layout/header";
 import { TransactionsClient } from "./transactions-client";
 import { getTransactions, getUserAccounts } from "@/lib/actions/transactions";
@@ -14,11 +15,13 @@ export default async function TransactionsPage() {
     <>
       <Header title="Transactions" />
       <div className="flex h-[calc(100vh-4rem)] flex-col gap-4 p-4 pt-0">
-        <TransactionsClient
-          initialTransactions={transactions}
-          categories={categories}
-          accounts={accounts}
-        />
+        <Suspense fallback={<div className="flex-1" />}>
+          <TransactionsClient
+            initialTransactions={transactions}
+            categories={categories}
+            accounts={accounts}
+          />
+        </Suspense>
       </div>
     </>
   );
