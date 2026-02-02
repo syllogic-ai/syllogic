@@ -267,6 +267,10 @@ export const csvImports = pgTable(
     importedRows: integer("imported_rows"),
     duplicatesFound: integer("duplicates_found"),
     errorMessage: text("error_message"),
+    // Background worker fields
+    celeryTaskId: varchar("celery_task_id", { length: 255 }),
+    progressCount: integer("progress_count").default(0),
+    selectedIndices: jsonb("selected_indices"), // Array of row indices selected for import
     createdAt: timestamp("created_at").defaultNow(),
     completedAt: timestamp("completed_at"),
   },

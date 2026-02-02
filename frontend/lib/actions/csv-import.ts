@@ -1121,6 +1121,164 @@ export async function finalizeImport(
   }
 }
 
+// Backend enqueue response type
+interface BackendEnqueueResponse {
+  success: boolean;
+  import_id: string;
+  task_id: string | null;
+  message: string;
+}
+
+/**
+ * Enqueue a CSV import for background processing.
+ * This allows immediate redirect while the import processes in the background.
+ *
+ * @param importId - The CSV import session ID
+ * @param selectedIndices - Array of row indices selected for import
+ * @returns Success status with import details for SSE connection
+ */
+export async function enqueueBackgroundImport(
+  importId: string,
+  selectedIndices: number[]
+): Promise<{
+  success: boolean;
+  error?: string;
+  importId?: string;
+  taskId?: string;
+  totalTransactions?: number;
+}> {
+  const session = await getAuthenticatedSession();
+
+  if (!session?.user?.id) {
+    return { success: false, error: "Not authenticated" };
+  }
+
+  try {
+    // Get preview transactions
+    const previewResult = await previewImportedTransactions(importId);
+    if (!previewResult.success || !previewResult.transactions) {
+      return { success: false, error: previewResult.error || "Failed to get preview" };
+    }
+
+    // Get the import session
+    const importSession = await db.query.csvImports.findFirst({
+      where: and(
+        eq(csvImports.id, importId),
+        eq(csvImports.userId, session.user.id)
+      ),
+    });
+
+    if (!importSession) {
+      return { success: false, error: "Import session not found" };
+    }
+
+    // Get account for currency
+    const account = await db.query.accounts.findFirst({
+      where: eq(accounts.id, importSession.accountId),
+    });
+
+    if (!account) {
+      return { success: false, error: "Account not found" };
+    }
+
+    // Filter to selected transactions
+    const selectedTransactions = previewResult.transactions.filter((tx) =>
+      selectedIndices.includes(tx.rowIndex)
+    );
+
+    if (selectedTransactions.length === 0) {
+      return { success: true, importId, totalTransactions: 0 };
+    }
+
+    // Transform transactions to backend format
+    const externalIdCounts = new Map<string, number>();
+
+    const transactions = selectedTransactions.map((tx) => {
+      const bookedAt = new Date(tx.date).toISOString();
+      const baseExternalId = generateCsvImportExternalId(
+        importSession.accountId,
+        bookedAt,
+        tx.amount,
+        tx.description || null,
+        tx.merchant || null
+      );
+
+      const count = externalIdCounts.get(baseExternalId) || 0;
+      externalIdCounts.set(baseExternalId, count + 1);
+
+      const externalId = count === 0
+        ? baseExternalId
+        : `${baseExternalId}-${count + 1}`;
+
+      return {
+        account_id: importSession.accountId,
+        amount: tx.amount,
+        description: tx.description || null,
+        merchant: tx.merchant || null,
+        booked_at: bookedAt,
+        transaction_type: tx.transactionType,
+        currency: account.currency || "EUR",
+        external_id: externalId,
+        category_id: null,
+      };
+    });
+
+    // Build enqueue request
+    const backendUrl = process.env.BACKEND_API_URL || "http://localhost:8000";
+    const enqueueRequest = {
+      csv_import_id: importId,
+      user_id: session.user.id,
+      transactions,
+      daily_balances: previewResult.dailyBalances || undefined,
+      starting_balance: previewResult.balanceVerification?.fileStartingBalance ?? undefined,
+    };
+
+    // Call backend enqueue endpoint
+    const response = await fetch(`${backendUrl}/api/csv-import/enqueue`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(enqueueRequest),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Backend enqueue failed:", response.status, errorText);
+      return {
+        success: false,
+        error: `Failed to start import: ${response.status} - ${errorText}`,
+      };
+    }
+
+    const backendResponse: BackendEnqueueResponse = await response.json();
+
+    if (!backendResponse.success) {
+      return {
+        success: false,
+        error: backendResponse.message,
+      };
+    }
+
+    console.log(
+      `Background import enqueued: ${backendResponse.import_id}, task: ${backendResponse.task_id}`
+    );
+
+    return {
+      success: true,
+      importId: backendResponse.import_id,
+      taskId: backendResponse.task_id || undefined,
+      totalTransactions: transactions.length,
+    };
+  } catch (error) {
+    console.error("Failed to enqueue background import:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to start import",
+    };
+  }
+}
+
 export async function getCsvImportSession(
   importId: string
 ): Promise<CsvImportSession | null> {

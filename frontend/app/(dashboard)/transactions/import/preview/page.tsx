@@ -11,16 +11,19 @@ import { CsvPreviewTable } from "@/components/transactions/csv-preview-table";
 import { cn } from "@/lib/utils";
 import {
   previewImportedTransactions,
-  finalizeImport,
+  enqueueBackgroundImport,
   getCsvImportSession,
   type PreviewTransaction,
   type BalanceVerification,
 } from "@/lib/actions/csv-import";
+import { setPendingImport } from "@/lib/hooks/use-import-status";
+import { useSession } from "@/lib/auth-client";
 
 function PreviewPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const importId = searchParams.get("id");
+  const { data: session } = useSession();
 
   const [isLoading, setIsLoading] = useState(true);
   const [isImporting, setIsImporting] = useState(false);
@@ -96,29 +99,35 @@ function PreviewPageContent() {
       return;
     }
 
-    setIsImporting(true);
-
-    // Show batch info toast for large imports
-    const batchSize = 500;
-    const totalBatches = Math.ceil(selectedIndices.length / batchSize);
-    if (totalBatches > 1) {
-      toast.info(`Importing ${selectedIndices.length} transactions in ${totalBatches} batches. This may take a moment...`);
+    if (!session?.user?.id) {
+      toast.error("Not authenticated");
+      return;
     }
 
+    setIsImporting(true);
+
     try {
-      const result = await finalizeImport(importId, selectedIndices);
-      if (result.success) {
-        toast.success(`Successfully imported ${result.importedCount} transactions`);
-        // Navigate to transactions page with cache-busting query param to ensure fresh data
-        router.push(`/transactions?refresh=${Date.now()}`);
-        // Also refresh the router to ensure cache is cleared
-        router.refresh();
+      // Use background import for better UX
+      const result = await enqueueBackgroundImport(importId, selectedIndices);
+
+      if (result.success && result.importId) {
+        // Store import info for SSE connection on transactions page
+        setPendingImport(result.importId, session.user.id);
+
+        toast.info(
+          `Starting import of ${result.totalTransactions || selectedIndices.length} transactions...`,
+          { description: "You'll be notified when complete." }
+        );
+
+        // Navigate immediately - the transactions page will show progress
+        router.push(`/transactions?importing=${result.importId}`);
       } else {
-        toast.error(result.error || "Failed to import transactions");
+        toast.error(result.error || "Failed to start import");
+        setIsImporting(false);
       }
-    } catch {
-      toast.error("Failed to import transactions");
-    } finally {
+    } catch (error) {
+      console.error("Import error:", error);
+      toast.error("Failed to start import");
       setIsImporting(false);
     }
   };

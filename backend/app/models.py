@@ -233,6 +233,10 @@ class CsvImport(Base):
     imported_rows = Column(Integer, nullable=True)
     duplicates_found = Column(Integer, nullable=True)
     error_message = Column(Text, nullable=True)
+    # Background worker fields
+    celery_task_id = Column(String(255), nullable=True)
+    progress_count = Column(Integer, default=0)
+    selected_indices = Column(JSONB, nullable=True)  # Array of row indices selected for import
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
 
