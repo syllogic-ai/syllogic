@@ -3,10 +3,26 @@ Analytics tools for the MCP server.
 """
 from typing import Optional
 
-from sqlalchemy import func, extract, case, or_
+from sqlalchemy import func, extract, case, or_, and_, text
+from sqlalchemy.orm import aliased
 
 from app.mcp.dependencies import get_db, validate_uuid, validate_date
-from app.models import Transaction, Category, Account
+from app.models import Transaction, Category, Account, TransactionLink
+
+
+def _get_link_group_nets_cte(user_id: str) -> str:
+    """Generate SQL CTE for calculating net amounts per link group."""
+    return f"""
+    WITH link_group_nets AS (
+        SELECT
+            tl.group_id,
+            SUM(t.amount) as net_amount
+        FROM transactions t
+        JOIN transaction_links tl ON t.id = tl.transaction_id
+        WHERE t.user_id = '{user_id}'
+        GROUP BY tl.group_id
+    )
+    """
 
 
 def get_spending_by_category(
@@ -17,6 +33,8 @@ def get_spending_by_category(
 ) -> list[dict]:
     """
     Get spending breakdown by category.
+
+    Uses net amounts for linked transactions (primary gets group net).
 
     Args:
         user_id: The user's ID
@@ -32,38 +50,48 @@ def get_spending_by_category(
     to_dt = validate_date(to_date)
     account_uuid = validate_uuid(account_id) if account_id else None
 
+    # Build filters
+    date_filter = ""
+    if from_dt:
+        date_filter += f" AND t.booked_at >= '{from_dt.isoformat()}'"
+    if to_dt:
+        date_filter += f" AND t.booked_at <= '{to_dt.isoformat()}'"
+
+    account_filter = ""
+    if account_uuid:
+        account_filter = f" AND t.account_id = '{account_uuid}'"
+
     with get_db() as db:
-        query = db.query(
-            func.coalesce(Transaction.category_id, Transaction.category_system_id).label("category_id"),
-            Category.name.label("category_name"),
-            Category.color.label("category_color"),
-            func.sum(func.abs(Transaction.amount)).label("total"),
-            func.count(Transaction.id).label("count"),
-        ).outerjoin(
-            Category,
-            (Transaction.category_id == Category.id) | (Transaction.category_system_id == Category.id)
-        ).filter(
-            Transaction.user_id == user_id,
-            Transaction.amount < 0,  # Only expenses
-            Transaction.include_in_analytics == True,
-            # Exclude transfers but handle NULL category_type
-            or_(Category.category_type != "transfer", Category.category_type.is_(None))
-        )
+        sql = text(f"""
+            {_get_link_group_nets_cte(user_id)}
+            SELECT
+                COALESCE(t.category_id, t.category_system_id) as category_id,
+                c.name as category_name,
+                c.color as category_color,
+                COALESCE(SUM(
+                    CASE
+                        WHEN tl.link_role = 'primary' THEN
+                            CASE WHEN lgn.net_amount < 0 THEN ABS(lgn.net_amount) ELSE 0 END
+                        WHEN tl.link_role IS NOT NULL THEN 0
+                        ELSE ABS(t.amount)
+                    END
+                ), 0) as total,
+                COUNT(t.id) as count
+            FROM transactions t
+            INNER JOIN categories c ON c.id = COALESCE(t.category_id, t.category_system_id)
+            LEFT JOIN transaction_links tl ON t.id = tl.transaction_id
+            LEFT JOIN link_group_nets lgn ON tl.group_id = lgn.group_id
+            WHERE t.user_id = '{user_id}'
+                AND t.transaction_type = 'debit'
+                AND t.include_in_analytics = true
+                AND c.category_type = 'expense'
+                {date_filter}
+                {account_filter}
+            GROUP BY COALESCE(t.category_id, t.category_system_id), c.name, c.color
+            ORDER BY total DESC
+        """)
 
-        if from_dt:
-            query = query.filter(Transaction.booked_at >= from_dt)
-
-        if to_dt:
-            query = query.filter(Transaction.booked_at <= to_dt)
-
-        if account_id and account_uuid:
-            query = query.filter(Transaction.account_id == account_uuid)
-
-        results = query.group_by(
-            func.coalesce(Transaction.category_id, Transaction.category_system_id),
-            Category.name,
-            Category.color
-        ).order_by(func.sum(func.abs(Transaction.amount)).desc()).all()
+        results = db.execute(sql).fetchall()
 
         return [
             {
@@ -86,6 +114,8 @@ def get_income_by_category(
     """
     Get income breakdown by category.
 
+    Uses net amounts for linked transactions (primary gets group net).
+
     Args:
         user_id: The user's ID
         from_date: Start date in ISO format (optional)
@@ -100,38 +130,48 @@ def get_income_by_category(
     to_dt = validate_date(to_date)
     account_uuid = validate_uuid(account_id) if account_id else None
 
+    # Build filters
+    date_filter = ""
+    if from_dt:
+        date_filter += f" AND t.booked_at >= '{from_dt.isoformat()}'"
+    if to_dt:
+        date_filter += f" AND t.booked_at <= '{to_dt.isoformat()}'"
+
+    account_filter = ""
+    if account_uuid:
+        account_filter = f" AND t.account_id = '{account_uuid}'"
+
     with get_db() as db:
-        query = db.query(
-            func.coalesce(Transaction.category_id, Transaction.category_system_id).label("category_id"),
-            Category.name.label("category_name"),
-            Category.color.label("category_color"),
-            func.sum(Transaction.amount).label("total"),
-            func.count(Transaction.id).label("count"),
-        ).outerjoin(
-            Category,
-            (Transaction.category_id == Category.id) | (Transaction.category_system_id == Category.id)
-        ).filter(
-            Transaction.user_id == user_id,
-            Transaction.amount > 0,  # Only income
-            Transaction.include_in_analytics == True,
-            # Exclude transfers but handle NULL category_type
-            or_(Category.category_type != "transfer", Category.category_type.is_(None))
-        )
+        sql = text(f"""
+            {_get_link_group_nets_cte(user_id)}
+            SELECT
+                COALESCE(t.category_id, t.category_system_id) as category_id,
+                c.name as category_name,
+                c.color as category_color,
+                COALESCE(SUM(
+                    CASE
+                        WHEN tl.link_role = 'primary' THEN
+                            CASE WHEN lgn.net_amount > 0 THEN lgn.net_amount ELSE 0 END
+                        WHEN tl.link_role IS NOT NULL THEN 0
+                        ELSE t.amount
+                    END
+                ), 0) as total,
+                COUNT(t.id) as count
+            FROM transactions t
+            INNER JOIN categories c ON c.id = COALESCE(t.category_id, t.category_system_id)
+            LEFT JOIN transaction_links tl ON t.id = tl.transaction_id
+            LEFT JOIN link_group_nets lgn ON tl.group_id = lgn.group_id
+            WHERE t.user_id = '{user_id}'
+                AND t.transaction_type = 'credit'
+                AND t.include_in_analytics = true
+                AND c.category_type = 'income'
+                {date_filter}
+                {account_filter}
+            GROUP BY COALESCE(t.category_id, t.category_system_id), c.name, c.color
+            ORDER BY total DESC
+        """)
 
-        if from_dt:
-            query = query.filter(Transaction.booked_at >= from_dt)
-
-        if to_dt:
-            query = query.filter(Transaction.booked_at <= to_dt)
-
-        if account_id and account_uuid:
-            query = query.filter(Transaction.account_id == account_uuid)
-
-        results = query.group_by(
-            func.coalesce(Transaction.category_id, Transaction.category_system_id),
-            Category.name,
-            Category.color
-        ).order_by(func.sum(Transaction.amount).desc()).all()
+        results = db.execute(sql).fetchall()
 
         return [
             {
@@ -153,6 +193,11 @@ def get_monthly_cashflow(
     """
     Get monthly income vs expenses breakdown.
 
+    Filters by category type to exclude transfers:
+    - Income: Only transactions with category_type='income'
+    - Expenses: Only transactions with category_type='expense'
+    - Uses net amounts for linked transactions (primary gets group net)
+
     Args:
         user_id: The user's ID
         from_date: Start date in ISO format (optional)
@@ -165,34 +210,55 @@ def get_monthly_cashflow(
     from_dt = validate_date(from_date)
     to_dt = validate_date(to_date)
 
+    # Build date filter
+    date_filter = ""
+    if from_dt:
+        date_filter += f" AND t.booked_at >= '{from_dt.isoformat()}'"
+    if to_dt:
+        date_filter += f" AND t.booked_at <= '{to_dt.isoformat()}'"
+
     with get_db() as db:
-        query = db.query(
-            extract("year", Transaction.booked_at).label("year"),
-            extract("month", Transaction.booked_at).label("month"),
-            func.sum(case((Transaction.amount > 0, Transaction.amount), else_=0)).label("income"),
-            func.sum(case((Transaction.amount < 0, func.abs(Transaction.amount)), else_=0)).label("expenses"),
-        ).filter(
-            Transaction.user_id == user_id,
-            Transaction.include_in_analytics == True
-        )
+        sql = text(f"""
+            {_get_link_group_nets_cte(user_id)}
+            SELECT
+                EXTRACT(YEAR FROM t.booked_at)::int as year,
+                EXTRACT(MONTH FROM t.booked_at)::int as month,
+                COALESCE(SUM(
+                    CASE
+                        WHEN c.category_type = 'income' THEN
+                            CASE
+                                WHEN tl.link_role = 'primary' THEN
+                                    CASE WHEN lgn.net_amount > 0 THEN lgn.net_amount ELSE 0 END
+                                WHEN tl.link_role IS NOT NULL THEN 0
+                                ELSE ABS(t.amount)
+                            END
+                        ELSE 0
+                    END
+                ), 0) as income,
+                COALESCE(SUM(
+                    CASE
+                        WHEN c.category_type = 'expense' THEN
+                            CASE
+                                WHEN tl.link_role = 'primary' THEN
+                                    CASE WHEN lgn.net_amount < 0 THEN ABS(lgn.net_amount) ELSE 0 END
+                                WHEN tl.link_role IS NOT NULL THEN 0
+                                ELSE ABS(t.amount)
+                            END
+                        ELSE 0
+                    END
+                ), 0) as expenses
+            FROM transactions t
+            INNER JOIN categories c ON c.id = COALESCE(t.category_id, t.category_system_id)
+            LEFT JOIN transaction_links tl ON t.id = tl.transaction_id
+            LEFT JOIN link_group_nets lgn ON tl.group_id = lgn.group_id
+            WHERE t.user_id = '{user_id}'
+                AND t.include_in_analytics = true
+                {date_filter}
+            GROUP BY EXTRACT(YEAR FROM t.booked_at), EXTRACT(MONTH FROM t.booked_at)
+            ORDER BY EXTRACT(YEAR FROM t.booked_at), EXTRACT(MONTH FROM t.booked_at)
+        """)
 
-        if from_dt:
-            query = query.filter(Transaction.booked_at >= from_dt)
-
-        if to_dt:
-            query = query.filter(Transaction.booked_at <= to_dt)
-
-        results = (
-            query.group_by(
-                extract("year", Transaction.booked_at),
-                extract("month", Transaction.booked_at),
-            )
-            .order_by(
-                extract("year", Transaction.booked_at),
-                extract("month", Transaction.booked_at),
-            )
-            .all()
-        )
+        results = db.execute(sql).fetchall()
 
         return [
             {
@@ -213,6 +279,11 @@ def get_financial_summary(
     """
     Get a financial summary with totals and net worth.
 
+    Filters by category type to exclude transfers:
+    - Income: Only transactions with category_type='income'
+    - Expenses: Only transactions with category_type='expense'
+    - Uses net amounts for linked transactions (primary gets group net)
+
     Args:
         user_id: The user's ID
         from_date: Start date in ISO format (optional)
@@ -225,26 +296,54 @@ def get_financial_summary(
     from_dt = validate_date(from_date)
     to_dt = validate_date(to_date)
 
+    # Build date filter
+    date_filter = ""
+    if from_dt:
+        date_filter += f" AND t.booked_at >= '{from_dt.isoformat()}'"
+    if to_dt:
+        date_filter += f" AND t.booked_at <= '{to_dt.isoformat()}'"
+
     with get_db() as db:
-        # Get income/expense totals
-        txn_query = db.query(
-            func.sum(case((Transaction.amount > 0, Transaction.amount), else_=0)).label("total_income"),
-            func.sum(case((Transaction.amount < 0, func.abs(Transaction.amount)), else_=0)).label("total_expenses"),
-        ).filter(
-            Transaction.user_id == user_id,
-            Transaction.include_in_analytics == True
-        )
+        sql = text(f"""
+            {_get_link_group_nets_cte(user_id)}
+            SELECT
+                COALESCE(SUM(
+                    CASE
+                        WHEN c.category_type = 'income' THEN
+                            CASE
+                                WHEN tl.link_role = 'primary' THEN
+                                    CASE WHEN lgn.net_amount > 0 THEN lgn.net_amount ELSE 0 END
+                                WHEN tl.link_role IS NOT NULL THEN 0
+                                ELSE ABS(t.amount)
+                            END
+                        ELSE 0
+                    END
+                ), 0) as total_income,
+                COALESCE(SUM(
+                    CASE
+                        WHEN c.category_type = 'expense' THEN
+                            CASE
+                                WHEN tl.link_role = 'primary' THEN
+                                    CASE WHEN lgn.net_amount < 0 THEN ABS(lgn.net_amount) ELSE 0 END
+                                WHEN tl.link_role IS NOT NULL THEN 0
+                                ELSE ABS(t.amount)
+                            END
+                        ELSE 0
+                    END
+                ), 0) as total_expenses
+            FROM transactions t
+            INNER JOIN categories c ON c.id = COALESCE(t.category_id, t.category_system_id)
+            LEFT JOIN transaction_links tl ON t.id = tl.transaction_id
+            LEFT JOIN link_group_nets lgn ON tl.group_id = lgn.group_id
+            WHERE t.user_id = '{user_id}'
+                AND t.include_in_analytics = true
+                {date_filter}
+        """)
 
-        if from_dt:
-            txn_query = txn_query.filter(Transaction.booked_at >= from_dt)
+        result = db.execute(sql).fetchone()
 
-        if to_dt:
-            txn_query = txn_query.filter(Transaction.booked_at <= to_dt)
-
-        txn_result = txn_query.first()
-
-        total_income = float(txn_result.total_income or 0)
-        total_expenses = float(txn_result.total_expenses or 0)
+        total_income = float(result.total_income or 0)
+        total_expenses = float(result.total_expenses or 0)
 
         # Get account balances (current)
         accounts = db.query(Account).filter(
