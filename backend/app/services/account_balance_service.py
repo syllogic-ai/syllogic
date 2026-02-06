@@ -362,13 +362,24 @@ class AccountBalanceService:
                         ).first()
 
                         if existing_timeseries:
-                            # DON'T update existing records - they may have authoritative data from CSV
-                            # that accounts for fees and other adjustments not in transactions
-                            logger.debug(
-                                f"[TIMESERIES] Preserving existing balance for {current_date}: "
-                                f"{existing_timeseries.balance_in_account_currency} (not overwriting with calculated {balance_in_account_currency})"
-                            )
-                            skipped_count += 1
+                            # Only skip if this date is in skip_dates (has authoritative CSV data)
+                            # Otherwise, update the record with newly calculated balance from transactions
+                            if current_date in account_skip_dates:
+                                # Preserve CSV data - don't overwrite
+                                logger.debug(
+                                    f"[TIMESERIES] Preserving CSV balance for {current_date}: "
+                                    f"{existing_timeseries.balance_in_account_currency} (not overwriting with calculated {balance_in_account_currency})"
+                                )
+                                skipped_count += 1
+                            else:
+                                # Update existing record with newly calculated balance
+                                existing_timeseries.balance_in_account_currency = balance_in_account_currency
+                                existing_timeseries.balance_in_functional_currency = balance_in_functional_currency
+                                records_stored += 1
+                                logger.debug(
+                                    f"[TIMESERIES] Updated existing balance for {current_date}: "
+                                    f"{balance_in_account_currency} (recalculated from transactions)"
+                                )
                         else:
                             # Create new record only if no existing entry
                             timeseries_record = AccountBalance(

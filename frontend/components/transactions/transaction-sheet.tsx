@@ -75,7 +75,7 @@ export function TransactionSheet({
   const [showLinkReimbursementsDialog, setShowLinkReimbursementsDialog] = useState(false);
 
   const isBalancingTransfer = transaction?.category?.name === "Balancing Transfer";
-  const isExpense = transaction?.amount ? parseFloat(String(transaction.amount)) < 0 : false;
+  const isExpense = transaction?.transactionType === "debit";
   const hasLinkedSubscription = !!transaction?.recurringTransactionId;
 
   const handleRevertBalancingTransfer = async () => {

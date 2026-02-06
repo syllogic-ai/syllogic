@@ -133,6 +133,7 @@ class TransactionInput(BaseModel):
     description: Optional[str] = None
     merchant: Optional[str] = None
     amount: Decimal
+    transaction_type: Optional[str] = None  # "debit" or "credit" - helps determine if expense or income
 
 
 class TransactionResult(BaseModel):

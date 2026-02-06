@@ -37,9 +37,39 @@ if 'db_session' not in st.session_state:
     st.session_state.db_session = SessionLocal()
 
 
+def ensure_clean_session():
+    """Ensure the database session is in a clean state."""
+    try:
+        if 'db_session' not in st.session_state or st.session_state.db_session is None:
+            st.session_state.db_session = SessionLocal()
+            return
+        
+        # Try to rollback any failed transaction
+        try:
+            st.session_state.db_session.rollback()
+        except:
+            # If rollback fails, create a new session
+            try:
+                st.session_state.db_session.close()
+            except:
+                pass
+            st.session_state.db_session = SessionLocal()
+    except:
+        # If anything fails, create a new session
+        try:
+            if 'db_session' in st.session_state and st.session_state.db_session:
+                st.session_state.db_session.close()
+        except:
+            pass
+        st.session_state.db_session = SessionLocal()
+
+
 def get_table_data(model, filters=None):
     """Get data from a table and return as DataFrame."""
     try:
+        # Ensure we have a clean session
+        ensure_clean_session()
+        
         query = st.session_state.db_session.query(model)
         
         if filters:
@@ -66,6 +96,12 @@ def get_table_data(model, filters=None):
         
         return pd.DataFrame(records)
     except Exception as e:
+        # Rollback the transaction on error
+        try:
+            if 'db_session' in st.session_state and st.session_state.db_session:
+                st.session_state.db_session.rollback()
+        except:
+            pass
         st.error(f"Error fetching data: {e}")
         return pd.DataFrame()
 
@@ -99,6 +135,8 @@ st.sidebar.markdown("---")
 
 # Refresh button
 if st.sidebar.button("🔄 Refresh All Data", use_container_width=True):
+    # Ensure clean session before refresh
+    ensure_clean_session()
     st.rerun()
 
 # Database stats
@@ -147,6 +185,7 @@ with tab1:
         st.markdown(f"**Total Users:** {stats.get('users', 0)}")
     with col2:
         if st.button("🔄 Refresh", key="refresh_users"):
+            ensure_clean_session()
             st.rerun()
     
     df_users = get_table_data(User)
@@ -220,6 +259,7 @@ with tab2:
         )
     with col3:
         if st.button("🔄 Refresh", key="refresh_auth_accounts"):
+            ensure_clean_session()
             st.rerun()
     
     filters = {}
@@ -375,6 +415,7 @@ with tab3:
         )
     with col3:
         if st.button("🔄 Refresh", key="refresh_accounts"):
+            ensure_clean_session()
             st.rerun()
     
     filters = {}
@@ -448,6 +489,7 @@ with tab4:
         )
     with col3:
         if st.button("🔄 Refresh", key="refresh_categories"):
+            ensure_clean_session()
             st.rerun()
     
     filters = {}
@@ -520,6 +562,7 @@ with tab5:
         )
     with col5:
         if st.button("🔄 Refresh", key="refresh_transactions"):
+            ensure_clean_session()
             st.rerun()
     
     filters = {}
@@ -623,6 +666,7 @@ with tab6:
         )
     with col3:
         if st.button("🔄 Refresh", key="refresh_rules"):
+            ensure_clean_session()
             st.rerun()
     
     filters = {}
@@ -658,6 +702,7 @@ with tab7:
         )
     with col3:
         if st.button("🔄 Refresh", key="refresh_connections"):
+            ensure_clean_session()
             st.rerun()
     
     filters = {}
@@ -704,6 +749,7 @@ with tab8:
         )
     with col4:
         if st.button("🔄 Refresh", key="refresh_exchange_rates"):
+            ensure_clean_session()
             st.rerun()
     
     df_exchange_rates = get_table_data(ExchangeRate)
@@ -831,6 +877,7 @@ with tab9:
 
     with col4:
         if st.button("🔄 Refresh", key="refresh_balances"):
+            ensure_clean_session()
             st.rerun()
 
     # Get balance data
@@ -985,6 +1032,7 @@ with tab10:
         )
     with col4:
         if st.button("🔄 Refresh", key="refresh_recurring"):
+            ensure_clean_session()
             st.rerun()
     
     filters = {}
@@ -1140,6 +1188,7 @@ with tab11:
         )
     with col4:
         if st.button("🔄 Refresh", key="refresh_suggestions"):
+            ensure_clean_session()
             st.rerun()
 
     filters = {}

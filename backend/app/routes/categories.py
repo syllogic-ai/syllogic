@@ -295,6 +295,7 @@ def categorize_transactions_batch(
                 description=txn.description,
                 merchant=txn.merchant,
                 amount=txn.amount,
+                transaction_type=txn.transaction_type,  # Pass transaction_type for correct type determination
                 use_llm=False  # Don't use LLM in first pass
             )
 
@@ -341,14 +342,18 @@ def categorize_transactions_batch(
             else:
                 # Prepare batch for LLM
                 llm_batch = []
+                logger.info(f"[CATEGORIZE] Preparing LLM batch for {len(unmatched_indices)} transactions")
                 for idx in unmatched_indices:
                     txn = request.transactions[idx]
+                    logger.info(f"[CATEGORIZE] Transaction {idx}: transaction_type='{txn.transaction_type}', amount={txn.amount}, description='{txn.description[:50]}...'")
                     llm_batch.append({
                         "index": idx,
                         "description": txn.description,
                         "merchant": txn.merchant,
                         "amount": float(txn.amount),
+                        "transaction_type": txn.transaction_type,  # TransactionInput has transaction_type field
                     })
+                logger.info(f"[CATEGORIZE] LLM batch prepared with {len(llm_batch)} items. First item keys: {list(llm_batch[0].keys()) if llm_batch else 'empty'}")
                 
                 try:
                     llm_results, total_tokens, total_cost = matcher.match_categories_batch_llm(llm_batch)

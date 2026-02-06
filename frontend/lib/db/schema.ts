@@ -251,6 +251,11 @@ export const bankConnections = pgTable("bank_connections", {
   syncStatus: varchar("sync_status", { length: 50 }), // syncing, synced, failed
   lastSyncedAt: timestamp("last_synced_at"),
   errorMessage: text("error_message"),
+  // Ponto-specific fields
+  organizationId: varchar("organization_id", { length: 255 }), // Ponto organization ID
+  accessToken: text("access_token"), // Encrypted Ponto access token
+  refreshToken: text("refresh_token"), // Encrypted Ponto refresh token
+  accessTokenExpiresAt: timestamp("access_token_expires_at"), // Token expiry
   createdAt: timestamp("created_at").defaultNow(),
   expiresAt: timestamp("expires_at"),
 });

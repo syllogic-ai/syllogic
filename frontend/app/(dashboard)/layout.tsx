@@ -19,10 +19,16 @@ export default async function DashboardLayout({
   }
 
   // Check onboarding status and redirect if not completed
-  const onboardingStatus = await getOnboardingStatus();
-  if (onboardingStatus && !onboardingStatus.isCompleted) {
-    const redirectPath = await getOnboardingRedirectPath(onboardingStatus.status);
-    redirect(redirectPath);
+  try {
+    const onboardingStatus = await getOnboardingStatus();
+    if (onboardingStatus && !onboardingStatus.isCompleted) {
+      const redirectPath = await getOnboardingRedirectPath(onboardingStatus.status);
+      redirect(redirectPath);
+    }
+  } catch (error) {
+    // If onboarding check fails, log error but allow access to dashboard
+    // This prevents the app from crashing if there's a database issue
+    console.error("Failed to check onboarding status:", error);
   }
 
   return (

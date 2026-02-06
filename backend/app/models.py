@@ -77,6 +77,7 @@ class Category(Base):
     description = Column(Text, nullable=True)  # Category description
     categorization_instructions = Column(Text, nullable=True)  # User instructions for AI categorization
     is_system = Column(Boolean, default=False)
+    hide_from_selection = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
@@ -155,6 +156,7 @@ class RecurringTransaction(Base):
     amount = Column(Numeric(15, 2), nullable=False)
     currency = Column(String(3), default="EUR")
     category_id = Column(UUID(as_uuid=True), ForeignKey("categories.id"), nullable=True, index=True)
+    logo_id = Column(UUID(as_uuid=True), ForeignKey("company_logos.id", ondelete="SET NULL"), nullable=True)
     importance = Column(Integer, nullable=False, default=3)  # 1-5 scale
     frequency = Column(String(20), nullable=False)  # monthly, weekly, yearly, quarterly, biweekly
     is_active = Column(Boolean, default=True)
@@ -165,6 +167,7 @@ class RecurringTransaction(Base):
     # Relationships
     user = relationship("User", back_populates="recurring_transactions")
     category = relationship("Category")
+    logo = relationship("CompanyLogo", back_populates="recurring_transactions")
     linked_transactions = relationship("Transaction", back_populates="recurring_transaction")
 
     # Indexes and constraints
@@ -428,6 +431,33 @@ class TransactionLink(Base):
         Index("idx_transaction_links_user", "user_id"),
         Index("idx_transaction_links_group", "group_id"),
         UniqueConstraint("transaction_id", name="transaction_links_transaction_unique"),
+    )
+
+
+class CompanyLogo(Base):
+    """
+    Company logo model matching Drizzle schema.
+    Stores company logos for subscriptions and recurring transactions.
+    """
+    __tablename__ = "company_logos"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    domain = Column(String(255), nullable=True)  # "netflix.com"
+    company_name = Column(String(255), nullable=True)  # "Netflix"
+    logo_url = Column(Text, nullable=True)  # Local path: "/uploads/logos/netflix.png"
+    status = Column(String(20), default="found", nullable=False)  # "found" | "not_found"
+    last_checked_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    recurring_transactions = relationship("RecurringTransaction", back_populates="logo")
+
+    # Indexes and constraints
+    __table_args__ = (
+        Index("idx_company_logos_domain", "domain"),
+        Index("idx_company_logos_name", "company_name"),
+        UniqueConstraint("domain", name="company_logos_domain_unique"),
     )
 
 

@@ -371,27 +371,30 @@ export async function getTransactions(): Promise<TransactionWithRelations[]> {
     return [];
   }
 
-  const result = await db.query.transactions.findMany({
-    where: eq(transactions.userId, userId),
-    orderBy: [desc(transactions.bookedAt)],
-    with: {
-      account: true,
-      category: true,
-      categorySystem: true,
-      recurringTransaction: true,
-      transactionLink: true,
-    },
-  });
+  try {
+    const result = await db.query.transactions.findMany({
+      where: eq(transactions.userId, userId),
+      orderBy: [desc(transactions.bookedAt)],
+      with: {
+        account: true,
+        category: true,
+        categorySystem: true,
+        recurringTransaction: true,
+        transactionLink: true,
+      },
+    });
 
-  return result.map((tx) => ({
-    id: tx.id,
-    accountId: tx.accountId,
-    account: {
-      id: tx.account.id,
-      name: tx.account.name,
-      institution: tx.account.institution,
-      accountType: tx.account.accountType,
-    },
+    return result.map((tx) => ({
+      id: tx.id,
+      accountId: tx.accountId,
+      account: tx.account
+        ? {
+            id: tx.account.id,
+            name: tx.account.name,
+            institution: tx.account.institution,
+            accountType: tx.account.accountType,
+          }
+        : null,
     description: tx.description,
     merchant: tx.merchant,
     amount: parseFloat(tx.amount),
@@ -434,6 +437,16 @@ export async function getTransactions(): Promise<TransactionWithRelations[]> {
     transactionType: tx.transactionType,
     includeInAnalytics: tx.includeInAnalytics,
   }));
+  } catch (error: any) {
+    console.error("[getTransactions] Query failed:", {
+      error: error?.message || String(error),
+      cause: error?.cause,
+      stack: error?.stack,
+      userId,
+    });
+    // Return empty array on error to prevent app crash
+    return [];
+  }
 }
 
 export async function getTransactionsForAccount(
@@ -457,30 +470,33 @@ export async function getTransactionsForAccount(
     return [];
   }
 
-  const result = await db.query.transactions.findMany({
-    where: and(
-      eq(transactions.userId, userId),
-      eq(transactions.accountId, accountId)
-    ),
-    orderBy: [desc(transactions.bookedAt)],
-    with: {
-      account: true,
-      category: true,
-      categorySystem: true,
-      recurringTransaction: true,
-      transactionLink: true,
-    },
-  });
+  try {
+    const result = await db.query.transactions.findMany({
+      where: and(
+        eq(transactions.userId, userId),
+        eq(transactions.accountId, accountId)
+      ),
+      orderBy: [desc(transactions.bookedAt)],
+      with: {
+        account: true,
+        category: true,
+        categorySystem: true,
+        recurringTransaction: true,
+        transactionLink: true,
+      },
+    });
 
-  return result.map((tx) => ({
-    id: tx.id,
-    accountId: tx.accountId,
-    account: {
-      id: tx.account.id,
-      name: tx.account.name,
-      institution: tx.account.institution,
-      accountType: tx.account.accountType,
-    },
+    return result.map((tx) => ({
+      id: tx.id,
+      accountId: tx.accountId,
+      account: tx.account
+        ? {
+            id: tx.account.id,
+            name: tx.account.name,
+            institution: tx.account.institution,
+            accountType: tx.account.accountType,
+          }
+        : null,
     description: tx.description,
     merchant: tx.merchant,
     amount: parseFloat(tx.amount),
@@ -523,6 +539,17 @@ export async function getTransactionsForAccount(
     transactionType: tx.transactionType,
     includeInAnalytics: tx.includeInAnalytics,
   }));
+  } catch (error: any) {
+    console.error("[getTransactionsForAccount] Query failed:", {
+      error: error?.message || String(error),
+      cause: error?.cause,
+      stack: error?.stack,
+      userId,
+      accountId,
+    });
+    // Return empty array on error to prevent app crash
+    return [];
+  }
 }
 
 export async function bulkUpdateTransactionCategory(

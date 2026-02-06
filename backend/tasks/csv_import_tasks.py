@@ -69,17 +69,75 @@ def _process_transaction_batch(
     categorization_instructions: List[str],
 ) -> Dict[str, Any]:
     """
-    Process a batch of transactions: categorize and insert.
+    Process a batch of transactions: normalize, categorize and insert.
 
     Returns:
         Dict with counts of inserted, skipped transactions and categorization summary
     """
     from app.routes.categories import categorize_transactions_batch
+    from decimal import Decimal
 
     inserted_count = 0
     skipped_count = 0
     inserted_transactions = []
     seen_external_ids = set()
+    
+    # Normalize amounts and transaction_type (same logic as transaction_import route)
+    normalized_transactions_data = []
+    for txn in transactions_data:
+        normalized_txn = txn.copy()
+        amount = Decimal(str(txn["amount"]))
+        transaction_type = str(txn.get("transaction_type", "")).lower()
+        
+        # Handle aliases: "expense" = "debit", "income" = "credit"
+        if transaction_type in ["expense", "expenses"]:
+            transaction_type = "debit"
+        elif transaction_type in ["income", "revenue"]:
+            transaction_type = "credit"
+        
+        # Normalize amounts: credit = positive, debit = negative
+        if transaction_type == "credit":
+            normalized_amount = abs(amount)  # Ensure positive
+            # Validate: credit should be positive
+            if float(amount) < 0:
+                logger.warning(
+                    f"[CSV_IMPORT] Warning: Transaction marked as 'credit' but amount is negative. "
+                    f"Description: {txn.get('description', 'N/A')[:50]}, Amount: {amount}. "
+                    f"Correcting to 'debit'."
+                )
+                transaction_type = "debit"
+                normalized_amount = -abs(amount)  # Make negative for debit
+        elif transaction_type == "debit":
+            normalized_amount = -abs(amount)  # Ensure negative
+            # Validate: debit should be negative
+            if float(amount) > 0:
+                logger.warning(
+                    f"[CSV_IMPORT] Warning: Transaction marked as 'debit' but amount is positive. "
+                    f"Description: {txn.get('description', 'N/A')[:50]}, Amount: {amount}. "
+                    f"Correcting to 'credit'."
+                )
+                transaction_type = "credit"
+                normalized_amount = abs(amount)  # Make positive for credit
+        else:
+            # If transaction_type is invalid, infer from amount sign
+            logger.warning(
+                f"[CSV_IMPORT] Invalid transaction_type '{txn.get('transaction_type')}' for transaction. "
+                f"Description: {txn.get('description', 'N/A')[:50]}, Amount: {amount}. "
+                f"Inferring from amount sign."
+            )
+            if float(amount) >= 0:
+                transaction_type = "credit"
+                normalized_amount = abs(amount)
+            else:
+                transaction_type = "debit"
+                normalized_amount = -abs(amount)
+        
+        normalized_txn["amount"] = float(normalized_amount)
+        normalized_txn["transaction_type"] = transaction_type
+        normalized_transactions_data.append(normalized_txn)
+    
+    # Use normalized transactions for the rest of the processing
+    transactions_data = normalized_transactions_data
 
     # Build set of existing external_ids for duplicate detection
     incoming_external_ids = [
@@ -115,7 +173,8 @@ def _process_transaction_batch(
                 TransactionInput(
                     description=txn["description"],
                     merchant=txn["merchant"],
-                    amount=Decimal(str(txn["amount"]))
+                    amount=Decimal(str(txn["amount"])),
+                    transaction_type=txn.get("transaction_type")  # Pass transaction_type for correct categorization
                 )
                 for txn in transactions_needing_categorization
             ],

@@ -216,44 +216,57 @@ export async function getPeriodSpending(referenceDate?: Date, accountId?: string
 
   // For linked transactions, use net amount (sum of all in group) for primary
   // Subquery calculates net for each link group
-  const [result, currency] = await Promise.all([
-    db
-      .select({
-        total: sql<string>`COALESCE(SUM(
-          CASE
-            WHEN ${transactionLinks.linkRole} = 'primary' THEN
-              CASE
-                WHEN (
-                  SELECT SUM(t2.amount)
+  try {
+    const [result, currency] = await Promise.all([
+      db
+        .select({
+          total: sql<string>`COALESCE(SUM(
+            CASE
+              WHEN ${transactionLinks.linkRole} = 'primary' AND ${transactionLinks.groupId} IS NOT NULL THEN
+                COALESCE((
+                  SELECT CASE 
+                    WHEN COALESCE(SUM(t2.amount), 0) < 0 THEN ABS(COALESCE(SUM(t2.amount), 0))
+                    ELSE 0
+                  END
                   FROM ${transactions} t2
                   JOIN ${transactionLinks} tl2 ON t2.id = tl2.transaction_id
                   WHERE tl2.group_id = ${transactionLinks.groupId}
-                ) < 0
-                THEN ABS((
-                  SELECT SUM(t2.amount)
-                  FROM ${transactions} t2
-                  JOIN ${transactionLinks} tl2 ON t2.id = tl2.transaction_id
-                  WHERE tl2.group_id = ${transactionLinks.groupId}
-                ))
-                ELSE 0
-              END
-            WHEN ${transactionLinks.linkRole} IS NOT NULL THEN 0
-            ELSE ABS(${transactions.amount})
-          END
-        ), 0)`,
-      })
-      .from(transactions)
-      .innerJoin(
-        categories,
-        sql`${categories.id} = COALESCE(${transactions.categoryId}, ${transactions.categorySystemId})`
-      )
-      .leftJoin(
-        transactionLinks,
-        eq(transactions.id, transactionLinks.transactionId)
-      )
-      .where(and(...conditions, eq(categories.categoryType, "expense"))),
-    getUserCurrency(session.user.id),
-  ]);
+                    AND tl2.group_id IS NOT NULL
+                ), 0)
+              WHEN ${transactionLinks.linkRole} IS NOT NULL THEN 0
+              ELSE ABS(${transactions.amount})
+            END
+          ), 0)`,
+        })
+        .from(transactions)
+        .innerJoin(
+          categories,
+          sql`${categories.id} = COALESCE(${transactions.categoryId}, ${transactions.categorySystemId})`
+        )
+        .leftJoin(
+          transactionLinks,
+          eq(transactions.id, transactionLinks.transactionId)
+        )
+        .where(and(...conditions, eq(categories.categoryType, "expense"))),
+      getUserCurrency(session.user.id),
+    ]);
+
+    return {
+      total: parseFloat(result[0]?.total || "0"),
+      currency,
+    };
+  } catch (error: any) {
+    console.error("[getPeriodSpending] Query failed:", {
+      error: error?.message || String(error),
+      stack: error?.stack,
+      userId: session.user.id,
+    });
+    // Return default on error to prevent app crash
+    return {
+      total: 0,
+      currency: await getUserCurrency(session.user.id),
+    };
+  }
 
   return {
     total: parseFloat(result[0]?.total || "0"),
@@ -290,49 +303,58 @@ export async function getPeriodIncome(referenceDate?: Date, accountId?: string, 
 
   // For linked transactions, use net amount (sum of all in group) for primary
   // Subquery calculates net for each link group
-  const [result, currency] = await Promise.all([
-    db
-      .select({
-        total: sql<string>`COALESCE(SUM(
-          CASE
-            WHEN ${transactionLinks.linkRole} = 'primary' THEN
-              CASE
-                WHEN (
-                  SELECT SUM(t2.amount)
+  try {
+    const [result, currency] = await Promise.all([
+      db
+        .select({
+          total: sql<string>`COALESCE(SUM(
+            CASE
+              WHEN ${transactionLinks.linkRole} = 'primary' AND ${transactionLinks.groupId} IS NOT NULL THEN
+                COALESCE((
+                  SELECT CASE 
+                    WHEN COALESCE(SUM(t2.amount), 0) > 0 THEN COALESCE(SUM(t2.amount), 0)
+                    ELSE 0
+                  END
                   FROM ${transactions} t2
                   JOIN ${transactionLinks} tl2 ON t2.id = tl2.transaction_id
                   WHERE tl2.group_id = ${transactionLinks.groupId}
-                ) > 0
-                THEN (
-                  SELECT SUM(t2.amount)
-                  FROM ${transactions} t2
-                  JOIN ${transactionLinks} tl2 ON t2.id = tl2.transaction_id
-                  WHERE tl2.group_id = ${transactionLinks.groupId}
-                )
-                ELSE 0
-              END
-            WHEN ${transactionLinks.linkRole} IS NOT NULL THEN 0
-            ELSE ${transactions.amount}
-          END
-        ), 0)`,
-      })
-      .from(transactions)
-      .innerJoin(
-        categories,
-        sql`${categories.id} = COALESCE(${transactions.categoryId}, ${transactions.categorySystemId})`
-      )
-      .leftJoin(
-        transactionLinks,
-        eq(transactions.id, transactionLinks.transactionId)
-      )
-      .where(and(...conditions, eq(categories.categoryType, "income"))),
-    getUserCurrency(session.user.id),
-  ]);
+                    AND tl2.group_id IS NOT NULL
+                ), 0)
+              WHEN ${transactionLinks.linkRole} IS NOT NULL THEN 0
+              ELSE ${transactions.amount}
+            END
+          ), 0)`,
+        })
+        .from(transactions)
+        .innerJoin(
+          categories,
+          sql`${categories.id} = COALESCE(${transactions.categoryId}, ${transactions.categorySystemId})`
+        )
+        .leftJoin(
+          transactionLinks,
+          eq(transactions.id, transactionLinks.transactionId)
+        )
+        .where(and(...conditions, eq(categories.categoryType, "income"))),
+      getUserCurrency(session.user.id),
+    ]);
 
-  return {
-    total: parseFloat(result[0]?.total || "0"),
-    currency,
-  };
+    return {
+      total: parseFloat(result[0]?.total || "0"),
+      currency,
+    };
+  } catch (error: any) {
+    console.error("[getPeriodIncome] Query failed:", {
+      error: error?.message || String(error),
+      cause: error?.cause,
+      stack: error?.stack,
+      userId: session.user.id,
+    });
+    // Return default on error to prevent app crash
+    return {
+      total: 0,
+      currency: await getUserCurrency(session.user.id),
+    };
+  }
 }
 
 export async function getSpendingHistory(days: number = 7, referenceDate?: Date, accountId?: string) {
@@ -448,7 +470,8 @@ export async function getIncomeExpenseData(referenceDate?: Date, accountId?: str
   // Get monthly income and expenses for the last 12 months
   // Filter by category type to exclude transfers
   // For linked transactions: use net amount via subquery
-  const result = await db
+  try {
+    const result = await db
     .select({
       year: sql<number>`EXTRACT(YEAR FROM ${transactions.bookedAt})::int`,
       month: sql<number>`EXTRACT(MONTH FROM ${transactions.bookedAt})::int`,
@@ -456,22 +479,17 @@ export async function getIncomeExpenseData(referenceDate?: Date, accountId?: str
         CASE
           WHEN ${categories.categoryType} = 'income' THEN
             CASE
-              WHEN ${transactionLinks.linkRole} = 'primary' THEN
-                CASE
-                  WHEN (
-                    SELECT SUM(t2.amount)
-                    FROM ${transactions} t2
-                    JOIN ${transactionLinks} tl2 ON t2.id = tl2.transaction_id
-                    WHERE tl2.group_id = ${transactionLinks.groupId}
-                  ) > 0
-                  THEN (
-                    SELECT SUM(t2.amount)
-                    FROM ${transactions} t2
-                    JOIN ${transactionLinks} tl2 ON t2.id = tl2.transaction_id
-                    WHERE tl2.group_id = ${transactionLinks.groupId}
-                  )
-                  ELSE 0
-                END
+              WHEN ${transactionLinks.linkRole} = 'primary' AND ${transactionLinks.groupId} IS NOT NULL THEN
+                COALESCE((
+                  SELECT CASE 
+                    WHEN COALESCE(SUM(t2.amount), 0) > 0 THEN COALESCE(SUM(t2.amount), 0)
+                    ELSE 0
+                  END
+                  FROM ${transactions} t2
+                  JOIN ${transactionLinks} tl2 ON t2.id = tl2.transaction_id
+                  WHERE tl2.group_id = ${transactionLinks.groupId}
+                    AND tl2.group_id IS NOT NULL
+                ), 0)
               WHEN ${transactionLinks.linkRole} IS NOT NULL THEN 0
               ELSE ABS(${transactions.amount})
             END
@@ -482,22 +500,17 @@ export async function getIncomeExpenseData(referenceDate?: Date, accountId?: str
         CASE
           WHEN ${categories.categoryType} = 'expense' THEN
             CASE
-              WHEN ${transactionLinks.linkRole} = 'primary' THEN
-                CASE
-                  WHEN (
-                    SELECT SUM(t2.amount)
-                    FROM ${transactions} t2
-                    JOIN ${transactionLinks} tl2 ON t2.id = tl2.transaction_id
-                    WHERE tl2.group_id = ${transactionLinks.groupId}
-                  ) < 0
-                  THEN ABS((
-                    SELECT SUM(t2.amount)
-                    FROM ${transactions} t2
-                    JOIN ${transactionLinks} tl2 ON t2.id = tl2.transaction_id
-                    WHERE tl2.group_id = ${transactionLinks.groupId}
-                  ))
-                  ELSE 0
-                END
+              WHEN ${transactionLinks.linkRole} = 'primary' AND ${transactionLinks.groupId} IS NOT NULL THEN
+                COALESCE((
+                  SELECT CASE 
+                    WHEN COALESCE(SUM(t2.amount), 0) < 0 THEN ABS(COALESCE(SUM(t2.amount), 0))
+                    ELSE 0
+                  END
+                  FROM ${transactions} t2
+                  JOIN ${transactionLinks} tl2 ON t2.id = tl2.transaction_id
+                  WHERE tl2.group_id = ${transactionLinks.groupId}
+                    AND tl2.group_id IS NOT NULL
+                ), 0)
               WHEN ${transactionLinks.linkRole} IS NOT NULL THEN 0
               ELSE ABS(${transactions.amount})
             END
@@ -524,52 +537,62 @@ export async function getIncomeExpenseData(referenceDate?: Date, accountId?: str
       sql`EXTRACT(MONTH FROM ${transactions.bookedAt})`
     );
 
-  const monthNames = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
+    const monthNames = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
 
-  // Create array of last 12 months with proper labels (ending at reference month)
-  const months: { month: string; income: number; expenses: number }[] = [];
-  for (let i = 0; i < 12; i++) {
-    const date = new Date(refDate.getFullYear(), refDate.getMonth() - 11 + i, 1);
-    const monthLabel = monthNames[date.getMonth()];
-    months.push({
-      month: monthLabel,
-      income: 0,
-      expenses: 0,
-    });
-  }
-
-  // Fill in the data
-  for (const row of result) {
-    // Find the corresponding month in our array
-    const rowDate = new Date(row.year, row.month - 1, 1);
-    const monthIndex = months.findIndex((_, i) => {
-      const targetDate = new Date(refDate.getFullYear(), refDate.getMonth() - 11 + i, 1);
-      return (
-        targetDate.getFullYear() === rowDate.getFullYear() &&
-        targetDate.getMonth() === rowDate.getMonth()
-      );
-    });
-
-    if (monthIndex !== -1) {
-      months[monthIndex].income = parseFloat(row.income);
-      months[monthIndex].expenses = parseFloat(row.expenses);
+    // Create array of last 12 months with proper labels (ending at reference month)
+    const months: { month: string; income: number; expenses: number }[] = [];
+    for (let i = 0; i < 12; i++) {
+      const date = new Date(refDate.getFullYear(), refDate.getMonth() - 11 + i, 1);
+      const monthLabel = monthNames[date.getMonth()];
+      months.push({
+        month: monthLabel,
+        income: 0,
+        expenses: 0,
+      });
     }
-  }
 
-  return months;
+    // Fill in the data
+    for (const row of result) {
+      // Find the corresponding month in our array
+      const rowDate = new Date(row.year, row.month - 1, 1);
+      const monthIndex = months.findIndex((_, i) => {
+        const targetDate = new Date(refDate.getFullYear(), refDate.getMonth() - 11 + i, 1);
+        return (
+          targetDate.getFullYear() === rowDate.getFullYear() &&
+          targetDate.getMonth() === rowDate.getMonth()
+        );
+      });
+
+      if (monthIndex !== -1) {
+        months[monthIndex].income = parseFloat(row.income);
+        months[monthIndex].expenses = parseFloat(row.expenses);
+      }
+    }
+
+    return months;
+  } catch (error: any) {
+    console.error("[getIncomeExpenseData] Query failed:", {
+      error: error?.message || String(error),
+      cause: error?.cause,
+      stack: error?.stack,
+      userId: session.user.id,
+    });
+    // Return empty array on error to prevent app crash
+    return [];
+  }
 }
 
 export async function getSpendingByCategory(limit: number = 5, referenceDate?: Date, accountId?: string, horizon: number = 30) {
@@ -601,69 +624,60 @@ export async function getSpendingByCategory(limit: number = 5, referenceDate?: D
   }
 
   // Get spending by category using net amounts for linked transactions via subquery
-  const categorizedResult = await db
-    .select({
-      id: categories.id,
-      name: categories.name,
-      icon: categories.icon,
-      color: categories.color,
-      amount: sql<string>`COALESCE(SUM(
+  try {
+    const categorizedResult = await db
+      .select({
+        id: categories.id,
+        name: categories.name,
+        icon: categories.icon,
+        color: categories.color,
+        amount: sql<string>`COALESCE(SUM(
+          CASE
+            WHEN ${transactionLinks.linkRole} = 'primary' AND ${transactionLinks.groupId} IS NOT NULL THEN
+              COALESCE((
+                SELECT CASE 
+                  WHEN COALESCE(SUM(t2.amount), 0) < 0 THEN ABS(COALESCE(SUM(t2.amount), 0))
+                  ELSE 0
+                END
+                FROM ${transactions} t2
+                JOIN ${transactionLinks} tl2 ON t2.id = tl2.transaction_id
+                WHERE tl2.group_id = ${transactionLinks.groupId}
+                  AND tl2.group_id IS NOT NULL
+              ), 0)
+            WHEN ${transactionLinks.linkRole} IS NOT NULL THEN 0
+            ELSE ABS(${transactions.amount})
+          END
+        ), 0)`,
+      })
+      .from(transactions)
+      .innerJoin(
+        categories,
+        sql`${categories.id} = COALESCE(${transactions.categoryId}, ${transactions.categorySystemId})`
+      )
+      .leftJoin(
+        transactionLinks,
+        eq(transactions.id, transactionLinks.transactionId)
+      )
+      .where(and(...baseConditions, eq(categories.categoryType, "expense")))
+      .groupBy(categories.id, categories.name, categories.icon, categories.color)
+      .orderBy(desc(sql`COALESCE(SUM(
         CASE
-          WHEN ${transactionLinks.linkRole} = 'primary' THEN
-            CASE
-              WHEN (
-                SELECT SUM(t2.amount)
-                FROM ${transactions} t2
-                JOIN ${transactionLinks} tl2 ON t2.id = tl2.transaction_id
-                WHERE tl2.group_id = ${transactionLinks.groupId}
-              ) < 0
-              THEN ABS((
-                SELECT SUM(t2.amount)
-                FROM ${transactions} t2
-                JOIN ${transactionLinks} tl2 ON t2.id = tl2.transaction_id
-                WHERE tl2.group_id = ${transactionLinks.groupId}
-              ))
-              ELSE 0
-            END
+          WHEN ${transactionLinks.linkRole} = 'primary' AND ${transactionLinks.groupId} IS NOT NULL THEN
+            COALESCE((
+              SELECT CASE 
+                WHEN COALESCE(SUM(t2.amount), 0) < 0 THEN ABS(COALESCE(SUM(t2.amount), 0))
+                ELSE 0
+              END
+              FROM ${transactions} t2
+              JOIN ${transactionLinks} tl2 ON t2.id = tl2.transaction_id
+              WHERE tl2.group_id = ${transactionLinks.groupId}
+                AND tl2.group_id IS NOT NULL
+            ), 0)
           WHEN ${transactionLinks.linkRole} IS NOT NULL THEN 0
           ELSE ABS(${transactions.amount})
         END
-      ), 0)`,
-    })
-    .from(transactions)
-    .innerJoin(
-      categories,
-      sql`${categories.id} = COALESCE(${transactions.categoryId}, ${transactions.categorySystemId})`
-    )
-    .leftJoin(
-      transactionLinks,
-      eq(transactions.id, transactionLinks.transactionId)
-    )
-    .where(and(...baseConditions, eq(categories.categoryType, "expense")))
-    .groupBy(categories.id, categories.name, categories.icon, categories.color)
-    .orderBy(desc(sql`COALESCE(SUM(
-      CASE
-        WHEN ${transactionLinks.linkRole} = 'primary' THEN
-          CASE
-            WHEN (
-              SELECT SUM(t2.amount)
-              FROM ${transactions} t2
-              JOIN ${transactionLinks} tl2 ON t2.id = tl2.transaction_id
-              WHERE tl2.group_id = ${transactionLinks.groupId}
-            ) < 0
-            THEN ABS((
-              SELECT SUM(t2.amount)
-              FROM ${transactions} t2
-              JOIN ${transactionLinks} tl2 ON t2.id = tl2.transaction_id
-              WHERE tl2.group_id = ${transactionLinks.groupId}
-            ))
-            ELSE 0
-          END
-        WHEN ${transactionLinks.linkRole} IS NOT NULL THEN 0
-        ELSE ABS(${transactions.amount})
-      END
-    ), 0)`))
-    .limit(limit);
+      ), 0)`))
+      .limit(limit);
 
   // Get uncategorized spending (non-linked only)
   const uncategorizedResult = await db
@@ -689,26 +703,21 @@ export async function getSpendingByCategory(limit: number = 5, referenceDate?: D
     .select({
       total: sql<string>`COALESCE(SUM(
         CASE
-          WHEN ${transactionLinks.linkRole} = 'primary' THEN
-            CASE
-              WHEN (
-                SELECT SUM(t2.amount)
-                FROM ${transactions} t2
-                JOIN ${transactionLinks} tl2 ON t2.id = tl2.transaction_id
-                WHERE tl2.group_id = ${transactionLinks.groupId}
-              ) < 0
-              THEN ABS((
-                SELECT SUM(t2.amount)
-                FROM ${transactions} t2
-                JOIN ${transactionLinks} tl2 ON t2.id = tl2.transaction_id
-                WHERE tl2.group_id = ${transactionLinks.groupId}
-              ))
+        WHEN ${transactionLinks.linkRole} = 'primary' AND ${transactionLinks.groupId} IS NOT NULL THEN
+          COALESCE((
+            SELECT CASE 
+              WHEN COALESCE(SUM(t2.amount), 0) < 0 THEN ABS(COALESCE(SUM(t2.amount), 0))
               ELSE 0
             END
-          WHEN ${transactionLinks.linkRole} IS NOT NULL THEN 0
-          ELSE ABS(${transactions.amount})
-        END
-      ), 0)`,
+            FROM ${transactions} t2
+            JOIN ${transactionLinks} tl2 ON t2.id = tl2.transaction_id
+            WHERE tl2.group_id = ${transactionLinks.groupId}
+              AND tl2.group_id IS NOT NULL
+          ), 0)
+        WHEN ${transactionLinks.linkRole} IS NOT NULL THEN 0
+        ELSE ABS(${transactions.amount})
+      END
+    ), 0)`,
     })
     .from(transactions)
     .innerJoin(
@@ -721,35 +730,48 @@ export async function getSpendingByCategory(limit: number = 5, referenceDate?: D
     )
     .where(and(...baseConditions, eq(categories.categoryType, "expense")));
 
-  const categorizedCategories = categorizedResult.map((row) => ({
-    id: row.id,
-    name: row.name,
-    icon: row.icon,
-    color: row.color,
-    amount: parseFloat(row.amount),
-  }));
+    const categorizedCategories = categorizedResult.map((row) => ({
+      id: row.id,
+      name: row.name,
+      icon: row.icon,
+      color: row.color,
+      amount: parseFloat(row.amount),
+    }));
 
-  // Add uncategorized if there's any amount
-  const uncategorizedAmount = parseFloat(uncategorizedResult[0]?.amount || "0");
-  if (uncategorizedAmount > 0) {
-    categorizedCategories.push({
-      id: "uncategorized",
-      name: "Uncategorized",
-      icon: null,
-      color: null,
-      amount: uncategorizedAmount,
+    // Add uncategorized if there's any amount
+    const uncategorizedAmount = parseFloat(uncategorizedResult[0]?.amount || "0");
+    if (uncategorizedAmount > 0) {
+      categorizedCategories.push({
+        id: "uncategorized",
+        name: "Uncategorized",
+        icon: null,
+        color: null,
+        amount: uncategorizedAmount,
+      });
+    }
+
+    // Sort by amount and limit
+    const sortedCategories = categorizedCategories
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, limit);
+
+    return {
+      categories: sortedCategories,
+      total: parseFloat(totalResult[0]?.total || "0"),
+    };
+  } catch (error: any) {
+    console.error("[getSpendingByCategory] Query failed:", {
+      error: error?.message || String(error),
+      cause: error?.cause,
+      stack: error?.stack,
+      userId: session.user.id,
     });
+    // Return empty result on error to prevent app crash
+    return {
+      categories: [],
+      total: 0,
+    };
   }
-
-  // Sort by amount and limit
-  const sortedCategories = categorizedCategories
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, limit);
-
-  return {
-    categories: sortedCategories,
-    total: parseFloat(totalResult[0]?.total || "0"),
-  };
 }
 
 // Asset category types and mapping

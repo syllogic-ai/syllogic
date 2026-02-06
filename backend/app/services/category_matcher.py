@@ -580,11 +580,24 @@ class CategoryMatcher:
         normalized_merchant = self._normalize_text(merchant)
         search_text = " ".join(filter(None, [normalized_desc, normalized_merchant]))
 
-        # Determine transaction type from amount if not provided
-        is_income = amount > 0
+        # Determine transaction type - use provided transaction_type if available, otherwise infer from amount
+        if transaction_type:
+            transaction_type_lower = transaction_type.lower()
+            # Handle aliases
+            if transaction_type_lower in ["expense", "expenses", "debit"]:
+                is_income = False
+            elif transaction_type_lower in ["income", "revenue", "credit"]:
+                is_income = True
+            else:
+                # Fallback to amount sign if transaction_type is invalid
+                is_income = amount > 0
+        else:
+            # Infer from amount sign if transaction_type not provided
+            is_income = amount > 0
+        
         is_transfer = "transfer" in search_text
 
-        logger.debug(f"Matching transaction: '{search_text}' (amount: {amount}, is_income: {is_income})")
+        logger.debug(f"Matching transaction: '{search_text}' (amount: {amount}, transaction_type: {transaction_type}, is_income: {is_income})")
         
         # Load categories and rules
         categories = self._load_categories()
@@ -652,7 +665,8 @@ class CategoryMatcher:
         description: Optional[str],
         merchant: Optional[str],
         amount: Decimal,
-        available_categories: List[Category]
+        available_categories: List[Category],
+        transaction_type: Optional[str] = None
     ) -> Optional[Category]:
         """
         Use LLM to suggest a category when deterministic matching fails.
@@ -662,6 +676,7 @@ class CategoryMatcher:
             merchant: Merchant name
             amount: Transaction amount
             available_categories: List of available categories to choose from
+            transaction_type: Transaction type (debit/credit) - helps determine if expense or income
 
         Returns:
             Suggested Category or None if LLM call fails
@@ -671,8 +686,21 @@ class CategoryMatcher:
         if not client:
             return None
 
-        # Determine transaction type
-        is_income = amount > 0
+        # Determine transaction type - use provided transaction_type if available, otherwise infer from amount
+        if transaction_type:
+            transaction_type_lower = transaction_type.lower()
+            # Handle aliases
+            if transaction_type_lower in ["expense", "expenses", "debit"]:
+                is_income = False
+            elif transaction_type_lower in ["income", "revenue", "credit"]:
+                is_income = True
+            else:
+                # Fallback to amount sign if transaction_type is invalid
+                is_income = amount > 0
+        else:
+            # Infer from amount sign if transaction_type not provided
+            is_income = amount > 0
+        
         transaction_type_str = "income" if is_income else "expense"
 
         # Filter categories by type
@@ -796,7 +824,8 @@ Category name:"""
         description: Optional[str],
         merchant: Optional[str],
         amount: Decimal,
-        available_categories: List[Category]
+        available_categories: List[Category],
+        transaction_type: Optional[str] = None
     ) -> Tuple[Optional[Category], int, float]:
         """
         Use LLM to suggest a category with detailed token usage information.
@@ -815,8 +844,21 @@ Category name:"""
         if not client:
             return None, 0, 0.0
 
-        # Determine transaction type
-        is_income = amount > 0
+        # Determine transaction type - use provided transaction_type if available, otherwise infer from amount
+        if transaction_type:
+            transaction_type_lower = transaction_type.lower()
+            # Handle aliases
+            if transaction_type_lower in ["expense", "expenses", "debit"]:
+                is_income = False
+            elif transaction_type_lower in ["income", "revenue", "credit"]:
+                is_income = True
+            else:
+                # Fallback to amount sign if transaction_type is invalid
+                is_income = amount > 0
+        else:
+            # Infer from amount sign if transaction_type not provided
+            is_income = amount > 0
+        
         transaction_type_str = "income" if is_income else "expense"
 
         # Filter categories by type
@@ -994,7 +1036,8 @@ Category name:"""
                 description=description,
                 merchant=merchant,
                 amount=amount,
-                available_categories=categories
+                available_categories=categories,
+                transaction_type=transaction_type
             )
             if category:
                 return category
@@ -1047,11 +1090,24 @@ Category name:"""
         normalized_merchant = self._normalize_text(merchant)
         search_text = " ".join(filter(None, [normalized_desc, normalized_merchant]))
 
-        # Determine transaction type from amount if not provided
-        is_income = amount > 0
+        # Determine transaction type - use provided transaction_type if available, otherwise infer from amount
+        if transaction_type:
+            transaction_type_lower = transaction_type.lower()
+            # Handle aliases
+            if transaction_type_lower in ["expense", "expenses", "debit"]:
+                is_income = False
+            elif transaction_type_lower in ["income", "revenue", "credit"]:
+                is_income = True
+            else:
+                # Fallback to amount sign if transaction_type is invalid
+                is_income = amount > 0
+        else:
+            # Infer from amount sign if transaction_type not provided
+            is_income = amount > 0
+        
         is_transfer = "transfer" in search_text
 
-        logger.debug(f"Matching transaction with details: '{search_text}' (amount: {amount}, is_income: {is_income})")
+        logger.debug(f"Matching transaction with details: '{search_text}' (amount: {amount}, transaction_type: {transaction_type}, is_income: {is_income})")
 
         # Load categories and rules
         categories = self._load_categories()
@@ -1130,7 +1186,8 @@ Category name:"""
                 description=description,
                 merchant=merchant,
                 amount=amount,
-                available_categories=all_categories
+                available_categories=all_categories,
+                transaction_type=transaction_type
             )
 
             if category:
@@ -1192,6 +1249,9 @@ Category name:"""
 
         expense_list = "\n".join([f"- {c.name}" for c in expense_categories])
         income_list = "\n".join([f"- {c.name}" for c in income_categories])
+        
+        logger.info(f"[BATCH LLM] Expense categories ({len(expense_categories)}): {[c.name for c in expense_categories[:10]]}...")
+        logger.info(f"[BATCH LLM] Income categories ({len(income_categories)}): {[c.name for c in income_categories[:10]]}...")
 
         # Check user overrides first and filter them out from LLM batch
         override_results = {}
@@ -1225,14 +1285,39 @@ Category name:"""
 
             # Build transaction list for prompt
             txn_lines = []
+            logger.info(f"[BATCH LLM] Processing {len(batch)} transactions. First transaction keys: {list(batch[0].keys()) if batch else 'empty'}")
             for txn in batch:
-                txn_type = "INCOME" if txn["amount"] > 0 else "EXPENSE"
+                # Log raw transaction data
+                logger.info(f"[BATCH LLM] Raw transaction {txn['index']}: {txn}")
+                
+                # Use transaction_type if provided, otherwise infer from amount sign
+                if txn.get("transaction_type"):
+                    transaction_type_lower = str(txn["transaction_type"]).lower()
+                    logger.info(f"[BATCH LLM] Transaction {txn['index']} has transaction_type: '{txn.get('transaction_type')}' (lowercase: '{transaction_type_lower}')")
+                    # Handle aliases
+                    if transaction_type_lower in ["expense", "expenses", "debit"]:
+                        txn_type = "EXPENSE"
+                        logger.info(f"[BATCH LLM] Transaction {txn['index']}: Mapped '{transaction_type_lower}' -> EXPENSE")
+                    elif transaction_type_lower in ["income", "revenue", "credit"]:
+                        txn_type = "INCOME"
+                        logger.info(f"[BATCH LLM] Transaction {txn['index']}: Mapped '{transaction_type_lower}' -> INCOME")
+                    else:
+                        # Fallback to amount sign if transaction_type is invalid
+                        txn_type = "INCOME" if txn["amount"] > 0 else "EXPENSE"
+                        logger.warning(f"[BATCH LLM] Transaction {txn['index']}: Invalid transaction_type '{txn.get('transaction_type')}', inferred '{txn_type}' from amount {txn['amount']}")
+                else:
+                    # Infer from amount sign if transaction_type not provided
+                    txn_type = "INCOME" if txn["amount"] > 0 else "EXPENSE"
+                    logger.warning(f"[BATCH LLM] Transaction {txn['index']}: No transaction_type provided, inferred '{txn_type}' from amount {txn['amount']}")
+                
+                logger.info(f"[BATCH LLM] Transaction {txn['index']}: Final determined_type='{txn_type}'")
+                
                 txn_lines.append(
                     f"{txn['index']}|{txn.get('description', 'N/A')}|{txn.get('merchant', 'N/A')}|{abs(txn['amount'])}|{txn_type}"
                 )
 
             transactions_text = "\n".join(txn_lines)
-            logger.debug(f"[BATCH LLM] Transactions text:\n{transactions_text}")
+            logger.info(f"[BATCH LLM] Transactions text (first 500 chars):\n{transactions_text[:500]}...")
 
             # Build instructions text if provided
             instructions_text = ""
@@ -1261,13 +1346,16 @@ Available categories for INCOME transactions:
 {income_list}
 {overrides_text}{instructions_text}
 Instructions:
-1. For each transaction, select the most appropriate category from the list matching its TYPE
-2. Follow any user-specific guidelines and override patterns provided above
-3. If a transaction matches a user override pattern, use that category
-4. Respond with one line per transaction in format: INDEX|CATEGORY_NAME|CONFIDENCE
-5. CONFIDENCE is your confidence percentage (0-100) in the categorization
-6. Use "UNKNOWN|0" if no category fits well
-7. Use EXACT category names from the lists above
+1. **CRITICAL**: Look at the TYPE field (last column) for each transaction. TYPE is either "EXPENSE" or "INCOME"
+2. **CRITICAL**: If TYPE is "EXPENSE", you MUST select a category ONLY from the "Available categories for EXPENSE transactions" list above
+3. **CRITICAL**: If TYPE is "INCOME", you MUST select a category ONLY from the "Available categories for INCOME transactions" list above
+4. Do NOT use income categories for expense transactions, and vice versa
+5. Follow any user-specific guidelines and override patterns provided above
+6. If a transaction matches a user override pattern, use that category
+7. Respond with one line per transaction in format: INDEX|CATEGORY_NAME|CONFIDENCE
+8. CONFIDENCE is your confidence percentage (0-100) in the categorization
+9. Use "UNKNOWN|0" if no category fits well
+10. Use EXACT category names from the lists above
 
 Example response format:
 0|Groceries|85
@@ -1276,6 +1364,8 @@ Example response format:
 
 Response:"""
 
+            # Log the full prompt for debugging (truncated to avoid log spam)
+            logger.info(f"[BATCH LLM] Full prompt (first 1000 chars):\n{prompt[:1000]}...")
             logger.info(f"[BATCH LLM] Sending request to OpenAI API (model: {self.LLM_MODEL})...")
 
             try:

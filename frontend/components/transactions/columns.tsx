@@ -201,8 +201,7 @@ export const transactionColumns: ColumnDef<TransactionWithRelations>[] = [
     header: "Type",
     cell: ({ row }) => {
       const type = row.original.transactionType;
-      const amount = row.original.amount;
-      const isCredit = type === "credit" || amount > 0;
+      const isCredit = type === "credit";
       return (
         <Badge variant={isCredit ? "default" : "secondary"}>
           {isCredit ? "Income" : "Expense"}
@@ -232,7 +231,7 @@ export const transactionColumns: ColumnDef<TransactionWithRelations>[] = [
     cell: ({ row }) => {
       const amount = row.getValue("amount") as number;
       const type = row.original.transactionType;
-      const isCredit = type === "credit" || amount > 0;
+      const isCredit = type === "credit";
       return (
         <span className="whitespace-nowrap text-right font-mono block">
           {isCredit ? "+" : "-"}

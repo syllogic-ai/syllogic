@@ -182,28 +182,65 @@ def import_transactions(
                 )
             
             # Normalize amount: credit = positive, debit = negative
+            # Also validate transaction_type matches amount sign to catch frontend bugs
             normalized_amount = txn.amount
-            if txn.transaction_type.lower() == "credit":
-                normalized_amount = abs(txn.amount)  # Ensure positive
-            elif txn.transaction_type.lower() == "debit":
-                normalized_amount = -abs(txn.amount)  # Ensure negative
-            else:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid transaction_type: {txn.transaction_type}. Must be 'credit' or 'debit'"
-                )
+            transaction_type_lower = txn.transaction_type.lower()
             
-            normalized_transactions.append({
+            # Handle aliases: "expense" = "debit", "income" = "credit"
+            if transaction_type_lower in ["expense", "expenses"]:
+                transaction_type_lower = "debit"
+            elif transaction_type_lower in ["income", "revenue"]:
+                transaction_type_lower = "credit"
+            
+            if transaction_type_lower == "credit":
+                normalized_amount = abs(txn.amount)  # Ensure positive
+                # Validate: credit should be positive
+                if float(normalized_amount) < 0:
+                    logger.warning(
+                        f"[IMPORT] Warning: Transaction marked as 'credit' but amount is negative. "
+                        f"Description: {txn.description}, Amount: {txn.amount}. "
+                        f"Correcting to 'debit'."
+                    )
+                    transaction_type_lower = "debit"
+                    normalized_amount = -abs(txn.amount)  # Make negative for debit
+            elif transaction_type_lower == "debit":
+                normalized_amount = -abs(txn.amount)  # Ensure negative
+                # Validate: debit should be negative
+                if float(normalized_amount) > 0:
+                    logger.warning(
+                        f"[IMPORT] Warning: Transaction marked as 'debit' but amount is positive. "
+                        f"Description: {txn.description}, Amount: {txn.amount}. "
+                        f"Correcting to 'credit'."
+                    )
+                    transaction_type_lower = "credit"
+                    normalized_amount = abs(txn.amount)  # Make positive for credit
+            else:
+                # If transaction_type is invalid, infer from amount sign
+                logger.warning(
+                    f"[IMPORT] Invalid transaction_type '{txn.transaction_type}' for transaction. "
+                    f"Description: {txn.description}, Amount: {txn.amount}. "
+                    f"Inferring from amount sign."
+                )
+                if float(txn.amount) >= 0:
+                    transaction_type_lower = "credit"
+                    normalized_amount = abs(txn.amount)
+                else:
+                    transaction_type_lower = "debit"
+                    normalized_amount = -abs(txn.amount)
+            
+            normalized_txn = {
                 "account_id": txn.account_id,
                 "amount": normalized_amount,
                 "description": txn.description,
                 "merchant": txn.merchant,
                 "booked_at": txn.booked_at,
-                "transaction_type": txn.transaction_type.lower(),
+                "transaction_type": transaction_type_lower,  # Use corrected transaction_type
                 "currency": txn.currency or account.currency or "EUR",
                 "external_id": txn.external_id,
                 "category_id": txn.category_id  # Pre-selected category
-            })
+            }
+            logger.debug(f"[IMPORT] Normalized transaction: transaction_type='{transaction_type_lower}', amount={normalized_amount}, description='{txn.description[:50]}...'")
+            normalized_transactions.append(normalized_txn)
         
         # Step 2: Categorize transactions (skip if category already provided)
         # Build list of transactions needing categorization and track their indices
@@ -227,12 +264,18 @@ def import_transactions(
 
             logger.info(f"[IMPORT] Found {len(user_overrides)} user overrides and {len(categorization_instructions)} instructions")
 
+            # Log first transaction to debug transaction_type
+            if transactions_needing_categorization:
+                first_txn = transactions_needing_categorization[0]
+                logger.info(f"[IMPORT] First transaction needing categorization: transaction_type='{first_txn.get('transaction_type')}', amount={first_txn.get('amount')}, description='{first_txn.get('description', '')[:50]}...'")
+
             categorize_request = BatchCategorizeRequest(
                 transactions=[
                     TransactionInput(
                         description=txn["description"],
                         merchant=txn["merchant"],
-                        amount=txn["amount"]
+                        amount=txn["amount"],
+                        transaction_type=txn.get("transaction_type")  # Use .get() to handle missing keys
                     )
                     for txn in transactions_needing_categorization
                 ],
