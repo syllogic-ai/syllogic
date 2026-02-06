@@ -8,6 +8,20 @@
       "when": 1768685392212,
       "tag": "0000_stormy_roxanne_simpson",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1769808592212,
+      "tag": "0001_fix_balance_adjustment_signs",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1770401897806,
+      "tag": "0002_better_auth_admin_fields",
+      "breakpoints": true
     }
   ]
 }

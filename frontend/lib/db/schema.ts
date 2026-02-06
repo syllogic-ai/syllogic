@@ -24,6 +24,11 @@ export const users = pgTable("users", {
   email: text("email").unique().notNull(),
   emailVerified: boolean("email_verified").default(false),
   image: text("image"),
+  // Required by BetterAuth admin plugin.
+  role: text("role").default("user"),
+  banned: boolean("banned").default(false),
+  banReason: text("ban_reason"),
+  banExpires: timestamp("ban_expires"),
   onboardingStatus: varchar("onboarding_status", { length: 20 }).default("pending"), // pending, step_1, step_2, step_3, completed
   onboardingCompletedAt: timestamp("onboarding_completed_at"),
   functionalCurrency: char("functional_currency", { length: 3 }).default("EUR"), // User's functional currency for reporting
@@ -41,6 +46,8 @@ export const sessions = pgTable("sessions", {
   expiresAt: timestamp("expires_at").notNull(),
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
+  // Required by BetterAuth admin plugin (impersonation).
+  impersonatedBy: text("impersonated_by"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

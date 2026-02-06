@@ -33,9 +33,12 @@ async function baselineExistingSchema(sql, migrationsFolder) {
   }
 
   // Read migrations using Drizzle's own reader (journal-based).
-  // If the DB already has tables but no migration records, we assume it was
-  // initialized via a prior push/create_all and baseline to the current journal.
-  // This makes the migration job idempotent for existing installs.
+  //
+  // IMPORTANT:
+  // We only baseline the *first* migration (usually the initial schema create).
+  // If we marked *all* migrations as applied, we'd skip newer ALTER/patch
+  // migrations and drift the schema. After baselining the first entry, the
+  // migrator can run the remaining migrations normally.
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { readMigrationFiles } = require("drizzle-orm/migrator");
   const migrations = readMigrationFiles({ migrationsFolder });
@@ -45,11 +48,10 @@ async function baselineExistingSchema(sql, migrationsFolder) {
     return true;
   }
 
-  for (const m of migrations) {
-    await sql`insert into "drizzle"."__drizzle_migrations" ("hash", "created_at") values (${m.hash}, ${m.folderMillis})`;
-  }
+  const first = migrations[0];
+  await sql`insert into "drizzle"."__drizzle_migrations" ("hash", "created_at") values (${first.hash}, ${first.folderMillis})`;
 
-  console.log(`[migrate] Baseline complete (${migrations.length} migration(s) marked as applied).`);
+  console.log("[migrate] Baseline complete (initial migration marked as applied).");
   return true;
 }
 
@@ -105,6 +107,9 @@ async function main() {
         console.warn("[migrate] Detected existing schema without migration tracking. Baseline mode...");
         const baselined = await baselineExistingSchema(sql, migrationsFolder);
         if (baselined) {
+          // Now that the baseline is recorded, apply the remaining migrations.
+          await migrate(db, { migrationsFolder });
+          console.log("[migrate] Migrations complete (after baseline)");
           return;
         }
       }
