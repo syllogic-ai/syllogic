@@ -267,11 +267,6 @@ export async function getPeriodSpending(referenceDate?: Date, accountId?: string
       currency: await getUserCurrency(session.user.id),
     };
   }
-
-  return {
-    total: parseFloat(result[0]?.total || "0"),
-    currency,
-  };
 }
 
 export async function getPeriodIncome(referenceDate?: Date, accountId?: string, horizon: number = 30) {
