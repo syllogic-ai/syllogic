@@ -328,7 +328,7 @@ export interface TransactionWithRelations {
     name: string;
     institution: string | null;
     accountType: string;
-  };
+  } | null;
   description: string | null;
   merchant: string | null;
   amount: number;
