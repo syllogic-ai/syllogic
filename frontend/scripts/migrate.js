@@ -18,12 +18,56 @@ function isPgRelationExistsError(err) {
   return code === "42P07"; // relation already exists
 }
 
-async function baselineExistingSchema(sql, migrationsFolder) {
+function getPgErrorCode(err) {
+  return err?.cause?.code || err?.code;
+}
+
+function isPgDuplicateSchemaError(err) {
+  const code = getPgErrorCode(err);
+  // In some rare/racy situations Postgres can surface a duplicate error even with IF NOT EXISTS.
+  // Treat both "duplicate_schema" and "unique_violation" as safe to ignore for schema creation.
+  return code === "42P06" || code === "23505";
+}
+
+function isPgDuplicateTypeErrorForMigrationsTable(err) {
+  const code = getPgErrorCode(err);
+  if (code !== "23505") return false;
+  const constraint = err?.cause?.constraint_name || err?.constraint_name;
+  return constraint === "pg_type_typname_nsp_index";
+}
+
+async function ensureDrizzleMigrationsTracking(sql) {
   // Drizzle uses schema "drizzle" and table "__drizzle_migrations" by default.
-  await sql.unsafe('CREATE SCHEMA IF NOT EXISTS "drizzle"');
-  await sql.unsafe(
-    'CREATE TABLE IF NOT EXISTS "drizzle"."__drizzle_migrations" (id SERIAL PRIMARY KEY, hash text NOT NULL, created_at bigint)'
-  );
+  try {
+    await sql.unsafe('CREATE SCHEMA IF NOT EXISTS "drizzle"');
+  } catch (err) {
+    if (!isPgDuplicateSchemaError(err)) throw err;
+  }
+
+  try {
+    await sql.unsafe(
+      'CREATE TABLE IF NOT EXISTS "drizzle"."__drizzle_migrations" (id SERIAL PRIMARY KEY, hash text NOT NULL, created_at bigint)'
+    );
+  } catch (err) {
+    // If a previous attempt partially created the row type, Postgres can error even with IF NOT EXISTS.
+    // Repair by dropping the stray type/table and retrying.
+    if (!isPgDuplicateTypeErrorForMigrationsTable(err)) throw err;
+
+    console.warn(
+      "[migrate] Detected a broken __drizzle_migrations row type. Repairing tracking table..."
+    );
+    await sql.unsafe('DROP TABLE IF EXISTS "drizzle"."__drizzle_migrations"');
+    await sql.unsafe('DROP TYPE IF EXISTS "drizzle"."__drizzle_migrations"');
+    await sql.unsafe(
+      'CREATE TABLE IF NOT EXISTS "drizzle"."__drizzle_migrations" (id SERIAL PRIMARY KEY, hash text NOT NULL, created_at bigint)'
+    );
+  }
+}
+
+async function baselineExistingSchema(sql, migrationsFolder) {
+  await ensureDrizzleMigrationsTracking(sql);
+  // Ensure our migration SQL (which uses unqualified table names) applies to the public schema.
+  await sql.unsafe('SET search_path TO public');
 
   const rows = await sql`select count(*)::int as count from "drizzle"."__drizzle_migrations"`;
   const count = Number(rows?.[0]?.count ?? 0);
@@ -97,6 +141,9 @@ async function main() {
   try {
     const db = drizzle(sql);
     console.log(`[migrate] Running migrations from: ${migrationsFolder}`);
+    await ensureDrizzleMigrationsTracking(sql);
+    // Ensure our migration SQL (which uses unqualified table names) applies to the public schema.
+    await sql.unsafe('SET search_path TO public');
     try {
       await migrate(db, { migrationsFolder });
       console.log("[migrate] Migrations complete");
