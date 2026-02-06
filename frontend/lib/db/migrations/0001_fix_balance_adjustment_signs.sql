@@ -3,6 +3,11 @@
 -- Description: Fix balance adjustment transactions that were stored with wrong sign.
 --              Debits should be negative, but they were stored as positive.
 
+-- Ensure required columns exist (older schemas / fresh installs).
+ALTER TABLE accounts
+  ADD COLUMN IF NOT EXISTS starting_balance numeric(15, 2) DEFAULT '0',
+  ADD COLUMN IF NOT EXISTS functional_balance numeric(15, 2);
+
 -- Step 1: Fix the specific balance adjustment transaction for ABN AMRO account
 -- This transaction was a debit of 1532.78 but stored as positive instead of negative
 UPDATE transactions
