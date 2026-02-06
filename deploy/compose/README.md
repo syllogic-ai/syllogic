@@ -19,6 +19,29 @@ This directory contains the production-grade Docker Compose bundle:
 docker compose --env-file deploy/compose/.env -f deploy/compose/docker-compose.yml up -d
 ```
 
+## Reusing Existing Dev `.env` Files (Optional)
+
+If you're running this stack from the repo and you already have local dev env files like:
+
+- `backend/.env`
+- `frontend/.env.local`
+
+…you can **layer** them into Compose using multiple `--env-file` flags.
+
+Tip: put `deploy/compose/.env` **last** so the Docker-friendly values (like `DATABASE_URL=...@postgres:5432/...`) win over any localhost URLs.
+
+Example (local build):
+
+```bash
+docker compose \
+  --env-file backend/.env \
+  --env-file frontend/.env.local \
+  --env-file deploy/compose/.env \
+  -f deploy/compose/docker-compose.yml \
+  -f deploy/compose/docker-compose.local.yml \
+  up -d --build
+```
+
 ## Notes
 
 - **Only web ports are exposed** by default: `HTTP_PORT` (80) and `HTTPS_PORT` (443).

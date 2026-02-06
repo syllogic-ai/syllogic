@@ -47,6 +47,15 @@ services:
       FRONTEND_URL: ${APP_URL}
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS}
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
+      # Optional integrations / features
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
+      PONTO_CLIENT_ID: ${PONTO_CLIENT_ID:-}
+      PONTO_CLIENT_SECRET: ${PONTO_CLIENT_SECRET:-}
+      PONTO_REDIRECT_URI: ${PONTO_REDIRECT_URI:-}
+      PONTO_SANDBOX: ${PONTO_SANDBOX:-}
+      KRAKEN_API_KEY: ${KRAKEN_API_KEY:-}
+      KRAKEN_PRIVATE_KEY: ${KRAKEN_PRIVATE_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -76,6 +85,15 @@ services:
       FRONTEND_URL: ${APP_URL}
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS}
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
+      # Optional integrations / features
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
+      PONTO_CLIENT_ID: ${PONTO_CLIENT_ID:-}
+      PONTO_CLIENT_SECRET: ${PONTO_CLIENT_SECRET:-}
+      PONTO_REDIRECT_URI: ${PONTO_REDIRECT_URI:-}
+      PONTO_SANDBOX: ${PONTO_SANDBOX:-}
+      KRAKEN_API_KEY: ${KRAKEN_API_KEY:-}
+      KRAKEN_PRIVATE_KEY: ${KRAKEN_PRIVATE_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -94,6 +112,15 @@ services:
       FRONTEND_URL: ${APP_URL}
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS}
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
+      # Optional integrations / features
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
+      PONTO_CLIENT_ID: ${PONTO_CLIENT_ID:-}
+      PONTO_CLIENT_SECRET: ${PONTO_CLIENT_SECRET:-}
+      PONTO_REDIRECT_URI: ${PONTO_REDIRECT_URI:-}
+      PONTO_SANDBOX: ${PONTO_SANDBOX:-}
+      KRAKEN_API_KEY: ${KRAKEN_API_KEY:-}
+      KRAKEN_PRIVATE_KEY: ${KRAKEN_PRIVATE_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -109,10 +136,14 @@ services:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
       BETTER_AUTH_URL: ${APP_URL}
+      NEXT_PUBLIC_BETTER_AUTH_URL: ${APP_URL}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env}
       BACKEND_URL: ${BACKEND_URL:-http://backend:8000}
       STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
       LOCAL_STORAGE_PATH: ${LOCAL_STORAGE_PATH:-uploads}
+      # Optional features
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LOGO_DEV_API_KEY: ${LOGO_DEV_API_KEY:-}
     volumes:
       - uploads_data:/app/public/uploads
     depends_on:
