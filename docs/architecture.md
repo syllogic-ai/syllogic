@@ -5,7 +5,7 @@
 A personal finance management platform with a **two-service architecture**:
 
 - **Frontend (Next.js)**: User interface, authentication, CRUD operations, analytics queries
-- **Backend (Python/FastAPI)**: Data pipeline for transaction fetching, enrichment, categorization, and ingestion
+- **Backend (Python/FastAPI)**: Data pipeline for transaction enrichment, categorization, and processing
 
 Both services share a single PostgreSQL database, with Drizzle ORM (frontend) as the source of truth for schema migrations.
 
@@ -33,7 +33,6 @@ flowchart TB
     
     subgraph backend [Python Backend - Data Pipeline]
         Cron[Cron Jobs / Celery Beat]
-        Fetch[GoCardless Fetcher]
         Enrich[Enrichment Service]
         Categorize[Categorization Engine]
         Reconcile[Reconciliation]
@@ -55,8 +54,7 @@ flowchart TB
     API --> Auth
     
     Cron --> Redis
-    Cron --> Fetch
-    Fetch --> Enrich
+    Cron --> Enrich
     Enrich --> Categorize
     Categorize --> Reconcile
     Reconcile --> Ingest
@@ -69,7 +67,7 @@ flowchart TB
 | Service | Responsibilities |
 |---------|------------------|
 | **Frontend** | UI rendering, user authentication, CRUD operations (accounts, transactions, categories), analytics queries, data visualization |
-| **Backend** | Cron jobs, bank transaction fetching (GoCardless), transaction enrichment, auto-categorization, reconciliation, data ingestion |
+| **Backend** | Cron jobs, transaction enrichment, auto-categorization, reconciliation, data processing |
 
 ---
 
@@ -102,7 +100,6 @@ flowchart TB
 | ORM | SQLAlchemy 2.0 | Reads/writes to shared schema |
 | Migrations | Drizzle (frontend) | Schema managed by Drizzle, SQLAlchemy mirrors it |
 | Job Queue | Celery + Redis | Scheduled tasks, background jobs |
-| Bank Integration | GoCardless (Nordigen) | Open banking API |
 
 ### 3.3 Infrastructure
 
@@ -246,19 +243,6 @@ CREATE TABLE categorization_rules (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- GoCardless connections (requisitions)
-CREATE TABLE bank_connections (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
-    institution_id VARCHAR(255) NOT NULL,
-    institution_name VARCHAR(255),
-    requisition_id VARCHAR(255) UNIQUE,
-    status VARCHAR(50), -- pending, linked, expired, revoked
-    agreement_id VARCHAR(255),
-    link TEXT, -- Authorization link
-    created_at TIMESTAMP DEFAULT NOW(),
-    expires_at TIMESTAMP
-);
 
 -- Indexes
 CREATE INDEX idx_transactions_user ON transactions(user_id);
@@ -335,8 +319,7 @@ frontend/
 │   │   └── category-badge.tsx      # Category pill
 │   │
 │   └── accounts/
-│       ├── account-card.tsx        # Account balance card
-│       └── connect-bank-button.tsx # GoCardless link flow
+│       └── account-card.tsx        # Account balance card
 │
 ├── lib/
 │   ├── db/
@@ -456,12 +439,11 @@ export async function updateTransactionCategory(
 
 The Python backend is a **data pipeline service** that handles:
 
-1. **Cron Jobs**: Scheduled transaction syncs
-2. **Bank Fetching**: GoCardless API integration
-3. **Enrichment**: Merchant name normalization, logo fetching
-4. **Categorization**: Rule-based and ML categorization
-5. **Reconciliation**: Deduplication, balance verification
-6. **Ingestion**: Writing processed data to PostgreSQL
+1. **Cron Jobs**: Scheduled data processing tasks
+2. **Enrichment**: Merchant name normalization, logo fetching
+3. **Categorization**: Rule-based and AI categorization
+4. **Reconciliation**: Deduplication, balance verification
+5. **Data Processing**: Processing and analyzing transaction data
 
 ### 6.2 Folder Structure
 
@@ -475,12 +457,7 @@ backend/
 │   │
 │   ├── integrations/
 │   │   ├── __init__.py
-│   │   ├── base.py                 # Abstract bank adapter
-│   │   └── gocardless/
-│   │       ├── __init__.py
-│   │       ├── client.py           # GoCardless API client
-│   │       ├── fetcher.py          # Transaction fetching
-│   │       └── mapper.py           # Data normalization
+│   │   └── base.py                 # Base integration interfaces
 │   │
 │   └── services/
 │       ├── __init__.py
@@ -510,21 +487,18 @@ backend/
 sequenceDiagram
     participant Cron as Celery Beat
     participant Worker as Celery Worker
-    participant GC as GoCardless API
     participant Enrich as Enrichment
     participant Cat as Categorizer
     participant DB as PostgreSQL
 
-    Cron->>Worker: Trigger sync_all_accounts
-    Worker->>DB: Get active bank connections
-    Worker->>GC: Fetch transactions
-    GC-->>Worker: Raw transactions
+    Cron->>Worker: Trigger data processing task
+    Worker->>DB: Get transactions to process
     Worker->>Enrich: Normalize & enrich
     Enrich-->>Worker: Enriched transactions
     Worker->>Cat: Apply categorization rules
     Cat-->>Worker: Categorized transactions
-    Worker->>DB: Upsert transactions (dedupe)
-    Worker->>DB: Update account balances
+    Worker->>DB: Update transactions
+    Worker->>DB: Update analytics
 ```
 
 ---
@@ -670,8 +644,7 @@ services:
     environment:
       DATABASE_URL: postgres://finance:finance_secret@postgres:5432/finance
       REDIS_URL: redis://redis:6379/0
-      GOCARDLESS_SECRET_ID: your-gocardless-id
-      GOCARDLESS_SECRET_KEY: your-gocardless-key
+      OPENAI_API_KEY: your-openai-key
     depends_on:
       postgres:
         condition: service_healthy
@@ -717,8 +690,7 @@ volumes:
 | `REDIS_URL` | Backend | Redis connection string |
 | `BETTER_AUTH_SECRET` | Frontend | Session encryption key |
 | `BETTER_AUTH_URL` | Frontend | App URL for callbacks |
-| `GOCARDLESS_SECRET_ID` | Backend | GoCardless API credentials |
-| `GOCARDLESS_SECRET_KEY` | Backend | GoCardless API credentials |
+| `OPENAI_API_KEY` | Backend | OpenAI API for categorization |
 
 ---
 
@@ -806,19 +778,17 @@ sequenceDiagram
 sequenceDiagram
     participant Beat as Celery Beat
     participant Worker as Celery Worker
-    participant GC as GoCardless
     participant SQLAlchemy
     participant DB as PostgreSQL
 
-    Beat->>Worker: sync_all_users (scheduled)
-    Worker->>DB: Get users with bank connections
-    loop For each user
-        Worker->>GC: Fetch transactions
+    Beat->>Worker: process_transactions (scheduled)
+    Worker->>DB: Get transactions to process
+    loop For each transaction
         Worker->>Worker: Enrich & categorize
-        Worker->>SQLAlchemy: Upsert transactions
-        SQLAlchemy->>DB: INSERT ON CONFLICT UPDATE
+        Worker->>SQLAlchemy: Update transaction
+        SQLAlchemy->>DB: UPDATE transaction
     end
-    Worker->>DB: Update last_synced_at
+    Worker->>DB: Update processing timestamp
 ```
 
 ### 10.3 User Categorizes Transaction
