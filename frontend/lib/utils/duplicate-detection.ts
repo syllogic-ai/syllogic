@@ -40,12 +40,13 @@ function stringSimilarity(str1: string, str2: string): number {
 
 /**
  * Check if two dates are on the same day
+ * Uses UTC to avoid timezone issues when comparing dates stored in UTC
  */
 function isSameDay(date1: Date, date2: Date): boolean {
   return (
-    date1.getFullYear() === date2.getFullYear() &&
-    date1.getMonth() === date2.getMonth() &&
-    date1.getDate() === date2.getDate()
+    date1.getUTCFullYear() === date2.getUTCFullYear() &&
+    date1.getUTCMonth() === date2.getUTCMonth() &&
+    date1.getUTCDate() === date2.getUTCDate()
   );
 }
 
@@ -76,7 +77,7 @@ export function detectDuplicates(
 
   for (const preview of previewTransactions) {
     const previewDate = new Date(preview.date);
-    const previewAmount = preview.amount;
+    const previewAmount = Math.abs(preview.amount); // Use absolute value for comparison
     const previewDescription = preview.description;
 
     for (const existing of existingTransactions) {
@@ -89,7 +90,7 @@ export function detectDuplicates(
         continue;
       }
 
-      // Check amount match
+      // Check amount match (compare absolute values)
       if (!amountsEqual(previewAmount, existingAmount)) {
         continue;
       }
@@ -153,6 +154,7 @@ export function createTransactionHash(
   date: Date
 ): string {
   const roundedAmount = Math.round(amount * 100);
-  const dateStr = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+  // Use UTC to avoid timezone issues
+  const dateStr = `${date.getUTCFullYear()}-${date.getUTCMonth()}-${date.getUTCDate()}`;
   return `${roundedAmount}:${dateStr}`;
 }
