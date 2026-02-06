@@ -44,6 +44,12 @@ jobs:
         python-version: '3.11'
         cache: 'pip'
 
+    - name: Set up pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: '10.22.0'
+        run_install: false
+
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
@@ -57,9 +63,6 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install httpx  # For API testing
-
-    - name: Enable corepack (pnpm)
-      run: corepack enable
 
     - name: Install frontend dependencies
       working-directory: ./frontend
