@@ -49,6 +49,22 @@ docker compose \
 - File uploads and CSV imports are stored in `public/uploads` and persisted via the `uploads_data` Docker volume.
 - This bundle defaults to **Postgres 16**. If you have an existing local Docker volume created by **Postgres 15**, you must dump/restore to upgrade (or temporarily set `POSTGRES_IMAGE=postgres:15-alpine` to keep running on 15).
 
+## Optional: MCP Server (Claude Desktop / Programmatic Access)
+
+This bundle includes an optional **MCP HTTP server** (FastMCP). It's disabled by default and only starts when you enable the `mcp` profile.
+
+1. Generate an API key in the app UI (Settings -> API Keys).
+2. Add it to `.env` as `PERSONAL_FINANCE_API_KEY=pf_...`.
+3. Start (or restart) with the profile enabled:
+
+```bash
+docker compose --profile mcp --env-file deploy/compose/.env -f deploy/compose/docker-compose.yml up -d
+```
+
+By default it binds to host port `8001` (override with `MCP_PORT`).
+
+Security note: the MCP service is currently best treated as **single-user** and should only be exposed to trusted networks (LAN/VPN), or protected by an auth layer.
+
 ## Making GHCR Images Public
 
 For truly one-click installs, the GHCR packages must be public:

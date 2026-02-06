@@ -76,6 +76,31 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # Optional MCP server (FastMCP) for Claude Desktop / programmatic access.
+  #
+  # Enabled only when the "mcp" profile is selected:
+  #   docker compose --profile mcp ...
+  mcp:
+    profiles: ["mcp"]
+    image: ghcr.io/syllogic-ai/personal-finance-backend:${APP_VERSION:-edge}
+    command: uvicorn mcp_server:app --host 0.0.0.0 --port 8001
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      # Provide a default API key for single-user setups (used when tool calls omit user_id).
+      # Generate/manage keys from the app UI: Settings -> API Keys.
+      PERSONAL_FINANCE_API_KEY: ${PERSONAL_FINANCE_API_KEY:-}
+      # Optional integrations / features
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "${MCP_PORT:-8001}:8001"
+    restart: unless-stopped
+
   worker:
     image: ghcr.io/syllogic-ai/personal-finance-backend:${APP_VERSION:-edge}
     command: celery -A celery_app worker --loglevel=info --concurrency=4
