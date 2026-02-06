@@ -1,22 +1,57 @@
-FROM python:3.11-slim
+# syntax=docker/dockerfile:1.7
+
+##
+# Backend (FastAPI + Celery) production image.
+# - Multi-stage build (keep build deps out of runtime)
+# - Non-root runtime user
+##
+
+FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-# Set Python path to include the app directory
-ENV PYTHONPATH=/app
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
+# Build deps (kept only in builder stage)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install Python dependencies
+# Create venv so we can copy it into the runtime image
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip \
+  && pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+
+FROM python:3.11-slim AS runner
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Runtime deps (libpq for Postgres connectivity)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /opt/venv /opt/venv
 COPY . .
 
-# Default command (can be overridden in docker-compose)
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Non-root user for production hardening
+RUN useradd --create-home --uid 10001 app \
+  && chown -R app:app /app
+USER app
+
+EXPOSE 8000
+
+# Default: production API server (can be overridden for celery worker/beat).
+# Bind to $PORT if set (Render), else default to 8000 (Compose/self-host).
+CMD ["sh", "-c", "gunicorn -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:${PORT:-8000} --workers 2 --timeout 120"]

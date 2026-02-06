@@ -1,0 +1,115 @@
+# Render Blueprints look for `render.yaml` at the repository root.
+# This file is kept in sync with `deploy/render/render.yaml`.
+
+databases:
+  - name: personal-finance-db
+    plan: basic-1gb
+    region: frankfurt
+    databaseName: finance_db
+    user: financeuser
+
+services:
+  - type: keyvalue
+    name: personal-finance-redis
+    plan: starter
+    region: frankfurt
+    ipAllowList: []
+
+  - type: pserv
+    name: personal-finance-backend
+    runtime: image
+    region: frankfurt
+    plan: starter
+    image:
+      url: ghcr.io/syllogic-ai/personal-finance-backend:edge
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: personal-finance-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: personal-finance-redis
+          type: keyvalue
+          property: connectionString
+      - key: API_DOCS_ENABLED
+        value: "false"
+
+  - type: worker
+    name: personal-finance-worker
+    runtime: image
+    region: frankfurt
+    plan: starter
+    image:
+      url: ghcr.io/syllogic-ai/personal-finance-backend:edge
+    dockerCommand:
+      - celery
+      - -A
+      - celery_app
+      - worker
+      - --loglevel=info
+      - --concurrency=4
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: personal-finance-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: personal-finance-redis
+          type: keyvalue
+          property: connectionString
+
+  - type: worker
+    name: personal-finance-beat
+    runtime: image
+    region: frankfurt
+    plan: starter
+    image:
+      url: ghcr.io/syllogic-ai/personal-finance-backend:edge
+    dockerCommand:
+      - celery
+      - -A
+      - celery_app
+      - beat
+      - --loglevel=info
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: personal-finance-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: personal-finance-redis
+          type: keyvalue
+          property: connectionString
+
+  - type: web
+    name: personal-finance-frontend
+    runtime: image
+    region: frankfurt
+    plan: starter
+    image:
+      url: ghcr.io/syllogic-ai/personal-finance-frontend:edge
+    healthCheckPath: /
+    preDeployCommand: node scripts/migrate.js
+    disk:
+      name: personal-finance-uploads
+      mountPath: /app/public/uploads
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: personal-finance-db
+          property: connectionString
+      - key: BETTER_AUTH_SECRET
+        generateValue: true
+      - key: BACKEND_URL
+        fromService:
+          name: personal-finance-backend
+          type: pserv
+          property: hostport
+      - key: STORAGE_PROVIDER
+        value: local
+      - key: LOCAL_STORAGE_PATH
+        value: uploads

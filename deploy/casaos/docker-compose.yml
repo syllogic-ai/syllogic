@@ -1,0 +1,127 @@
+name: personal-finance-app
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-financeuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-financepass}
+      POSTGRES_DB: ${POSTGRES_DB:-finance_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  migrate:
+    image: ghcr.io/syllogic-ai/personal-finance-frontend:${APP_VERSION:-edge}
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://financeuser:financepass@postgres:5432/finance_db}
+    depends_on:
+      - postgres
+    command: ["node", "scripts/migrate.js"]
+    restart: "no"
+
+  backend:
+    image: ghcr.io/syllogic-ai/personal-finance-backend:${APP_VERSION:-edge}
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://financeuser:financepass@postgres:5432/finance_db}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      FRONTEND_URL: ${APP_URL:-http://localhost:8080}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:8080}
+      API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
+    depends_on:
+      - postgres
+      - redis
+      - migrate
+    restart: unless-stopped
+
+  worker:
+    image: ghcr.io/syllogic-ai/personal-finance-backend:${APP_VERSION:-edge}
+    command: celery -A celery_app worker --loglevel=info --concurrency=4
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://financeuser:financepass@postgres:5432/finance_db}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    depends_on:
+      - postgres
+      - redis
+      - migrate
+    restart: unless-stopped
+
+  beat:
+    image: ghcr.io/syllogic-ai/personal-finance-backend:${APP_VERSION:-edge}
+    command: celery -A celery_app beat --loglevel=info
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://financeuser:financepass@postgres:5432/finance_db}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    depends_on:
+      - postgres
+      - redis
+      - migrate
+    restart: unless-stopped
+
+  frontend:
+    image: ghcr.io/syllogic-ai/personal-finance-frontend:${APP_VERSION:-edge}
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:-postgresql://financeuser:financepass@postgres:5432/finance_db}
+      BETTER_AUTH_URL: ${APP_URL:-http://localhost:8080}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-change-me}
+      BACKEND_URL: ${BACKEND_URL:-http://backend:8000}
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
+      LOCAL_STORAGE_PATH: ${LOCAL_STORAGE_PATH:-uploads}
+    volumes:
+      - uploads_data:/app/public/uploads
+    depends_on:
+      - migrate
+    restart: unless-stopped
+
+  # CasaOS typically runs on a local network; default to HTTP-only via Caddy.
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "8080:80"
+    environment:
+      CADDY_ADDRESS: ":80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+    x-casaos:
+      ports:
+        - container: "80"
+          description:
+            en_us: Web UI
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads_data:
+  caddy_data:
+  caddy_config:
+
+x-casaos:
+  architectures:
+    - amd64
+    - arm64
+  main: caddy
+  port_map: "8080"
+  title:
+    en_us: Personal Finance App
+  description:
+    en_us: Self-hosted personal finance management with a Next.js UI, FastAPI backend, and Postgres.
+  tagline:
+    en_us: Track spending, imports, balances, and analytics.
+  developer: syllogic-ai
+  author: syllogic-ai
+  category: Finance
+  website: https://github.com/syllogic-ai/personal-finance-app

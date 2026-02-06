@@ -1,0 +1,31 @@
+# Local development/testing override:
+# - Builds images from the local source instead of pulling from GHCR.
+#
+# Usage:
+#   docker compose --env-file deploy/compose/.env \
+#     -f deploy/compose/docker-compose.yml \
+#     -f deploy/compose/docker-compose.local.yml \
+#     up -d --build
+
+services:
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+
+  migrate:
+    # Use the locally-built frontend image; do not attempt to pull from GHCR.
+    pull_policy: never
+
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+
+  worker:
+    # Use the locally-built backend image; do not attempt to pull from GHCR.
+    pull_policy: never
+
+  beat:
+    # Use the locally-built backend image; do not attempt to pull from GHCR.
+    pull_policy: never

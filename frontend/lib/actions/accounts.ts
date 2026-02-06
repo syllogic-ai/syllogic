@@ -5,6 +5,7 @@ import { eq, and, lte, gte, lt, desc, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { accounts, accountBalances, transactions, type NewAccount } from "@/lib/db/schema";
 import { requireAuth } from "@/lib/auth-helpers";
+import { getBackendBaseUrl } from "@/lib/backend-url";
 
 export interface CreateAccountInput {
   name: string;
@@ -245,7 +246,7 @@ export async function recalculateStartingBalance(
 
     // Trigger backend timeseries recalculation
     try {
-      const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
+      const backendUrl = getBackendBaseUrl();
       await fetch(`${backendUrl}/api/accounts/${accountId}/recalculate-timeseries?user_id=${userId}`, {
         method: "POST",
       });
@@ -495,7 +496,7 @@ export async function recalculateAccountTimeseries(
     }
 
     // Call backend to recalculate timeseries
-    const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
+    const backendUrl = getBackendBaseUrl();
     const response = await fetch(`${backendUrl}/api/accounts/${accountId}/recalculate-timeseries?user_id=${userId}`, {
       method: "POST",
       headers: {

@@ -1,0 +1,12 @@
+{$CADDY_ADDRESS} {
+	encode zstd gzip
+
+	@auth path /api/auth/*
+	reverse_proxy @auth frontend:3000
+
+	@api path /api/*
+	reverse_proxy @api backend:8000
+
+	reverse_proxy frontend:3000
+}
+

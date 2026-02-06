@@ -27,7 +27,11 @@ export const auth = betterAuth({
       maxAge: 5 * 60, // 5 minutes
     },
   },
-  trustedOrigins: [process.env.BETTER_AUTH_URL || "http://localhost:3000"],
+  trustedOrigins: [
+    process.env.BETTER_AUTH_URL ||
+      process.env.RENDER_EXTERNAL_URL ||
+      "http://localhost:3000",
+  ],
 });
 
 export type Session = typeof auth.$Infer.Session;

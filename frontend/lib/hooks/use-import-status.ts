@@ -154,8 +154,17 @@ export function useImportStatus(
       return;
     }
 
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
-    const url = `${backendUrl}/api/events/import-status/${userId}/${importId}`;
+    // Production default is same-origin (`/api/...`) so Docker/Reverse-proxy installs
+    // don't require baking NEXT_PUBLIC_* values into the build.
+    // In local dev (Next :3000 + backend :8000), default to localhost:8000 for convenience.
+    const backendBase =
+      process.env.NODE_ENV === "development"
+        ? process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"
+        : process.env.NEXT_PUBLIC_BACKEND_URL || "";
+
+    const url = backendBase
+      ? `${backendBase}/api/events/import-status/${userId}/${importId}`
+      : `/api/events/import-status/${userId}/${importId}`;
 
     const eventSource = new EventSource(url);
     eventSourceRef.current = eventSource;

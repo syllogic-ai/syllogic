@@ -5,6 +5,7 @@ import { eq, and, desc, inArray, sql, gte, lte, gt, asc, ne } from "drizzle-orm"
 import { db } from "@/lib/db";
 import { transactions, accounts, categories, accountBalances, type NewTransaction } from "@/lib/db/schema";
 import { requireAuth } from "@/lib/auth-helpers";
+import { getBackendBaseUrl } from "@/lib/backend-url";
 
 export interface CreateTransactionInput {
   accountId: string;
@@ -195,7 +196,7 @@ export async function createTransaction(
 
   try {
     // Call backend API to import the transaction
-    const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
+    const backendUrl = getBackendBaseUrl();
 
     const response = await fetch(`${backendUrl}/api/transactions/import`, {
       method: "POST",
@@ -384,59 +385,71 @@ export async function getTransactions(): Promise<TransactionWithRelations[]> {
       },
     });
 
-    return result.map((tx) => ({
-      id: tx.id,
-      accountId: tx.accountId,
-      account: tx.account
-        ? {
+    // Transactions should always have an account (FK w/ cascade), but Drizzle's
+    // relation typing can still be nullable. Enforce non-null at runtime.
+    return result
+      .map((tx) => {
+        if (!tx.account) {
+          console.warn("[getTransactions] Transaction missing account relation", {
+            transactionId: tx.id,
+            accountId: tx.accountId,
+          });
+          return null;
+        }
+
+        return {
+          id: tx.id,
+          accountId: tx.accountId,
+          account: {
             id: tx.account.id,
             name: tx.account.name,
             institution: tx.account.institution,
             accountType: tx.account.accountType,
-          }
-        : null,
-    description: tx.description,
-    merchant: tx.merchant,
-    amount: parseFloat(tx.amount),
-    currency: tx.currency,
-    categoryId: tx.categoryId,
-    category: tx.category
-      ? {
-          id: tx.category.id,
-          name: tx.category.name,
-          color: tx.category.color,
-          icon: tx.category.icon,
-        }
-      : null,
-    categorySystemId: tx.categorySystemId,
-    categorySystem: tx.categorySystem
-      ? {
-          id: tx.categorySystem.id,
-          name: tx.categorySystem.name,
-          color: tx.categorySystem.color,
-          icon: tx.categorySystem.icon,
-        }
-      : null,
-    recurringTransactionId: tx.recurringTransactionId,
-    recurringTransaction: tx.recurringTransaction
-      ? {
-          id: tx.recurringTransaction.id,
-          name: tx.recurringTransaction.name,
-          merchant: tx.recurringTransaction.merchant,
-          frequency: tx.recurringTransaction.frequency,
-        }
-      : null,
-    transactionLink: tx.transactionLink
-      ? {
-          groupId: tx.transactionLink.groupId,
-          linkRole: tx.transactionLink.linkRole,
-        }
-      : null,
-    bookedAt: tx.bookedAt,
-    pending: tx.pending,
-    transactionType: tx.transactionType,
-    includeInAnalytics: tx.includeInAnalytics,
-  }));
+          },
+          description: tx.description,
+          merchant: tx.merchant,
+          amount: parseFloat(tx.amount),
+          currency: tx.currency,
+          categoryId: tx.categoryId,
+          category: tx.category
+            ? {
+                id: tx.category.id,
+                name: tx.category.name,
+                color: tx.category.color,
+                icon: tx.category.icon,
+              }
+            : null,
+          categorySystemId: tx.categorySystemId,
+          categorySystem: tx.categorySystem
+            ? {
+                id: tx.categorySystem.id,
+                name: tx.categorySystem.name,
+                color: tx.categorySystem.color,
+                icon: tx.categorySystem.icon,
+              }
+            : null,
+          recurringTransactionId: tx.recurringTransactionId,
+          recurringTransaction: tx.recurringTransaction
+            ? {
+                id: tx.recurringTransaction.id,
+                name: tx.recurringTransaction.name,
+                merchant: tx.recurringTransaction.merchant,
+                frequency: tx.recurringTransaction.frequency,
+              }
+            : null,
+          transactionLink: tx.transactionLink
+            ? {
+                groupId: tx.transactionLink.groupId,
+                linkRole: tx.transactionLink.linkRole,
+              }
+            : null,
+          bookedAt: tx.bookedAt,
+          pending: tx.pending,
+          transactionType: tx.transactionType,
+          includeInAnalytics: tx.includeInAnalytics,
+        };
+      })
+      .filter((tx): tx is TransactionWithRelations => tx !== null);
   } catch (error: any) {
     console.error("[getTransactions] Query failed:", {
       error: error?.message || String(error),
@@ -486,59 +499,69 @@ export async function getTransactionsForAccount(
       },
     });
 
-    return result.map((tx) => ({
-      id: tx.id,
-      accountId: tx.accountId,
-      account: tx.account
-        ? {
+    return result
+      .map((tx) => {
+        if (!tx.account) {
+          console.warn("[getTransactionsForAccount] Transaction missing account relation", {
+            transactionId: tx.id,
+            accountId: tx.accountId,
+          });
+          return null;
+        }
+
+        return {
+          id: tx.id,
+          accountId: tx.accountId,
+          account: {
             id: tx.account.id,
             name: tx.account.name,
             institution: tx.account.institution,
             accountType: tx.account.accountType,
-          }
-        : null,
-    description: tx.description,
-    merchant: tx.merchant,
-    amount: parseFloat(tx.amount),
-    currency: tx.currency,
-    categoryId: tx.categoryId,
-    category: tx.category
-      ? {
-          id: tx.category.id,
-          name: tx.category.name,
-          color: tx.category.color,
-          icon: tx.category.icon,
-        }
-      : null,
-    categorySystemId: tx.categorySystemId,
-    categorySystem: tx.categorySystem
-      ? {
-          id: tx.categorySystem.id,
-          name: tx.categorySystem.name,
-          color: tx.categorySystem.color,
-          icon: tx.categorySystem.icon,
-        }
-      : null,
-    recurringTransactionId: tx.recurringTransactionId,
-    recurringTransaction: tx.recurringTransaction
-      ? {
-          id: tx.recurringTransaction.id,
-          name: tx.recurringTransaction.name,
-          merchant: tx.recurringTransaction.merchant,
-          frequency: tx.recurringTransaction.frequency,
-        }
-      : null,
-    transactionLink: tx.transactionLink
-      ? {
-          groupId: tx.transactionLink.groupId,
-          linkRole: tx.transactionLink.linkRole,
-        }
-      : null,
-    bookedAt: tx.bookedAt,
-    pending: tx.pending,
-    transactionType: tx.transactionType,
-    includeInAnalytics: tx.includeInAnalytics,
-  }));
+          },
+          description: tx.description,
+          merchant: tx.merchant,
+          amount: parseFloat(tx.amount),
+          currency: tx.currency,
+          categoryId: tx.categoryId,
+          category: tx.category
+            ? {
+                id: tx.category.id,
+                name: tx.category.name,
+                color: tx.category.color,
+                icon: tx.category.icon,
+              }
+            : null,
+          categorySystemId: tx.categorySystemId,
+          categorySystem: tx.categorySystem
+            ? {
+                id: tx.categorySystem.id,
+                name: tx.categorySystem.name,
+                color: tx.categorySystem.color,
+                icon: tx.categorySystem.icon,
+              }
+            : null,
+          recurringTransactionId: tx.recurringTransactionId,
+          recurringTransaction: tx.recurringTransaction
+            ? {
+                id: tx.recurringTransaction.id,
+                name: tx.recurringTransaction.name,
+                merchant: tx.recurringTransaction.merchant,
+                frequency: tx.recurringTransaction.frequency,
+              }
+            : null,
+          transactionLink: tx.transactionLink
+            ? {
+                groupId: tx.transactionLink.groupId,
+                linkRole: tx.transactionLink.linkRole,
+              }
+            : null,
+          bookedAt: tx.bookedAt,
+          pending: tx.pending,
+          transactionType: tx.transactionType,
+          includeInAnalytics: tx.includeInAnalytics,
+        };
+      })
+      .filter((tx): tx is TransactionWithRelations => tx !== null);
   } catch (error: any) {
     console.error("[getTransactionsForAccount] Query failed:", {
       error: error?.message || String(error),

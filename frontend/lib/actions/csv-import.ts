@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { csvImports, accounts, transactions, type NewTransaction } from "@/lib/db/schema";
 import { getAuthenticatedSession, requireAuth } from "@/lib/auth-helpers";
 import { storage } from "@/lib/storage";
+import { getBackendBaseUrl } from "@/lib/backend-url";
 import { detectDuplicates, markDuplicates } from "@/lib/utils/duplicate-detection";
 import OpenAI from "openai";
 
@@ -1090,7 +1091,7 @@ export async function finalizeImport(
     // Batch the transactions to avoid request timeouts and large payload issues
     // For large imports (>500 transactions), split into batches
     const BATCH_SIZE = 500;
-    const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
+    const backendUrl = getBackendBaseUrl();
 
     let totalImported = 0;
     let aggregatedCategorizationSummary: BackendTransactionImportResponse["categorization_summary"] = null;
@@ -1313,7 +1314,7 @@ export async function enqueueBackgroundImport(
     });
 
     // Build enqueue request
-    const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
+    const backendUrl = getBackendBaseUrl();
     const enqueueRequest = {
       csv_import_id: importId,
       user_id: session.user.id,

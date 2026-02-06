@@ -52,6 +52,8 @@ yarn-error.log*
 .env.local
 .env.*.local
 .env*
+!.env.example
+!**/.env.example
 
 # Docker
 postgres_data/

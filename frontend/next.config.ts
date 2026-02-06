@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Required for production Docker images (small runtime image).
+  output: "standalone",
   // Reduce cache times in development to prevent stale data issues
   experimental: {
     staleTimes: {

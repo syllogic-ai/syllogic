@@ -5,8 +5,9 @@ import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { bankConnections, accounts } from "@/lib/db/schema";
 import { requireAuth } from "@/lib/auth-helpers";
+import { getBackendBaseUrl } from "@/lib/backend-url";
 
-const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
+const BACKEND_URL = getBackendBaseUrl();
 
 export interface BankConnection {
   id: string;

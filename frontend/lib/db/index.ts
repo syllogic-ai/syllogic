@@ -8,6 +8,8 @@ if (!connectionString) {
   throw new Error("DATABASE_URL environment variable is not set");
 }
 
+const sslRequired = /sslmode=require/i.test(connectionString) || /ssl=true/i.test(connectionString);
+
 // Configure connection pooling to prevent "too many clients" errors
 // In Next.js serverless functions, we need to limit connections and reuse them
 const client = postgres(connectionString, {
@@ -33,6 +35,8 @@ const client = postgres(connectionString, {
   transform: {
     undefined: null,
   },
+
+  ...(sslRequired ? { ssl: "require" } : {}),
 });
 
 // Gracefully close connections on process exit
