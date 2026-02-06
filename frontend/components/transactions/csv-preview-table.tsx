@@ -155,7 +155,7 @@ export function CsvPreviewTable({
             </td>
             <td className="whitespace-nowrap px-4 py-3 text-right font-mono">
               {tx.transactionType === "credit" ? "+" : "-"}
-              {tx.amount.toFixed(2)}
+              {Math.abs(tx.amount).toFixed(2)}
             </td>
           </tr>
         ))}

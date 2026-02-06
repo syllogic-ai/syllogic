@@ -26,20 +26,37 @@ export async function getOnboardingStatus(): Promise<OnboardingStatusResult | nu
     return null;
   }
 
-  const user = await db.query.users.findFirst({
-    where: eq(users.id, userId),
-  });
+  try {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+    });
 
-  if (!user) {
-    return null;
+    if (!user) {
+      console.warn(`[Onboarding] User not found: ${userId}`);
+      return null;
+    }
+
+    const status = (user.onboardingStatus as OnboardingStatus) || "pending";
+
+    return {
+      status,
+      isCompleted: status === "completed",
+    };
+  } catch (error: any) {
+    // Log detailed error information
+    console.error("[Onboarding] Failed to get onboarding status:", {
+      error: error?.message || String(error),
+      stack: error?.stack,
+      userId,
+      databaseUrl: process.env.DATABASE_URL ? "set" : "not set",
+    });
+    
+    // Return default status on error to prevent app crash
+    return {
+      status: "pending",
+      isCompleted: false,
+    };
   }
-
-  const status = (user.onboardingStatus as OnboardingStatus) || "pending";
-
-  return {
-    status,
-    isCompleted: status === "completed",
-  };
 }
 
 /**
