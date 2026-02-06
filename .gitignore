@@ -64,3 +64,8 @@ postgres_data/
 
 # User uploads (frontend)
 frontend/public/uploads/
+
+# Claude / MCP local configs
+.claude/settings.local.json
+backend/claude_desktop_config.json
+backend/fastmcp.json
