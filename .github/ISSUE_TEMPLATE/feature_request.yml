@@ -2,7 +2,6 @@ name: ✨ Feature Request
 description: Suggest an idea for this project
 title: "[FEATURE] "
 labels: enhancement
-assignees: ''
 
 body:
   - type: markdown
@@ -15,25 +14,21 @@ body:
     attributes:
       label: Summary
       placeholder: A clear and concise description of what the feature should do.
-      required: true
 
   - type: textarea
     id: motivation
     attributes:
       label: Motivation
       description: Why is this feature needed? What problem does it solve?
-      required: true
 
   - type: textarea
     id: alternatives
     attributes:
       label: Alternatives considered
       description: Other solutions you tried or considered
-      required: false
 
   - type: textarea
     id: additional
     attributes:
       label: Additional context
       placeholder: Add any other context or screenshots about the feature request here.
-      required: false
