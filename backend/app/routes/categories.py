@@ -176,7 +176,9 @@ def get_category_stats(
 
 @router.post("/categorize", response_model=CategorizeTransactionResponse)
 def categorize_transaction(
-    request: CategorizeTransactionRequest, db: Session = Depends(get_db)
+    request: CategorizeTransactionRequest, 
+    db: Session = Depends(get_db),
+    user_id: Optional[str] = None
 ):
     """
     Categorize a single transaction.
@@ -211,7 +213,7 @@ def categorize_transaction(
         if request.user_overrides:
             user_overrides_dict = [override.model_dump() for override in request.user_overrides]
         
-        user_id = get_user_id()
+        user_id = get_user_id(user_id)
         matcher = CategoryMatcher(
             db,
             user_id=user_id,
