@@ -1,3 +1,3 @@
 """
-MCP tools for the Personal Finance App.
+MCP tools for Syllogic.
 """

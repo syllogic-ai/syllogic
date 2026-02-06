@@ -10,8 +10,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Personal Finance App",
-  description: "Track your personal finances with ease",
+  title: "Syllogic",
+  description: "Personal finance tracking, imports, and analytics",
 };
 
 export default function RootLayout({

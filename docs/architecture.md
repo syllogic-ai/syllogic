@@ -1,4 +1,4 @@
-# Personal Finance App - Architecture
+# Syllogic - Architecture
 
 ## 1. Overview
 

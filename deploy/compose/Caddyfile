@@ -3,12 +3,12 @@
 
 	# BetterAuth lives in the Next.js app (do not send to backend).
 	@auth path /api/auth/*
-	reverse_proxy @auth frontend:3000
+	reverse_proxy @auth app:3000
 
 	# All other /api/* routes belong to the FastAPI backend.
 	@api path /api/*
 	reverse_proxy @api backend:8000
 
 	# Everything else goes to Next.js.
-	reverse_proxy frontend:3000
+	reverse_proxy app:3000
 }

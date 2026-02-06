@@ -1,1 +1,1 @@
-# Personal Finance App Backend
+# Syllogic Backend

@@ -1,4 +1,4 @@
-# Personal Finance App - Agent Instructions
+# Syllogic - Agent Instructions
 
 ## Project Overview
 

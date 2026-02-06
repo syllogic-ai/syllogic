@@ -1,5 +1,5 @@
 """
-MCP (Model Context Protocol) server for the Personal Finance App.
+MCP (Model Context Protocol) server for Syllogic.
 Provides read-only access to financial data with one write operation (update transaction category).
 
 Usage:

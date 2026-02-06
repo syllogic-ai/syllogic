@@ -5,7 +5,7 @@ This directory contains the production-grade Docker Compose bundle:
 - PostgreSQL 16
 - Redis 7
 - FastAPI backend + Celery worker/beat
-- Next.js frontend
+- Next.js app
 - Caddy reverse proxy (TLS by default)
 - One-shot Drizzle migration job (runs on deploy/boot)
 
@@ -48,6 +48,7 @@ docker compose \
 - DB migrations run automatically via the `migrate` service. They are idempotent.
 - File uploads and CSV imports are stored in `public/uploads` and persisted via the `uploads_data` Docker volume.
 - This bundle defaults to **Postgres 16**. If you have an existing local Docker volume created by **Postgres 15**, you must dump/restore to upgrade (or temporarily set `POSTGRES_IMAGE=postgres:15-alpine` to keep running on 15).
+- We set explicit `container_name` values to avoid the `*-1` suffix. This makes container names stable, but it also means you **cannot** scale services with `--scale`, and you shouldn't run multiple Syllogic stacks on the same Docker host without changing names.
 
 ## Optional: MCP Server (Claude Desktop / Programmatic Access)
 

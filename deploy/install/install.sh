@@ -15,7 +15,7 @@ if [[ -z "$VERSION" ]]; then
   exit 1
 fi
 
-INSTALL_DIR="/opt/personal-finance-app"
+INSTALL_DIR="/opt/syllogic"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 

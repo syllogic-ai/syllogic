@@ -47,8 +47,8 @@ if _env_bool("AUTO_CREATE_TABLES", default=False):
     Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
-    title="Personal Finance API",
-    description="API for personal finance management",
+    title="Syllogic API",
+    description="API for Syllogic (personal finance management)",
     version="0.1.0",
     docs_url="/docs" if _env_bool("API_DOCS_ENABLED", default=False) else None,
     redoc_url="/redoc" if _env_bool("API_DOCS_ENABLED", default=False) else None,
@@ -69,7 +69,7 @@ app.include_router(api_router, prefix="/api")
 
 @app.get("/")
 def root():
-    payload = {"message": "Personal Finance API"}
+    payload = {"message": "Syllogic API"}
     if _env_bool("API_DOCS_ENABLED", default=False):
         payload["docs"] = "/docs"
     return payload

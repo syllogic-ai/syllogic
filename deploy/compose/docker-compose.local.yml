@@ -8,7 +8,7 @@
 #     up -d --build
 
 services:
-  frontend:
+  app:
     build:
       context: ../../frontend
       dockerfile: Dockerfile

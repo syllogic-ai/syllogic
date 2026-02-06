@@ -1,8 +1,9 @@
-name: personal-finance-app
+name: syllogic
 
 services:
   postgres:
     image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    container_name: syllogic-postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-financeuser}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
@@ -18,6 +19,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    container_name: syllogic-redis
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
@@ -31,6 +33,7 @@ services:
   # One-shot DB migrations (Drizzle SQL migrations).
   migrate:
     image: ghcr.io/syllogic-ai/personal-finance-frontend:${APP_VERSION:-edge}
+    container_name: syllogic-migrate
     environment:
       DATABASE_URL: ${DATABASE_URL}
     depends_on:
@@ -41,6 +44,7 @@ services:
 
   backend:
     image: ghcr.io/syllogic-ai/personal-finance-backend:${APP_VERSION:-edge}
+    container_name: syllogic-backend
     environment:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
@@ -83,6 +87,7 @@ services:
   mcp:
     profiles: ["mcp"]
     image: ghcr.io/syllogic-ai/personal-finance-backend:${APP_VERSION:-edge}
+    container_name: syllogic-mcp
     command: uvicorn mcp_server:app --host 0.0.0.0 --port 8001
     environment:
       DATABASE_URL: ${DATABASE_URL}
@@ -103,6 +108,7 @@ services:
 
   worker:
     image: ghcr.io/syllogic-ai/personal-finance-backend:${APP_VERSION:-edge}
+    container_name: syllogic-worker
     command: celery -A celery_app worker --loglevel=info --concurrency=4
     environment:
       DATABASE_URL: ${DATABASE_URL}
@@ -130,6 +136,7 @@ services:
 
   beat:
     image: ghcr.io/syllogic-ai/personal-finance-backend:${APP_VERSION:-edge}
+    container_name: syllogic-beat
     command: celery -A celery_app beat --loglevel=info
     environment:
       DATABASE_URL: ${DATABASE_URL}
@@ -155,8 +162,9 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
-  frontend:
+  app:
     image: ghcr.io/syllogic-ai/personal-finance-frontend:${APP_VERSION:-edge}
+    container_name: syllogic-app
     environment:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
@@ -189,6 +197,7 @@ services:
 
   caddy:
     image: caddy:2-alpine
+    container_name: syllogic-caddy
     ports:
       - "${HTTP_PORT:-80}:80"
       - "${HTTPS_PORT:-443}:443"
@@ -200,7 +209,7 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      frontend:
+      app:
         condition: service_healthy
       backend:
         condition: service_healthy

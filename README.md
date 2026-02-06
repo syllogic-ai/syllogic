@@ -1,6 +1,6 @@
-# Personal Finance App
+# Syllogic
 
-A modern, full-stack personal finance management platform for tracking savings, expenses, investments, and subscriptions with automated bank synchronization.
+Syllogic is a modern, full-stack personal finance management platform for tracking savings, expenses, investments, and subscriptions with automated bank synchronization.
 
 ## What it does
 

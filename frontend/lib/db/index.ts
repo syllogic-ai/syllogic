@@ -20,7 +20,7 @@ const client = postgres(connectionString, {
   
   // Connection settings
   connection: {
-    application_name: "personal-finance-app-frontend",
+    application_name: "syllogic-frontend",
   },
   
   // Error handling

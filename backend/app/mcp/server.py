@@ -1,5 +1,5 @@
 """
-Main FastMCP server setup for the Personal Finance App.
+Main FastMCP server setup for Syllogic.
 Registers all tools from the tools modules.
 """
 from fastmcp import FastMCP
@@ -9,9 +9,9 @@ from app.mcp.tools import accounts, categories, transactions, analytics, recurri
 
 # Initialize FastMCP server
 mcp = FastMCP(
-    name="Personal Finance MCP",
+    name="Syllogic MCP",
     instructions="""
-Personal Finance MCP Server - Access financial data and manage transactions.
+Syllogic MCP Server - Access financial data and manage transactions.
 
 The `user_id` parameter is optional on all tools - it defaults to the configured user.
 You can omit it for single-user setups.
