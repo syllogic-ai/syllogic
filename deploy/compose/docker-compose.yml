@@ -54,12 +54,6 @@ services:
       # Optional integrations / features
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
-      PONTO_CLIENT_ID: ${PONTO_CLIENT_ID:-}
-      PONTO_CLIENT_SECRET: ${PONTO_CLIENT_SECRET:-}
-      PONTO_REDIRECT_URI: ${PONTO_REDIRECT_URI:-}
-      PONTO_SANDBOX: ${PONTO_SANDBOX:-}
-      KRAKEN_API_KEY: ${KRAKEN_API_KEY:-}
-      KRAKEN_PRIVATE_KEY: ${KRAKEN_PRIVATE_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -117,12 +111,6 @@ services:
       # Optional integrations / features
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
-      PONTO_CLIENT_ID: ${PONTO_CLIENT_ID:-}
-      PONTO_CLIENT_SECRET: ${PONTO_CLIENT_SECRET:-}
-      PONTO_REDIRECT_URI: ${PONTO_REDIRECT_URI:-}
-      PONTO_SANDBOX: ${PONTO_SANDBOX:-}
-      KRAKEN_API_KEY: ${KRAKEN_API_KEY:-}
-      KRAKEN_PRIVATE_KEY: ${KRAKEN_PRIVATE_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -145,12 +133,6 @@ services:
       # Optional integrations / features
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
-      PONTO_CLIENT_ID: ${PONTO_CLIENT_ID:-}
-      PONTO_CLIENT_SECRET: ${PONTO_CLIENT_SECRET:-}
-      PONTO_REDIRECT_URI: ${PONTO_REDIRECT_URI:-}
-      PONTO_SANDBOX: ${PONTO_SANDBOX:-}
-      KRAKEN_API_KEY: ${KRAKEN_API_KEY:-}
-      KRAKEN_PRIVATE_KEY: ${KRAKEN_PRIVATE_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
