@@ -41,6 +41,8 @@ const horizonOptions: { value: Horizon; label: string; description: string }[] =
   { value: "ALL", label: "ALL", description: "All time" },
 ];
 
+const horizonValueSet = new Set<Horizon>(horizonOptions.map((option) => option.value));
+
 // Get appropriate date format based on the data range
 function getDateFormat(startDate: Date, endDate: Date): string {
   const days = differenceInDays(endDate, startDate);
@@ -63,6 +65,7 @@ function getDateFormat(startDate: Date, endDate: Date): string {
 interface AccountBalanceChartProps {
   data: BalanceHistoryPoint[];
   currency: string;
+  storageKey?: string;
 }
 
 const chartConfig = {
@@ -97,12 +100,39 @@ function getHorizonCutoffDate(horizon: Horizon): Date | null {
 export function AccountBalanceChart({
   data,
   currency,
+  storageKey,
 }: AccountBalanceChartProps) {
   const chartRef = useRef<HTMLDivElement>(null);
   const [axis, setAxis] = useState(0);
   const [isInitialized, setIsInitialized] = useState(false);
   const [currentDate, setCurrentDate] = useState<string | null>(null);
   const [horizon, setHorizon] = useState<Horizon>("90D");
+  const skipPersistRef = useRef(true);
+
+  useEffect(() => {
+    if (!storageKey) return;
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored && horizonValueSet.has(stored as Horizon)) {
+        setHorizon(stored as Horizon);
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (!storageKey) return;
+    if (skipPersistRef.current) {
+      skipPersistRef.current = false;
+      return;
+    }
+    try {
+      localStorage.setItem(storageKey, horizon);
+    } catch {
+      // Ignore storage errors
+    }
+  }, [storageKey, horizon]);
 
   const { chartData, dateFormat, yearTicks } = useMemo(() => {
     if (data.length === 0) {

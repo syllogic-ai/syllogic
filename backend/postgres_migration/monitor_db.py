@@ -19,7 +19,7 @@ from sqlalchemy import text
 from app.database import SessionLocal, engine
 from app.models import (
     User, Account, Category, Transaction,
-    CategorizationRule, BankConnection, ExchangeRate, AuthAccount, AccountBalance,
+    CategorizationRule, ExchangeRate, AuthAccount, AccountBalance,
     RecurringTransaction, SubscriptionSuggestion
 )
 from datetime import datetime, timedelta
@@ -112,7 +112,7 @@ def get_table_stats():
     try:
         with engine.connect() as conn:
             tables = ['users', 'auth_accounts', 'accounts', 'categories', 'transactions',
-                     'categorization_rules', 'bank_connections', 'exchange_rates', 'account_balances',
+                     'categorization_rules', 'exchange_rates', 'account_balances',
                      'recurring_transactions', 'subscription_suggestions']
             
             for table in tables:
@@ -162,14 +162,13 @@ st.title("📊 Database Monitor")
 st.markdown("Monitor and explore your database tables")
 
 # Create tabs
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
     "👥 Users",
     "🔐 Auth Accounts",
     "💳 Accounts",
     "📁 Categories",
     "💰 Transactions",
     "🎯 Categorization Rules",
-    "🏦 Bank Connections",
     "💱 Exchange Rates",
     "📈 Account Balances",
     "🔄 Recurring Transactions",
@@ -687,49 +686,8 @@ with tab6:
     else:
         st.info("No categorization rules found in the database.")
 
-# Tab 7: Bank Connections
+# Tab 7: Exchange Rates
 with tab7:
-    st.header("Bank Connections Table")
-    
-    col1, col2, col3 = st.columns([2, 2, 1])
-    with col1:
-        st.markdown(f"**Total Connections:** {stats.get('bank_connections', 0)}")
-    with col2:
-        user_filter = st.selectbox(
-            "Filter by User:",
-            ["All"] + (df_users['id'].tolist() if not df_users.empty else []),
-            key="connection_user_filter"
-        )
-    with col3:
-        if st.button("🔄 Refresh", key="refresh_connections"):
-            ensure_clean_session()
-            st.rerun()
-    
-    filters = {}
-    if user_filter != "All":
-        filters['user_id'] = user_filter
-    
-    df_connections = get_table_data(BankConnection, filters)
-    
-    if not df_connections.empty:
-        # Status summary
-        if 'status' in df_connections.columns:
-            status_counts = df_connections['status'].value_counts()
-            cols = st.columns(len(status_counts))
-            for idx, (status, count) in enumerate(status_counts.items()):
-                with cols[idx]:
-                    st.metric(f"{status.title()}", count)
-        
-        st.dataframe(
-            df_connections,
-            width='stretch',
-            hide_index=True
-        )
-    else:
-        st.info("No bank connections found in the database.")
-
-# Tab 8: Exchange Rates
-with tab8:
     st.header("Exchange Rates Table")
     
     col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
@@ -836,8 +794,8 @@ with tab8:
         or manually via the `/api/exchange-rates/sync` endpoint.
         """)
 
-# Tab 9: Account Balances
-with tab9:
+# Tab 8: Account Balances
+with tab8:
     st.header("Account Balances Table")
 
     col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
@@ -1011,8 +969,8 @@ with tab9:
         via the `/api/transactions/import` endpoint with `calculate_balances=true`.
         """)
 
-# Tab 10: Recurring Transactions
-with tab10:
+# Tab 9: Recurring Transactions
+with tab9:
     st.header("Recurring Transactions Table")
     
     col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
@@ -1167,8 +1125,8 @@ with tab10:
     else:
         st.info("No recurring transactions found in the database.")
 
-# Tab 11: Subscription Suggestions
-with tab11:
+# Tab 10: Subscription Suggestions
+with tab10:
     st.header("Subscription Suggestions Table")
 
     col1, col2, col3, col4 = st.columns([2, 2, 2, 1])

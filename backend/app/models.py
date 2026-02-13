@@ -197,36 +197,6 @@ class CategorizationRule(Base):
     category = relationship("Category", back_populates="categorization_rules")
 
 
-class BankConnection(Base):
-    """
-    Bank connections model matching Drizzle schema.
-    Stores GoCardless/Nordigen/Ponto bank connection information.
-    """
-    __tablename__ = "bank_connections"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    institution_id = Column(String(255), nullable=False)
-    institution_name = Column(String(255))
-    requisition_id = Column(String(255), unique=True)
-    status = Column(String(50))  # pending, linked, expired, revoked
-    agreement_id = Column(String(255))
-    link = Column(Text)  # Authorization link
-    provider = Column(String(50), nullable=True)  # gocardless, ponto, etc.
-    sync_status = Column(String(50), nullable=True)  # syncing, synced, failed, idle
-    last_synced_at = Column(DateTime, nullable=True)
-    error_message = Column(Text, nullable=True)
-    # Ponto-specific fields
-    organization_id = Column(String(255), nullable=True)  # Ponto organization ID
-    access_token = Column(Text, nullable=True)  # Encrypted Ponto access token
-    refresh_token = Column(Text, nullable=True)  # Encrypted Ponto refresh token
-    access_token_expires_at = Column(DateTime, nullable=True)  # Token expiry
-    created_at = Column(DateTime, default=datetime.utcnow)
-    expires_at = Column(DateTime, nullable=True)
-
-    # Relationships
-    user = relationship("User", back_populates="bank_connections")
-
 
 class CsvImport(Base):
     """
@@ -556,7 +526,6 @@ class User(Base):
     transactions = relationship("Transaction", back_populates="user", cascade="all, delete-orphan")
     recurring_transactions = relationship("RecurringTransaction", back_populates="user", cascade="all, delete-orphan")
     categorization_rules = relationship("CategorizationRule", back_populates="user", cascade="all, delete-orphan")
-    bank_connections = relationship("BankConnection", back_populates="user", cascade="all, delete-orphan")
     csv_imports = relationship("CsvImport", back_populates="user", cascade="all, delete-orphan")
     properties = relationship("Property", back_populates="user", cascade="all, delete-orphan")
     vehicles = relationship("Vehicle", back_populates="user", cascade="all, delete-orphan")

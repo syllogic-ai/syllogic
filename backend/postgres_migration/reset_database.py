@@ -16,7 +16,7 @@ from sqlalchemy import inspect, text
 from app.database import engine, Base
 from app.models import (
     User, Account, Category, Transaction,
-    CategorizationRule, BankConnection, ExchangeRate
+    CategorizationRule, ExchangeRate
 )
 
 def reset_database():

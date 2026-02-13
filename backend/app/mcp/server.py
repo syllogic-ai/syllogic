@@ -4,7 +4,8 @@ Registers all tools from the tools modules.
 """
 from fastmcp import FastMCP
 
-from app.db_helpers import get_user_id
+from app.db_helpers import get_mcp_user_id
+from app.mcp.auth import ApiKeyAuthProvider
 from app.mcp.tools import accounts, categories, transactions, analytics, recurring
 
 # Initialize FastMCP server
@@ -13,8 +14,10 @@ mcp = FastMCP(
     instructions="""
 Syllogic MCP Server - Access financial data and manage transactions.
 
-The `user_id` parameter is optional on all tools - it defaults to the configured user.
-You can omit it for single-user setups.
+All requests require an API key:
+Authorization: Bearer pf_...
+
+The `user_id` parameter is optional on all tools but must match the authenticated user.
 
 ## Available functionality
 - **Accounts**: List, view, and check balance history
@@ -60,7 +63,8 @@ Use `match_mode="word"` for merchant names to avoid false positives!
 When using `search_transactions`, ALWAYS check `has_more` in the response.
 If true, you MUST call again with page=2, 3, etc. until has_more=false.
 The `total_count` field tells you how many total results exist.
-"""
+""",
+    auth=ApiKeyAuthProvider(),
 )
 
 
@@ -80,7 +84,7 @@ def list_accounts(user_id: str | None = None, include_inactive: bool = False) ->
     Returns:
         List of account dictionaries with id, name, type, institution, currency, balance, etc.
     """
-    return accounts.list_accounts(get_user_id(user_id), include_inactive)
+    return accounts.list_accounts(get_mcp_user_id(user_id), include_inactive)
 
 
 @mcp.tool
@@ -95,7 +99,7 @@ def get_account(account_id: str, user_id: str | None = None) -> dict | None:
     Returns:
         Account dictionary or None if not found
     """
-    return accounts.get_account(get_user_id(user_id), account_id)
+    return accounts.get_account(get_mcp_user_id(user_id), account_id)
 
 
 @mcp.tool
@@ -117,7 +121,7 @@ def get_account_balance_history(
     Returns:
         List of balance snapshots with date, balance in account currency, and functional currency
     """
-    return accounts.get_account_balance_history(get_user_id(user_id), account_id, from_date, to_date)
+    return accounts.get_account_balance_history(get_mcp_user_id(user_id), account_id, from_date, to_date)
 
 
 # ============================================================================
@@ -136,7 +140,7 @@ def list_categories(user_id: str | None = None, category_type: str | None = None
     Returns:
         List of category dictionaries with id, name, type, color, icon, parent info
     """
-    return categories.list_categories(get_user_id(user_id), category_type)
+    return categories.list_categories(get_mcp_user_id(user_id), category_type)
 
 
 @mcp.tool
@@ -151,7 +155,7 @@ def get_category(category_id: str, user_id: str | None = None) -> dict | None:
     Returns:
         Category dictionary or None if not found
     """
-    return categories.get_category(get_user_id(user_id), category_id)
+    return categories.get_category(get_mcp_user_id(user_id), category_id)
 
 
 @mcp.tool
@@ -165,7 +169,7 @@ def get_category_tree(user_id: str | None = None) -> list[dict]:
     Returns:
         List of root categories, each with nested 'children' list
     """
-    return categories.get_category_tree(get_user_id(user_id))
+    return categories.get_category_tree(get_mcp_user_id(user_id))
 
 
 # ============================================================================
@@ -200,7 +204,7 @@ def list_transactions(
         List of transaction dictionaries with account and category info
     """
     return transactions.list_transactions(
-        get_user_id(user_id), account_id, category_id, from_date, to_date, search, limit, page
+        get_mcp_user_id(user_id), account_id, category_id, from_date, to_date, search, limit, page
     )
 
 
@@ -216,7 +220,7 @@ def get_transaction(transaction_id: str, user_id: str | None = None) -> dict | N
     Returns:
         Transaction dictionary or None if not found
     """
-    return transactions.get_transaction(get_user_id(user_id), transaction_id)
+    return transactions.get_transaction(get_mcp_user_id(user_id), transaction_id)
 
 
 @mcp.tool
@@ -264,7 +268,7 @@ def search_transactions(
         )
     """
     return transactions.search_transactions(
-        get_user_id(user_id), query, exclude_category_id, match_mode, ids_only, limit, page
+        get_mcp_user_id(user_id), query, exclude_category_id, match_mode, ids_only, limit, page
     )
 
 
@@ -316,7 +320,7 @@ def search_transactions_multi(
         )
     """
     return transactions.search_transactions_multi(
-        get_user_id(user_id), queries, exclude_category_id, match_mode, ids_only, max_results
+        get_mcp_user_id(user_id), queries, exclude_category_id, match_mode, ids_only, max_results
     )
 
 
@@ -340,7 +344,7 @@ def update_transaction_category(
     Returns:
         Dict with success status and updated transaction, or error message
     """
-    return transactions.update_transaction_category(get_user_id(user_id), transaction_id, category_id)
+    return transactions.update_transaction_category(get_mcp_user_id(user_id), transaction_id, category_id)
 
 
 @mcp.tool
@@ -375,7 +379,7 @@ def bulk_update_transaction_categories(
         )
     """
     return transactions.bulk_update_transaction_categories(
-        get_user_id(user_id), category_id, transaction_ids
+        get_mcp_user_id(user_id), category_id, transaction_ids
     )
 
 
@@ -402,7 +406,7 @@ def get_spending_by_category(
     Returns:
         List of categories with total spending amount and transaction count
     """
-    return analytics.get_spending_by_category(get_user_id(user_id), from_date, to_date, account_id)
+    return analytics.get_spending_by_category(get_mcp_user_id(user_id), from_date, to_date, account_id)
 
 
 @mcp.tool
@@ -424,7 +428,7 @@ def get_income_by_category(
     Returns:
         List of categories with total income amount and transaction count
     """
-    return analytics.get_income_by_category(get_user_id(user_id), from_date, to_date, account_id)
+    return analytics.get_income_by_category(get_mcp_user_id(user_id), from_date, to_date, account_id)
 
 
 @mcp.tool
@@ -444,7 +448,7 @@ def get_monthly_cashflow(
     Returns:
         List of monthly data with income, expenses, and net for each month
     """
-    return analytics.get_monthly_cashflow(get_user_id(user_id), from_date, to_date)
+    return analytics.get_monthly_cashflow(get_mcp_user_id(user_id), from_date, to_date)
 
 
 @mcp.tool
@@ -464,7 +468,7 @@ def get_financial_summary(
     Returns:
         Summary with total income, total expenses, net, savings rate, and account balances
     """
-    return analytics.get_financial_summary(get_user_id(user_id), from_date, to_date)
+    return analytics.get_financial_summary(get_mcp_user_id(user_id), from_date, to_date)
 
 
 @mcp.tool
@@ -486,7 +490,7 @@ def get_top_merchants(
     Returns:
         List of merchants with total spending and transaction count
     """
-    return analytics.get_top_merchants(get_user_id(user_id), from_date, to_date, limit)
+    return analytics.get_top_merchants(get_mcp_user_id(user_id), from_date, to_date, limit)
 
 
 # ============================================================================
@@ -508,7 +512,7 @@ def list_recurring_transactions(
     Returns:
         List of recurring transactions with details
     """
-    return recurring.list_recurring_transactions(get_user_id(user_id), is_active)
+    return recurring.list_recurring_transactions(get_mcp_user_id(user_id), is_active)
 
 
 @mcp.tool
@@ -523,7 +527,7 @@ def get_recurring_transaction(recurring_id: str, user_id: str | None = None) -> 
     Returns:
         Recurring transaction dictionary or None if not found
     """
-    return recurring.get_recurring_transaction(get_user_id(user_id), recurring_id)
+    return recurring.get_recurring_transaction(get_mcp_user_id(user_id), recurring_id)
 
 
 @mcp.tool
@@ -537,4 +541,4 @@ def get_recurring_summary(user_id: str | None = None) -> dict:
     Returns:
         Summary with totals by frequency, importance groups, and monthly/yearly costs
     """
-    return recurring.get_recurring_summary(get_user_id(user_id))
+    return recurring.get_recurring_summary(get_mcp_user_id(user_id))

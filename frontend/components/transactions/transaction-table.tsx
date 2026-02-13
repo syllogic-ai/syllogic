@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { type DateRange } from "react-day-picker";
 import { type ColumnFiltersState } from "@tanstack/react-table";
@@ -44,6 +44,7 @@ export function TransactionTable({
   const [tableKey, setTableKey] = useState(() =>
     resetToken ? `reset-${resetToken}` : "default"
   );
+  const hasInitializedRef = useRef(false);
 
   useEffect(() => {
     if (!resetToken) return;
@@ -120,17 +121,17 @@ export function TransactionTable({
     return filters;
   }, [searchKey, transactions]);
 
-  // Track mounted state to know when we can access sessionStorage
+  // Track mounted state to know when we can access localStorage
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  // Load saved filters from sessionStorage (only on client after mount)
+  // Load saved filters from localStorage (only on client after mount)
   const savedFilters = React.useMemo((): ColumnFiltersState => {
     if (!isMounted) return [];
     try {
-      const saved = sessionStorage.getItem(FILTER_STORAGE_KEY);
+      const saved = localStorage.getItem(FILTER_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved) as ColumnFiltersState;
         return parsed.map((filter) => {
@@ -153,7 +154,7 @@ export function TransactionTable({
     return [];
   }, [isMounted]);
 
-  // Compute initial filters - URL takes precedence, then sessionStorage
+  // Compute initial filters - URL takes precedence, then localStorage
   const initialColumnFilters = hasUrlFilters ? urlBasedFilters : savedFilters;
 
   // Force table remount when saved filters are loaded
@@ -163,9 +164,16 @@ export function TransactionTable({
     }
   }, [isMounted, hasUrlFilters, savedFilters.length]);
 
-  // Save filters to sessionStorage when they change
+  // Save filters to localStorage when they change
   const handleColumnFiltersChange = useCallback((filters: ColumnFiltersState) => {
     try {
+      if (!hasInitializedRef.current) {
+        hasInitializedRef.current = true;
+        if (filters.length === 0) {
+          return;
+        }
+      }
+
       // Convert dates to ISO strings for storage
       const serializable = filters.map((filter) => {
         if (filter.id === "bookedAt" && filter.value) {
@@ -180,7 +188,7 @@ export function TransactionTable({
         }
         return filter;
       });
-      sessionStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(serializable));
+      localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(serializable));
     } catch {
       // Ignore storage errors
     }

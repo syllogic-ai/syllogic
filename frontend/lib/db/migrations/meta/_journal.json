@@ -29,6 +29,13 @@
       "when": 1770408054187,
       "tag": "0003_schema_alignment",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1771006303622,
+      "tag": "0004_remove_bank_connections",
+      "breakpoints": true
     }
   ]
 }

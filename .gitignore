@@ -47,6 +47,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+celerybeat-schedule
+celerybeat-schedule.*
 
 # Environment variables
 .env

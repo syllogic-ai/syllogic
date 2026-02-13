@@ -186,6 +186,12 @@ python seed_data.py
 
 ### Development Mode
 
+**One-click helpers:**
+- `scripts/dev-up.sh` (builds local images for dev; use `--prebuilt` to pull GHCR)
+- `scripts/prod-up.sh` (pulls prebuilt GHCR images)
+
+Dev script builds local, prod pulls images.
+
 **Start all services with Docker Compose:**
 ```bash
 docker-compose up

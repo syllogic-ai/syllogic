@@ -30,6 +30,14 @@ services:
       retries: 10
     restart: unless-stopped
 
+  uploads-init:
+    image: alpine:3.20
+    container_name: syllogic-uploads-init
+    command: ["sh", "-c", "mkdir -p /uploads && chown -R 1000:1000 /uploads"]
+    volumes:
+      - uploads_data:/uploads
+    restart: "no"
+
   # One-shot DB migrations (Drizzle SQL migrations).
   migrate:
     image: ghcr.io/syllogic-ai/personal-finance-frontend:${APP_VERSION:-edge}
@@ -53,7 +61,6 @@ services:
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
       # Optional integrations / features
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -83,12 +90,8 @@ services:
     command: uvicorn mcp_server:app --host 0.0.0.0 --port 8001
     environment:
       DATABASE_URL: ${DATABASE_URL}
-      # Provide a default API key for single-user setups (used when tool calls omit user_id).
-      # Generate/manage keys from the app UI: Settings -> API Keys.
-      PERSONAL_FINANCE_API_KEY: ${PERSONAL_FINANCE_API_KEY:-}
       # Optional integrations / features
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -110,7 +113,6 @@ services:
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
       # Optional integrations / features
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -132,7 +134,6 @@ services:
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
       # Optional integrations / features
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -160,6 +161,8 @@ services:
     volumes:
       - uploads_data:/app/public/uploads
     depends_on:
+      uploads-init:
+        condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
     healthcheck:

@@ -55,7 +55,7 @@ docker compose \
 This bundle includes an optional **MCP HTTP server** (FastMCP). It's disabled by default and only starts when you enable the `mcp` profile.
 
 1. Generate an API key in the app UI (Settings -> API Keys).
-2. Add it to `.env` as `PERSONAL_FINANCE_API_KEY=pf_...`.
+2. Configure your MCP client to send `Authorization: Bearer pf_...`.
 3. Start (or restart) with the profile enabled:
 
 ```bash

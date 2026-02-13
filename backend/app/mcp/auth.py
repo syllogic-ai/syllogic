@@ -2,11 +2,12 @@
 API Key authentication for the MCP server.
 Validates API keys and resolves them to user IDs.
 """
-import os
 import hashlib
 import bcrypt
 from datetime import datetime
 from typing import Optional
+
+from fastmcp.server.auth import AuthProvider, AccessToken
 
 from app.database import SessionLocal
 from app.models import ApiKey
@@ -87,15 +88,20 @@ def validate_api_key(api_key: str) -> Optional[str]:
         db.close()
 
 
-def get_user_from_env() -> Optional[str]:
+class ApiKeyAuthProvider(AuthProvider):
     """
-    Get user ID from PERSONAL_FINANCE_API_KEY environment variable.
-    Used for stdio mode (Claude Desktop configuration).
+    FastMCP auth provider that validates API keys from Authorization headers.
+    """
 
-    Returns:
-        The user_id if a valid API key is found in env, None otherwise.
-    """
-    api_key = os.environ.get("PERSONAL_FINANCE_API_KEY")
-    if not api_key:
-        return None
-    return validate_api_key(api_key)
+    async def verify_token(self, token: str) -> AccessToken | None:
+        user_id = validate_api_key(token)
+        if not user_id:
+            return None
+        # Use user_id as client_id; include it in claims for easy access.
+        return AccessToken(
+            token=token,
+            client_id=user_id,
+            scopes=["mcp"],
+            expires_at=None,
+            claims={"user_id": user_id},
+        )

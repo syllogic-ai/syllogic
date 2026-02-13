@@ -116,7 +116,6 @@ export const accounts = pgTable(
     currency: char("currency", { length: 3 }).default("EUR"),
     provider: varchar("provider", { length: 50 }), // ponto, gocardless, manual
     externalId: varchar("external_id", { length: 255 }), // Provider's account ID
-    bankConnectionId: uuid("bank_connection_id").references(() => bankConnections.id, { onDelete: "set null" }),
     balanceAvailable: decimal("balance_available", { precision: 15, scale: 2 }),
     startingBalance: decimal("starting_balance", { precision: 15, scale: 2 }).default("0"), // Starting balance for calculation
     functionalBalance: decimal("functional_balance", { precision: 15, scale: 2 }), // Calculated balance (sum of transactions + starting_balance)
@@ -241,30 +240,6 @@ export const categorizationRules = pgTable("categorization_rules", {
   instructions: text("instructions"), // User-provided instructions for AI categorization
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const bankConnections = pgTable("bank_connections", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  userId: text("user_id")
-    .references(() => users.id, { onDelete: "cascade" })
-    .notNull(),
-  institutionId: varchar("institution_id", { length: 255 }).notNull(),
-  institutionName: varchar("institution_name", { length: 255 }),
-  requisitionId: varchar("requisition_id", { length: 255 }).unique(),
-  status: varchar("status", { length: 50 }), // pending, linked, expired, revoked
-  agreementId: varchar("agreement_id", { length: 255 }),
-  link: text("link"), // Authorization link
-  provider: varchar("provider", { length: 50 }), // gocardless, ponto, etc.
-  syncStatus: varchar("sync_status", { length: 50 }), // syncing, synced, failed
-  lastSyncedAt: timestamp("last_synced_at"),
-  errorMessage: text("error_message"),
-  // Ponto-specific fields
-  organizationId: varchar("organization_id", { length: 255 }), // Ponto organization ID
-  accessToken: text("access_token"), // Encrypted Ponto access token
-  refreshToken: text("refresh_token"), // Encrypted Ponto refresh token
-  accessTokenExpiresAt: timestamp("access_token_expires_at"), // Token expiry
-  createdAt: timestamp("created_at").defaultNow(),
-  expiresAt: timestamp("expires_at"),
 });
 
 export const csvImports = pgTable(
@@ -466,7 +441,6 @@ export const usersRelations = relations(users, ({ many }) => ({
   categories: many(categories),
   transactions: many(transactions),
   categorizationRules: many(categorizationRules),
-  bankConnections: many(bankConnections),
   csvImports: many(csvImports),
   properties: many(properties),
   vehicles: many(vehicles),
@@ -500,10 +474,6 @@ export const accountsRelations = relations(accounts, ({ one, many }) => ({
   user: one(users, {
     fields: [accounts.userId],
     references: [users.id],
-  }),
-  bankConnection: one(bankConnections, {
-    fields: [accounts.bankConnectionId],
-    references: [bankConnections.id],
   }),
   transactions: many(transactions),
   csvImports: many(csvImports),
@@ -589,14 +559,6 @@ export const categorizationRulesRelations = relations(categorizationRules, ({ on
   }),
 }));
 
-export const bankConnectionsRelations = relations(bankConnections, ({ one, many }) => ({
-  user: one(users, {
-    fields: [bankConnections.userId],
-    references: [users.id],
-  }),
-  accounts: many(accounts),
-}));
-
 export const csvImportsRelations = relations(csvImports, ({ one }) => ({
   user: one(users, {
     fields: [csvImports.userId],
@@ -671,8 +633,6 @@ export type NewRecurringTransaction = typeof recurringTransactions.$inferInsert;
 export type CategorizationRule = typeof categorizationRules.$inferSelect;
 export type NewCategorizationRule = typeof categorizationRules.$inferInsert;
 
-export type BankConnection = typeof bankConnections.$inferSelect;
-export type NewBankConnection = typeof bankConnections.$inferInsert;
 
 export type CsvImport = typeof csvImports.$inferSelect;
 export type NewCsvImport = typeof csvImports.$inferInsert;

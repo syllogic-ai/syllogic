@@ -3,7 +3,6 @@ Celery application configuration for scheduled tasks.
 """
 import os
 from celery import Celery
-from celery.schedules import crontab
 
 # Redis URL for broker and backend
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -13,7 +12,7 @@ celery_app = Celery(
     "finance_tasks",
     broker=REDIS_URL,
     backend=REDIS_URL,
-    include=["tasks.sync_tasks", "tasks.csv_import_tasks"],
+    include=["tasks.csv_import_tasks"],
 )
 
 # Celery configuration
@@ -37,18 +36,7 @@ celery_app.conf.update(
     worker_concurrency=4,
 
     # Beat schedule for periodic tasks
-    beat_schedule={
-        # Sync all Ponto connections daily at 6:00 AM UTC
-        "sync-all-ponto-daily": {
-            "task": "tasks.sync_tasks.sync_all_ponto_connections",
-            "schedule": crontab(hour=6, minute=0),
-        },
-        # Refresh expiring tokens every 15 minutes
-        "refresh-expiring-tokens": {
-            "task": "tasks.sync_tasks.refresh_expiring_tokens",
-            "schedule": crontab(minute="*/15"),
-        },
-    },
+    beat_schedule={},
 )
 
 # Optional: Auto-discover tasks in app

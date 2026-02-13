@@ -67,7 +67,11 @@ export function AccountDetail({
   return (
     <div className="flex flex-col gap-4">
       <AccountHeader account={account} currency={currency} />
-      <AccountBalanceChart data={balanceHistory} currency={currency} />
+      <AccountBalanceChart
+        data={balanceHistory}
+        currency={currency}
+        storageKey={`filters:/accounts/${account.id}/balance-horizon`}
+      />
       <div className="min-h-[400px]">
         {transactions.length === 0 ? (
           <div className="flex h-48 items-center justify-center rounded border border-dashed">
@@ -75,6 +79,7 @@ export function AccountDetail({
           </div>
         ) : (
           <AccountTransactions
+            accountId={account.id}
             transactions={transactions}
             categories={categoryDisplays}
             onUpdateTransaction={handleUpdateTransaction}

@@ -94,7 +94,7 @@ services:
     image:
       url: ghcr.io/syllogic-ai/personal-finance-frontend:edge
     healthCheckPath: /
-    preDeployCommand: node scripts/migrate.js
+    preDeployCommand: sh -c "chown -R node:node /app/public/uploads 2>/dev/null || chmod -R 0777 /app/public/uploads 2>/dev/null || true; node scripts/migrate.js"
     disk:
       name: personal-finance-uploads
       mountPath: /app/public/uploads
@@ -115,3 +115,24 @@ services:
         value: local
       - key: LOCAL_STORAGE_PATH
         value: uploads
+
+  # MCP HTTP server (FastMCP)
+  - type: web
+    name: personal-finance-mcp
+    runtime: image
+    region: frankfurt
+    plan: starter
+    image:
+      url: ghcr.io/syllogic-ai/personal-finance-backend:edge
+    dockerCommand:
+      - uvicorn
+      - mcp_server:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8001"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: personal-finance-db
+          property: connectionString

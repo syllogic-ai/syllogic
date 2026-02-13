@@ -54,6 +54,15 @@ services:
           description:
             en_US: Redis data.
 
+  uploads-init:
+    image: alpine:3.20
+    command: ["sh", "-c", "mkdir -p /uploads && chown -R ${PUID:-1000}:${PGID:-1000} /uploads"]
+    volumes:
+      - type: bind
+        source: /DATA/AppData/$AppID/uploads
+        target: /uploads
+    restart: "no"
+
   migrate:
     image: ghcr.io/syllogic-ai/personal-finance-frontend:${APP_VERSION:-edge}
     environment:
@@ -79,11 +88,6 @@ services:
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
       # Optional integrations / features
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
-      PONTO_CLIENT_ID: ${PONTO_CLIENT_ID:-}
-      PONTO_CLIENT_SECRET: ${PONTO_CLIENT_SECRET:-}
-      PONTO_REDIRECT_URI: ${PONTO_REDIRECT_URI:-}
-      PONTO_SANDBOX: ${PONTO_SANDBOX:-}
       KRAKEN_API_KEY: ${KRAKEN_API_KEY:-}
       KRAKEN_PRIVATE_KEY: ${KRAKEN_PRIVATE_KEY:-}
     depends_on:
@@ -105,9 +109,6 @@ services:
         - container: OPENAI_API_KEY
           description:
             en_US: OpenAI API key (optional).
-        - container: TOKEN_ENCRYPTION_KEY
-          description:
-            en_US: Token encryption key (optional).
 
   worker:
     image: ghcr.io/syllogic-ai/personal-finance-backend:${APP_VERSION:-edge}
@@ -120,11 +121,6 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       # Optional integrations / features
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
-      PONTO_CLIENT_ID: ${PONTO_CLIENT_ID:-}
-      PONTO_CLIENT_SECRET: ${PONTO_CLIENT_SECRET:-}
-      PONTO_REDIRECT_URI: ${PONTO_REDIRECT_URI:-}
-      PONTO_SANDBOX: ${PONTO_SANDBOX:-}
       KRAKEN_API_KEY: ${KRAKEN_API_KEY:-}
       KRAKEN_PRIVATE_KEY: ${KRAKEN_PRIVATE_KEY:-}
     depends_on:
@@ -144,11 +140,6 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       # Optional integrations / features
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
-      PONTO_CLIENT_ID: ${PONTO_CLIENT_ID:-}
-      PONTO_CLIENT_SECRET: ${PONTO_CLIENT_SECRET:-}
-      PONTO_REDIRECT_URI: ${PONTO_REDIRECT_URI:-}
-      PONTO_SANDBOX: ${PONTO_SANDBOX:-}
       KRAKEN_API_KEY: ${KRAKEN_API_KEY:-}
       KRAKEN_PRIVATE_KEY: ${KRAKEN_PRIVATE_KEY:-}
     depends_on:
@@ -180,6 +171,7 @@ services:
         source: /DATA/AppData/$AppID/uploads
         target: /app/public/uploads
     depends_on:
+      - uploads-init
       - migrate
     restart: unless-stopped
     x-casaos:
