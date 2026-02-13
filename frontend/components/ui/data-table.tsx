@@ -36,6 +36,7 @@ interface DataTableProps<TData, TValue> {
   enablePagination?: boolean;
   pageSize?: number;
   initialColumnFilters?: ColumnFiltersState;
+  onColumnFiltersChange?: (filters: ColumnFiltersState) => void;
   toolbar?: (table: TanStackTable<TData>) => React.ReactNode;
   pagination?: (table: TanStackTable<TData>) => React.ReactNode;
   bulkActions?: (table: TanStackTable<TData>) => React.ReactNode;
@@ -53,6 +54,7 @@ export function DataTable<TData, TValue>({
   enablePagination = true,
   pageSize = 20,
   initialColumnFilters = [],
+  onColumnFiltersChange,
   toolbar,
   pagination,
   bulkActions,
@@ -64,6 +66,11 @@ export function DataTable<TData, TValue>({
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     initialColumnFilters
   );
+
+  // Notify parent when filters change
+  React.useEffect(() => {
+    onColumnFiltersChange?.(columnFilters);
+  }, [columnFilters, onColumnFiltersChange]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
   const [columnSizing, setColumnSizing] = React.useState<ColumnSizingState>({});

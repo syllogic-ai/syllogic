@@ -23,6 +23,7 @@ interface KpiSparkCardProps {
   };
   icon?: React.ReactNode;
   isLoading?: boolean;
+  showSign?: boolean;
 }
 
 function KpiSparkCardSkeleton() {
@@ -49,6 +50,7 @@ export function KpiSparkCard({
   trend,
   icon,
   isLoading = false,
+  showSign = false,
 }: KpiSparkCardProps) {
   // Generate unique ID for gradient to avoid conflicts with multiple charts
   const gradientId = React.useId();
@@ -57,7 +59,7 @@ export function KpiSparkCard({
     return <KpiSparkCardSkeleton />;
   }
 
-  const formattedValue = formatCurrency(value, currency);
+  const formattedValue = formatCurrency(value, currency, { showSign });
 
   return (
     <Card>
@@ -83,7 +85,7 @@ export function KpiSparkCard({
                   trend.isPositive ? "text-emerald-600" : "text-red-600"
                 )}
               >
-                {trend.isPositive ? "+" : ""}
+                {trend.isPositive ? "+" : "-"}
                 {trend.value.toFixed(1)}%
               </span>
             )}

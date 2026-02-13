@@ -129,7 +129,7 @@ export default function OnboardingStep3Page() {
 
             <Button onClick={() => setIsDialogOpen(true)} className="w-full" size="lg">
               <RiAddLine className="mr-2 h-4 w-4" />
-              Create your first account
+              {accounts.length > 0 ? "Add another account" : "Create your first account"}
             </Button>
           </div>
         </CardContent>

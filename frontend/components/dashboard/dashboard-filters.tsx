@@ -13,6 +13,7 @@ import {
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { cn } from "@/lib/utils";
 import { RiWalletLine } from "@remixicon/react";
+import { useFilterPersistence } from "@/lib/hooks/use-filter-persistence";
 
 interface Account {
   id: string;
@@ -36,6 +37,9 @@ export function DashboardFilters({
 }: DashboardFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // Persist filters to sessionStorage
+  useFilterPersistence();
 
   // Get current filter values from URL or use defaults
   const currentAccount = searchParams.get("account") || "all";

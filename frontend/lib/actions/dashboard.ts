@@ -112,20 +112,19 @@ export async function getTotalBalance(accountId?: string) {
 
   const accountIds = userAccounts.map(a => a.id);
 
-  // Get the latest balance from account_balances table
+  // Get the latest balance for EACH account, then sum them
+  // This ensures accounts with different latest dates are all included
   const [result, currency] = await Promise.all([
     db
       .select({
-        total: sql<string>`COALESCE(SUM(${accountBalances.balanceInFunctionalCurrency}), 0)`,
+        total: sql<string>`COALESCE(SUM(ab.balance_in_functional_currency), 0)`,
       })
-      .from(accountBalances)
-      .where(and(
-        inArray(accountBalances.accountId, accountIds),
-        eq(accountBalances.date, sql`(
-          SELECT MAX(date) FROM account_balances
-          WHERE account_id IN (${sql.join(accountIds.map(id => sql`${id}`), sql`, `)})
-        )`)
-      )),
+      .from(sql`(
+        SELECT DISTINCT ON (account_id) account_id, balance_in_functional_currency
+        FROM account_balances
+        WHERE account_id IN (${sql.join(accountIds.map(id => sql`${id}`), sql`, `)})
+        ORDER BY account_id, date DESC
+      ) AS ab`),
     getUserCurrency(session.user.id),
   ]);
 

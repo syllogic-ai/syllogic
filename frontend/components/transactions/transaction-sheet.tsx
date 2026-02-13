@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Sheet,
@@ -80,6 +80,9 @@ export function TransactionSheet({
   const isExpense = transaction?.transactionType === "debit";
   const hasLinkedSubscription = !!transaction?.recurringTransactionId;
 
+  // Track previous transaction ID to only reset state when a different transaction is opened
+  const prevTransactionIdRef = useRef<string | null>(null);
+
   const handleRevertBalancingTransfer = async () => {
     if (!transaction) return;
 
@@ -101,15 +104,23 @@ export function TransactionSheet({
     }
   };
 
-  // Reset state when transaction changes
+  // Reset state only when a different transaction is opened (not when same transaction updates)
   useEffect(() => {
-    if (transaction) {
+    if (transaction && transaction.id !== prevTransactionIdRef.current) {
+      prevTransactionIdRef.current = transaction.id;
       setSelectedCategoryId(transaction.categoryId);
       setIncludeInAnalytics(transaction.includeInAnalytics ?? true);
       setInstructions("");
       setHasChanges(false);
     }
   }, [transaction]);
+
+  // Reset ref when sheet closes so reopening same transaction reinitializes properly
+  useEffect(() => {
+    if (!open) {
+      prevTransactionIdRef.current = null;
+    }
+  }, [open]);
 
   const handleCategoryChange = (value: string | null) => {
     if (!value) return;

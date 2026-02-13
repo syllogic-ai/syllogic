@@ -113,6 +113,7 @@ export default async function HomePage({ searchParams }: PageProps) {
             currency={data.savingsRate.currency}
             subtitle={data.periodLabel.subtitle}
             sparkData={[]}
+            showSign
             trend={
               data.savingsRate.amount !== 0
                 ? {

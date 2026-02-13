@@ -30,7 +30,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <CommandPaletteProvider>
           {children}
-          <Toaster />
+          <Toaster position="top-right" />
           <CommandPalette />
         </CommandPaletteProvider>
       </QueryClientProvider>

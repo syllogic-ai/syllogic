@@ -188,7 +188,7 @@ export function BulkActionsDock({
         >
           <PopoverTrigger
             nativeButton={false}
-            render={<DockIcon className="bg-muted hover:bg-muted/80" />}
+            render={<DockIcon className="bg-muted hover:bg-muted/80" title="Categorize" />}
           >
             <RiPriceTag3Line className="size-5" />
           </PopoverTrigger>
@@ -250,7 +250,7 @@ export function BulkActionsDock({
         >
           <PopoverTrigger
             nativeButton={false}
-            render={<DockIcon className="bg-muted hover:bg-muted/80" />}
+            render={<DockIcon className="bg-muted hover:bg-muted/80" title="Analytics" />}
           >
             <RiLineChartLine className="size-5" />
           </PopoverTrigger>

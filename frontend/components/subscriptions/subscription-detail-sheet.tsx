@@ -214,7 +214,7 @@ export function SubscriptionDetailSheet({
             <RiLoader4Line className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <div className="flex-1 flex flex-col gap-6 mt-6 overflow-hidden">
+          <div className="flex-1 flex flex-col gap-6 mt-6 min-h-0 overflow-hidden">
             {/* Cost Aggregations */}
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-muted/50 p-4 space-y-1">
@@ -255,7 +255,7 @@ export function SubscriptionDetailSheet({
             <Separator />
 
             {/* Linked Transactions */}
-            <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 flex flex-col min-h-0">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-medium">
                   Linked Transactions ({linkedTransactions.length})
@@ -267,7 +267,7 @@ export function SubscriptionDetailSheet({
                   No transactions linked yet
                 </div>
               ) : (
-                <ScrollArea className="flex-1">
+                <ScrollArea className="flex-1 min-h-0">
                   <div className="space-y-1">
                     {linkedTransactions.map((txn) => (
                       <div

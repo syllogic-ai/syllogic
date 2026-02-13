@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { useState, useEffect } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useState, useEffect, useCallback } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { type DateRange } from "react-day-picker";
 import { type ColumnFiltersState } from "@tanstack/react-table";
 import { DataTable } from "@/components/ui/data-table";
@@ -13,6 +13,8 @@ import { transactionColumns } from "./columns";
 import { TransactionFilters } from "./transaction-filters";
 import { TransactionPagination } from "./transaction-pagination";
 import { BulkActionsDock } from "./bulk-actions-dock";
+
+const FILTER_STORAGE_KEY = "filters:/transactions";
 
 interface TransactionTableProps {
   transactions: TransactionWithRelations[];
@@ -54,7 +56,14 @@ export function TransactionTable({
     });
   }, [resetToken, router, searchParams]);
 
-  const initialColumnFilters = React.useMemo(() => {
+  // Check if URL has filter-related params
+  const hasUrlFilters = React.useMemo(() => {
+    const params = new URLSearchParams(searchKey);
+    return params.has("category") || params.has("account") || params.has("from") || params.has("to") || params.has("horizon");
+  }, [searchKey]);
+
+  // Build filters from URL params
+  const urlBasedFilters = React.useMemo(() => {
     const filters: ColumnFiltersState = [];
     const params = new URLSearchParams(searchKey);
     const categoryParam = params.get("category");
@@ -111,6 +120,72 @@ export function TransactionTable({
     return filters;
   }, [searchKey, transactions]);
 
+  // Track mounted state to know when we can access sessionStorage
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Load saved filters from sessionStorage (only on client after mount)
+  const savedFilters = React.useMemo((): ColumnFiltersState => {
+    if (!isMounted) return [];
+    try {
+      const saved = sessionStorage.getItem(FILTER_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved) as ColumnFiltersState;
+        return parsed.map((filter) => {
+          if (filter.id === "bookedAt" && filter.value) {
+            const val = filter.value as { from?: string; to?: string };
+            return {
+              ...filter,
+              value: {
+                from: val.from ? new Date(val.from) : undefined,
+                to: val.to ? new Date(val.to) : undefined,
+              },
+            };
+          }
+          return filter;
+        });
+      }
+    } catch {
+      // Ignore parse errors
+    }
+    return [];
+  }, [isMounted]);
+
+  // Compute initial filters - URL takes precedence, then sessionStorage
+  const initialColumnFilters = hasUrlFilters ? urlBasedFilters : savedFilters;
+
+  // Force table remount when saved filters are loaded
+  useEffect(() => {
+    if (isMounted && !hasUrlFilters && savedFilters.length > 0) {
+      setTableKey(`restored-${Date.now()}`);
+    }
+  }, [isMounted, hasUrlFilters, savedFilters.length]);
+
+  // Save filters to sessionStorage when they change
+  const handleColumnFiltersChange = useCallback((filters: ColumnFiltersState) => {
+    try {
+      // Convert dates to ISO strings for storage
+      const serializable = filters.map((filter) => {
+        if (filter.id === "bookedAt" && filter.value) {
+          const val = filter.value as DateRange;
+          return {
+            ...filter,
+            value: {
+              from: val.from?.toISOString(),
+              to: val.to?.toISOString(),
+            },
+          };
+        }
+        return filter;
+      });
+      sessionStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(serializable));
+    } catch {
+      // Ignore storage errors
+    }
+  }, []);
+
   // Handle URL query param for auto-selecting a transaction
   useEffect(() => {
     const txId = searchParams.get("tx");
@@ -147,6 +222,7 @@ export function TransactionTable({
         enablePagination={true}
         pageSize={20}
         initialColumnFilters={initialColumnFilters}
+        onColumnFiltersChange={handleColumnFiltersChange}
         toolbar={(table) => (
           <TransactionFilters table={table} categories={categories} accounts={accounts} action={action} />
         )}
