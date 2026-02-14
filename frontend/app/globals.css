@@ -87,7 +87,7 @@
 }
 
 .dark {
-  --background: oklch(0.147 0.004 49.25);
+  --background: oklch(0.18 0.004 49.25);
   --foreground: oklch(0.985 0.001 106.423);
   --card: oklch(0.216 0.006 56.043);
   --card-foreground: oklch(0.985 0.001 106.423);
@@ -110,7 +110,7 @@
   --chart-3: oklch(0.439 0 0);     /* Darker gray - tertiary */
   --chart-4: oklch(0.553 0 0);     /* Reference lines */
   --chart-5: oklch(0.268 0 0);     /* Fills/backgrounds */
-  --sidebar: oklch(0.216 0.006 56.043);
+  --sidebar: oklch(0.18 0.004 49.25);
   --sidebar-foreground: oklch(0.985 0.001 106.423);
   --sidebar-primary: oklch(0.488 0.243 264.376);
   --sidebar-primary-foreground: oklch(0.985 0.001 106.423);

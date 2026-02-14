@@ -1,15 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   RiHomeLine,
   RiExchangeLine,
   RiSettings3Line,
   RiLogoutBoxLine,
-  RiWalletLine,
   RiWallet3Line,
   RiArrowUpDownLine,
   RiLoopRightLine,
+  RiArrowRightSLine,
+  RiArrowLeftSLine,
 } from "@remixicon/react";
 import { signOut, useSession } from "@/lib/auth-client";
 import {
@@ -21,7 +23,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
 import {
@@ -65,8 +66,13 @@ export function AppSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session } = useSession();
-  const { isMobile, state } = useSidebar();
+  const { isMobile, state, setOpen } = useSidebar();
+  const [hasMarkError, setHasMarkError] = useState(false);
   const isCollapsed = state === "collapsed";
+  const brandImageSrc =
+    isCollapsed && !hasMarkError
+      ? "/brand/syllogic-mark.png"
+      : "/brand/syllogic-logo.png";
   const userWithProfilePhoto = session?.user as
     | { profilePhotoPath?: string | null; image?: string | null }
     | undefined;
@@ -92,23 +98,32 @@ export function AppSidebar() {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              size="lg"
-              onClick={() => router.push("/")}
-              tooltip="Finance"
-            >
-              <div className="bg-foreground text-background flex aspect-square size-8 items-center justify-center shrink-0">
-                <RiWalletLine className="size-4" />
-              </div>
-              {!isCollapsed && (
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">Finance</span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    Personal
-                  </span>
+            <div className="flex items-center gap-1">
+              <SidebarMenuButton
+                size="lg"
+                onClick={() => router.push("/")}
+                tooltip="Syllogic"
+                className={isCollapsed ? "justify-center" : "w-full"}
+              >
+                <div className="bg-sidebar-accent border-sidebar-border flex aspect-square size-8 items-center justify-center overflow-hidden border shrink-0">
+                  <img
+                    src={brandImageSrc}
+                    alt="Syllogic"
+                    className="h-full w-full object-contain"
+                    onError={() => {
+                      if (isCollapsed) {
+                        setHasMarkError(true);
+                      }
+                    }}
+                  />
                 </div>
-              )}
-            </SidebarMenuButton>
+                {!isCollapsed && (
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-medium">Syllogic</span>
+                  </div>
+                )}
+              </SidebarMenuButton>
+            </div>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
@@ -132,6 +147,25 @@ export function AppSidebar() {
             })}
           </SidebarMenu>
         </SidebarGroup>
+        {!isMobile && (
+          <SidebarGroup className="mt-auto pt-2">
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => setOpen((prev) => !prev)}
+                  tooltip={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                >
+                  {isCollapsed ? (
+                    <RiArrowRightSLine className="shrink-0" />
+                  ) : (
+                    <RiArrowLeftSLine className="shrink-0" />
+                  )}
+                  {!isCollapsed && <span>Collapse</span>}
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroup>
+        )}
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
@@ -186,7 +220,6 @@ export function AppSidebar() {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
-      <SidebarRail />
     </Sidebar>
   );
 }

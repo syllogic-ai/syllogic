@@ -25,20 +25,19 @@ import {
 import { useIsMobile } from "@/hooks/use-mobile"
 import { RiSideBarLine } from "@remixicon/react"
 
-const SIDEBAR_WIDTH = "16rem"
-const SIDEBAR_WIDTH_MOBILE = "18rem"
-const SIDEBAR_WIDTH_ICON = "4rem"
+const SIDEBAR_WIDTH = "14rem"
+const SIDEBAR_WIDTH_MOBILE = "16rem"
+const SIDEBAR_WIDTH_ICON = "3.5rem"
+const SIDEBAR_OPEN_STORAGE_KEY = "syllogic.sidebar.open"
 
 type SidebarContextProps = {
   state: "expanded" | "collapsed"
   open: boolean
-  setOpen: (open: boolean) => void
+  setOpen: (open: boolean | ((open: boolean) => boolean)) => void
   openMobile: boolean
   setOpenMobile: (open: boolean) => void
   isMobile: boolean
   toggleSidebar: () => void
-  isHoverExpanded: boolean
-  setIsHoverExpanded: (value: boolean) => void
 }
 
 const SidebarContext = React.createContext<SidebarContextProps | null>(null)
@@ -67,7 +66,7 @@ function SidebarProvider({
 }) {
   const isMobile = useIsMobile()
   const [openMobile, setOpenMobile] = React.useState(false)
-  const [isHoverExpanded, setIsHoverExpanded] = React.useState(false)
+  const [hasInitializedOpenState, setHasInitializedOpenState] = React.useState(false)
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
@@ -85,15 +84,42 @@ function SidebarProvider({
     [setOpenProp, open]
   )
 
-  // Helper to toggle the sidebar (only used for mobile).
+  React.useEffect(() => {
+    if (hasInitializedOpenState) {
+      return
+    }
+
+    const stored = window.localStorage.getItem(SIDEBAR_OPEN_STORAGE_KEY)
+    if (stored === "true" || stored === "false") {
+      const nextOpen = stored === "true"
+      if (nextOpen !== open) {
+        setOpen(nextOpen)
+      }
+    }
+
+    setHasInitializedOpenState(true)
+  }, [hasInitializedOpenState, open, setOpen])
+
+  React.useEffect(() => {
+    if (!hasInitializedOpenState || isMobile) {
+      return
+    }
+
+    window.localStorage.setItem(SIDEBAR_OPEN_STORAGE_KEY, String(open))
+  }, [hasInitializedOpenState, isMobile, open])
+
   const toggleSidebar = React.useCallback(() => {
-    return isMobile ? setOpenMobile((open) => !open) : undefined
-  }, [isMobile, setOpenMobile])
+    if (isMobile) {
+      setOpenMobile((openState) => !openState)
+      return
+    }
+
+    setOpen((openState) => !openState)
+  }, [isMobile, setOpen, setOpenMobile])
 
   // We add a state so that we can do data-state="expanded" or "collapsed".
   // This makes it easier to style the sidebar with Tailwind classes.
-  // Consider both permanent open state and hover expansion
-  const state = (open || isHoverExpanded) ? "expanded" : "collapsed"
+  const state = open ? "expanded" : "collapsed"
 
   const contextValue = React.useMemo<SidebarContextProps>(
     () => ({
@@ -104,10 +130,8 @@ function SidebarProvider({
       openMobile,
       setOpenMobile,
       toggleSidebar,
-      isHoverExpanded,
-      setIsHoverExpanded,
     }),
-    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar, isHoverExpanded]
+    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar]
   )
 
   return (
@@ -145,7 +169,7 @@ function Sidebar({
   variant?: "sidebar" | "floating" | "inset"
   collapsible?: "offExamples" | "icon" | "none"
 }) {
-  const { isMobile, state, openMobile, setOpenMobile, open, isHoverExpanded, setIsHoverExpanded } = useSidebar()
+  const { isMobile, state, openMobile, setOpenMobile, open } = useSidebar()
 
   if (collapsible === "none") {
     return (
@@ -187,19 +211,6 @@ function Sidebar({
     )
   }
 
-  // Handle hover expansion for desktop collapsed sidebar
-  const handleMouseEnter = () => {
-    if (!open && collapsible === "icon") {
-      setIsHoverExpanded(true)
-    }
-  }
-
-  const handleMouseLeave = () => {
-    if (isHoverExpanded) {
-      setIsHoverExpanded(false)
-    }
-  }
-
   return (
     <div
       className="group peer text-sidebar-foreground hidden md:block"
@@ -209,11 +220,9 @@ function Sidebar({
       data-side={side}
       data-slot="sidebar"
       data-open={open ? "true" : "false"}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
     >
       {/* This is what handles the sidebar gap on desktop */}
-      {/* Use data-state so gap expands on hover */}
+      {/* Use data-state so gap tracks expanded/collapsed state */}
       <div
         data-slot="sidebar-gap"
         className={cn(
@@ -336,7 +345,7 @@ function SidebarHeader({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="sidebar-header"
       data-sidebar="header"
-      className={cn("gap-2 p-2 flex flex-col", className)}
+      className={cn("gap-2 p-2 group-data-[collapsible=icon]:px-1 flex flex-col", className)}
       {...props}
     />
   )
@@ -347,7 +356,7 @@ function SidebarFooter({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="sidebar-footer"
       data-sidebar="footer"
-      className={cn("gap-2 p-2 pb-4 flex flex-col", className)}
+      className={cn("gap-2 p-2 pb-4 group-data-[collapsible=icon]:px-1 flex flex-col", className)}
       {...props}
     />
   )
@@ -387,7 +396,7 @@ function SidebarGroup({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="sidebar-group"
       data-sidebar="group"
       className={cn(
-        "p-2 relative flex w-full min-w-0 flex-col",
+        "p-2 group-data-[collapsible=icon]:px-1 relative flex w-full min-w-0 flex-col",
         className
       )}
       {...props}
@@ -480,7 +489,7 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
 }
 
 const sidebarMenuButtonVariants = cva(
-  "ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground data-open:hover:bg-sidebar-accent data-open:hover:text-sidebar-accent-foreground gap-2 rounded-none p-2 text-left text-xs transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-2! focus-visible:ring-2 data-active:font-medium peer/menu-button flex w-full items-center overflow-hidden outline-hidden group/menu-button disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 [&>span:last-child]:truncate [&_svg]:size-4 [&_svg]:shrink-0",
+  "ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground data-open:hover:bg-sidebar-accent data-open:hover:text-sidebar-accent-foreground gap-2 rounded-none p-2 text-left text-xs transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-1! group-data-[collapsible=icon]:py-2! focus-visible:ring-2 data-active:font-medium peer/menu-button flex w-full items-center overflow-hidden outline-hidden group/menu-button disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 [&>span:last-child]:truncate [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
