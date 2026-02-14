@@ -102,7 +102,6 @@ export function AppSidebar() {
               <SidebarMenuButton
                 size="lg"
                 onClick={() => router.push("/")}
-                tooltip="Syllogic"
                 className={isCollapsed ? "justify-center" : "w-full"}
               >
                 <div className="bg-sidebar-accent border-sidebar-border flex aspect-square size-8 items-center justify-center overflow-hidden border shrink-0">
@@ -153,7 +152,7 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   onClick={() => setOpen((prev) => !prev)}
-                  tooltip={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
                 >
                   {isCollapsed ? (
                     <RiArrowRightSLine className="shrink-0" />
