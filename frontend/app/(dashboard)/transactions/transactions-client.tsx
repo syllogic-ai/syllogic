@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { RiLoader4Line } from "@remixicon/react";
+import { Progress } from "@/components/ui/progress";
 import { TransactionTable } from "@/components/transactions/transaction-table";
 import { AddTransactionButton } from "@/components/transactions/add-transaction-button";
 import { AddTransactionDialog } from "@/components/transactions/add-transaction-dialog";
@@ -179,36 +180,26 @@ export function TransactionsClient({
   }, [checkImportStatus]);
 
   // Subscribe to import status updates
-  const { isImporting } = useImportStatus(
+  const { isImporting, progress, processedRows, totalRows } = useImportStatus(
     pendingImport?.userId,
     pendingImport?.importId,
     {
-      onStarted: () => {
-        setImportStatus("importing");
-      },
-      onProgress: () => {
-        setImportStatus("importing");
-      },
+      onStarted: () => { setImportStatus("importing"); },
+      onProgress: () => { setImportStatus("importing"); },
       onCompleted: () => {
-        // Clear pending import and refresh data
         clearPendingImport();
         setPendingImportState(null);
         setImportStatus("completed");
         router.refresh();
-        // Remove importing param from URL
-        if (importingId) {
-          router.replace("/transactions");
-        }
+        if (importingId) router.replace("/transactions");
       },
       onFailed: () => {
         clearPendingImport();
         setPendingImportState(null);
         setImportStatus("failed");
-        if (importingId) {
-          router.replace("/transactions");
-        }
+        if (importingId) router.replace("/transactions");
       },
-      showToasts: true,
+      showToasts: false,  // Global ImportStatusNotifier handles toasts
     }
   );
 
@@ -282,9 +273,22 @@ export function TransactionsClient({
           action={
             <div className="flex flex-row items-center gap-3">
               {importStatus === "importing" && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <RiLoader4Line className="h-4 w-4 animate-spin" />
-                  <span>Importing transactions</span>
+                <div className="flex flex-col gap-1 min-w-[180px]">
+                  <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      <RiLoader4Line className="h-4 w-4 animate-spin shrink-0" />
+                      <span>Importing transactions</span>
+                    </div>
+                    {progress !== null && (
+                      <span className="text-xs font-mono tabular-nums">{progress}%</span>
+                    )}
+                  </div>
+                  {progress !== null && <Progress value={progress} className="h-1.5" />}
+                  {processedRows !== null && totalRows !== null && (
+                    <span className="text-xs text-muted-foreground font-mono tabular-nums">
+                      {processedRows} / {totalRows} rows
+                    </span>
+                  )}
                 </div>
               )}
               <AddTransactionButton onAddManual={handleAddManual} />
