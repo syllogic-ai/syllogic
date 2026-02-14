@@ -55,11 +55,13 @@
     "tailwindcss": "^4",
     "typescript": "^5"
   },
-  "overrides": {
-    "esbuild": "0.25.12",
-    "lodash": "^4.17.23",
-    "hono": "^4.11.7",
-    "@isaacs/brace-expansion": "5.0.1",
-    "@modelcontextprotocol/sdk": "1.26.0"
+  "pnpm": {
+    "overrides": {
+      "esbuild": "0.25.12",
+      "lodash": "^4.17.23",
+      "hono": "^4.11.7",
+      "@isaacs/brace-expansion": "5.0.1",
+      "@modelcontextprotocol/sdk": "1.26.0"
+    }
   }
 }
