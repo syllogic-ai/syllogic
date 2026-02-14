@@ -1,6 +1,7 @@
 "use server";
 
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { apiKeys } from "@/lib/db/schema";
 import { requireAuth } from "@/lib/auth-helpers";
@@ -12,8 +13,8 @@ function generateApiKey(): string {
   return `pf_${crypto.randomBytes(24).toString("base64url")}`;
 }
 
-function hashApiKey(key: string): string {
-  return crypto.createHash("sha256").update(key).digest("hex");
+async function hashApiKey(key: string): Promise<string> {
+  return bcrypt.hash(key, 10);
 }
 
 export async function createApiKey(input: {
@@ -43,7 +44,7 @@ export async function createApiKey(input: {
 
   try {
     const rawKey = generateApiKey();
-    const keyHash = hashApiKey(rawKey);
+    const keyHash = await hashApiKey(rawKey);
     const keyPrefix = rawKey.substring(0, 11); // "pf_" + 8 chars
 
     const [inserted] = await db

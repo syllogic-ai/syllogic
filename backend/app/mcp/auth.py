@@ -65,9 +65,12 @@ def validate_api_key(api_key: str) -> Optional[str]:
             record.key_hash = hash_api_key(api_key)
             db.commit()
         else:
-            # Try to find a bcrypt-hashed key
-            all_keys = db.query(ApiKey).all()
-            for key_record in all_keys:
+            # Try to find a bcrypt-hashed key, scoped by key prefix when possible.
+            key_prefix = api_key[:11]  # "pf_" + 8 chars
+            candidates = db.query(ApiKey).filter(ApiKey.key_prefix == key_prefix).all()
+            if not candidates:
+                candidates = db.query(ApiKey).all()
+            for key_record in candidates:
                 if verify_api_key(api_key, key_record.key_hash):
                     record = key_record
                     break
