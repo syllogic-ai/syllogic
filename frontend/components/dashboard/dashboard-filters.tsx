@@ -3,17 +3,19 @@
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type DateRange } from "react-day-picker";
-import { format } from "date-fns";
+import { differenceInCalendarDays, format } from "date-fns";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from "@/components/ui/select";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { cn } from "@/lib/utils";
-import { RiWalletLine } from "@remixicon/react";
+import { RiArrowDownSLine, RiWalletLine } from "@remixicon/react";
 import { useFilterPersistence } from "@/lib/hooks/use-filter-persistence";
+import { parseGlobalFiltersFromSearchParams } from "@/lib/filters/global-filters";
 
 interface Account {
   id: string;
@@ -32,22 +34,31 @@ const HORIZON_OPTIONS = [
   { value: "365", label: "12M" },
 ] as const;
 
-export function DashboardFilters({
-  accounts,
-}: DashboardFiltersProps) {
+export function DashboardFilters({ accounts }: DashboardFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [accountsOpen, setAccountsOpen] = React.useState(false);
 
-  // Persist filters to sessionStorage
   useFilterPersistence();
 
-  // Get current filter values from URL or use defaults
-  const currentAccount = searchParams.get("account") || "all";
-  const currentHorizon = searchParams.get("horizon") || "30";
+  const globalFilters = React.useMemo(
+    () => parseGlobalFiltersFromSearchParams(searchParams),
+    [searchParams]
+  );
 
-  // Parse date range from URL
-  const dateFromParam = searchParams.get("from");
-  const dateToParam = searchParams.get("to");
+  const selectedAccountIds = globalFilters.accountIds;
+
+  const selectedAccountSet = React.useMemo(
+    () => new Set(selectedAccountIds),
+    [selectedAccountIds]
+  );
+
+  const isAllAccountsSelected = selectedAccountIds.length === 0;
+  const selectedAccountsCount = selectedAccountIds.length;
+  const accountTriggerText = isAllAccountsSelected ? "All accounts" : "Accounts";
+
+  const dateFromParam = globalFilters.from;
+  const dateToParam = globalFilters.to;
   const dateRange: DateRange | undefined = React.useMemo(() => {
     if (!dateFromParam) return undefined;
     return {
@@ -56,22 +67,46 @@ export function DashboardFilters({
     };
   }, [dateFromParam, dateToParam]);
 
-  // Update URL with new filter values
-  const updateFilters = React.useCallback(
-    (key: string, value: string | undefined) => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (!value || value === "all" || (key === "horizon" && value === "30")) {
-        params.delete(key);
-      } else {
-        params.set(key, value);
-      }
-      const queryString = params.toString();
+  const isDateRangeActive = Boolean(dateRange?.from);
+  const currentHorizon = globalFilters.horizon || "30";
+  const effectiveHorizon = isDateRangeActive ? undefined : currentHorizon;
+
+  const matchedSpanDays = React.useMemo(() => {
+    if (!dateRange?.from || !dateRange.to) return null;
+    return differenceInCalendarDays(dateRange.to, dateRange.from) + 1;
+  }, [dateRange?.from, dateRange?.to]);
+
+  const shouldCollapseGap = matchedSpanDays === 7 || matchedSpanDays === 30 || matchedSpanDays === 365;
+
+  const pushParams = React.useCallback(
+    (nextParams: URLSearchParams) => {
+      const queryString = nextParams.toString();
       router.push(queryString ? `?${queryString}` : "/", { scroll: false });
     },
-    [searchParams, router]
+    [router]
   );
 
-  // Update date range in URL
+  const updateSelectedAccounts = React.useCallback(
+    (nextAccountIds: string[]) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("account");
+      nextAccountIds.forEach((accountId) => params.append("account", accountId));
+      pushParams(params);
+    },
+    [pushParams, searchParams]
+  );
+
+  const toggleAccount = React.useCallback(
+    (accountId: string) => {
+      if (selectedAccountSet.has(accountId)) {
+        updateSelectedAccounts(selectedAccountIds.filter((id) => id !== accountId));
+      } else {
+        updateSelectedAccounts([...selectedAccountIds, accountId]);
+      }
+    },
+    [selectedAccountIds, selectedAccountSet, updateSelectedAccounts]
+  );
+
   const updateDateRange = React.useCallback(
     (range: DateRange | undefined) => {
       const params = new URLSearchParams(searchParams.toString());
@@ -85,70 +120,109 @@ export function DashboardFilters({
         } else {
           params.delete("to");
         }
+        params.delete("horizon");
       }
-      const queryString = params.toString();
-      router.push(queryString ? `?${queryString}` : "/", { scroll: false });
+      pushParams(params);
     },
-    [searchParams, router]
+    [pushParams, searchParams]
+  );
+
+  const updateHorizon = React.useCallback(
+    (horizon: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("from");
+      params.delete("to");
+      if (horizon === "30") {
+        params.delete("horizon");
+      } else {
+        params.set("horizon", horizon);
+      }
+      pushParams(params);
+    },
+    [pushParams, searchParams]
   );
 
   return (
     <div className="flex items-center gap-2">
-      {/* Account Selector */}
-      <Select
-        value={currentAccount}
-        onValueChange={(value) => updateFilters("account", value || undefined)}
-      >
-        <SelectTrigger className="!h-9 w-[160px]">
-          {currentAccount === "all" ? (
-            <div className="flex items-center gap-2">
-              <RiWalletLine className="h-4 w-4 text-muted-foreground" />
-              <span>Accounts</span>
-            </div>
-          ) : (
-            <span>{accounts.find(a => a.id === currentAccount)?.name || "Account"}</span>
+      <Popover open={accountsOpen} onOpenChange={setAccountsOpen}>
+        <PopoverTrigger
+          className={cn(
+            "flex !h-9 w-[190px] items-center justify-between border border-input bg-transparent px-2.5 text-xs transition-colors hover:bg-muted"
           )}
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">
-            <div className="flex items-center gap-2">
-              <RiWalletLine className="h-4 w-4 text-muted-foreground" />
-              <span>All Accounts</span>
-            </div>
-          </SelectItem>
-          {accounts.map((account) => (
-            <SelectItem key={account.id} value={account.id}>
-              {account.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      {/* Date Range Selector */}
-      <DateRangePicker
-        value={dateRange}
-        onChange={updateDateRange}
-        className="!h-9 w-fit"
-        placeholder="Date"
-      />
-
-      {/* Horizon Selector */}
-      <div className="flex items-center !h-9 border border-input box-border">
-        {HORIZON_OPTIONS.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            className={cn(
-              "h-full px-3 text-xs font-medium transition-colors",
-              currentHorizon === option.value
-                ? "bg-primary text-primary-foreground"
-                : "bg-transparent text-foreground hover:bg-muted"
+        >
+          <span className="flex items-center gap-2 truncate">
+            <RiWalletLine className="h-4 w-4 text-muted-foreground" />
+            <span className="truncate">{accountTriggerText}</span>
+          </span>
+          <span className="flex items-center gap-1 shrink-0">
+            {!isAllAccountsSelected && (
+              <Badge variant="outline" className="h-4 min-w-4 px-1 text-[10px] leading-none">
+                {selectedAccountsCount}
+              </Badge>
             )}
-            onClick={() => updateFilters("horizon", option.value)}
-          >
-            {option.label}
-          </button>
-        ))}
+            <RiArrowDownSLine className="h-4 w-4 text-muted-foreground" />
+          </span>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-64 p-0">
+          <div className="border-b p-1">
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-2 py-1.5 text-xs hover:bg-accent"
+              onClick={() => updateSelectedAccounts([])}
+            >
+              <Checkbox
+                checked={isAllAccountsSelected}
+                className="pointer-events-none"
+              />
+              <span>All accounts ({accounts.length})</span>
+            </button>
+          </div>
+          <div className="max-h-56 overflow-y-auto p-1">
+            {accounts.map((account) => (
+              <button
+                key={account.id}
+                type="button"
+                className="flex w-full items-center gap-2 px-2 py-1.5 text-xs hover:bg-accent"
+                onClick={() => toggleAccount(account.id)}
+              >
+                <Checkbox
+                  checked={selectedAccountSet.has(account.id)}
+                  className="pointer-events-none"
+                />
+                <span className="truncate">{account.name}</span>
+              </button>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      <div className={cn("flex items-center", shouldCollapseGap ? "gap-0" : "gap-2")}>
+        <DateRangePicker
+          value={dateRange}
+          onChange={updateDateRange}
+          className="!h-9 w-fit"
+          placeholder="Date"
+          showSelectedText={false}
+          active={isDateRangeActive}
+        />
+
+        <div className="flex items-center !h-9 border border-input box-border divide-x divide-border">
+          {HORIZON_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={cn(
+                "h-full px-3 text-xs font-medium transition-colors",
+                effectiveHorizon === option.value
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-transparent text-foreground hover:bg-muted"
+              )}
+              onClick={() => updateHorizon(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

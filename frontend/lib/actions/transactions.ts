@@ -1,11 +1,17 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq, and, desc, inArray, sql, gte, lte, gt, asc, ne } from "drizzle-orm";
+import { eq, and, desc, inArray, sql, gte, lte, gt, asc, ne, or, ilike, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { transactions, accounts, categories, accountBalances, type NewTransaction } from "@/lib/db/schema";
+import { transactions, accounts, categories, accountBalances } from "@/lib/db/schema";
 import { requireAuth } from "@/lib/auth-helpers";
 import { getBackendBaseUrl } from "@/lib/backend-url";
+import { createInternalAuthHeaders } from "@/lib/internal-auth";
+import type {
+  TransactionSortField,
+  TransactionSortOrder,
+  TransactionsQueryState,
+} from "@/lib/transactions/query-state";
 
 export interface CreateTransactionInput {
   accountId: string;
@@ -197,11 +203,17 @@ export async function createTransaction(
   try {
     // Call backend API to import the transaction
     const backendUrl = getBackendBaseUrl();
+    const pathWithQuery = "/api/transactions/import";
 
-    const response = await fetch(`${backendUrl}/api/transactions/import`, {
+    const response = await fetch(`${backendUrl}${pathWithQuery}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...createInternalAuthHeaders({
+          method: "POST",
+          pathWithQuery,
+          userId,
+        }),
       },
       body: JSON.stringify({
         transactions: [
@@ -215,7 +227,6 @@ export async function createTransaction(
             category_id: input.categoryId || null, // Pre-selected category (skips AI categorization)
           },
         ],
-        user_id: userId,
         sync_exchange_rates: true,
         update_functional_amounts: true,
         calculate_balances: true,
@@ -365,6 +376,333 @@ export interface TransactionWithRelations {
   includeInAnalytics: boolean;
 }
 
+export interface TransactionsPageResult {
+  rows: TransactionWithRelations[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  resolvedFrom?: string;
+  resolvedTo?: string;
+  effectiveHorizon?: number;
+}
+
+function normalizeAccountIds(accountIds: string[]): string[] {
+  return Array.from(new Set(accountIds.map((id) => id.trim()).filter(Boolean)));
+}
+
+function toNumberOrUndefined(value?: string): number | undefined {
+  if (!value) return undefined;
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function resolveSortOrder(
+  sort: TransactionSortField,
+  order: TransactionSortOrder
+) {
+  if (sort === "amount") {
+    return order === "asc"
+      ? [asc(transactions.amount), desc(transactions.bookedAt)]
+      : [desc(transactions.amount), desc(transactions.bookedAt)];
+  }
+  if (sort === "description") {
+    return order === "asc"
+      ? [asc(transactions.description), desc(transactions.bookedAt)]
+      : [desc(transactions.description), desc(transactions.bookedAt)];
+  }
+  if (sort === "merchant") {
+    return order === "asc"
+      ? [asc(transactions.merchant), desc(transactions.bookedAt)]
+      : [desc(transactions.merchant), desc(transactions.bookedAt)];
+  }
+
+  return order === "asc"
+    ? [asc(transactions.bookedAt), desc(transactions.id)]
+    : [desc(transactions.bookedAt), desc(transactions.id)];
+}
+
+interface TransactionRowWithRelations {
+  id: string;
+  accountId: string;
+  description: string | null;
+  merchant: string | null;
+  amount: string;
+  currency: string | null;
+  categoryId: string | null;
+  categorySystemId: string | null;
+  recurringTransactionId: string | null;
+  bookedAt: Date;
+  pending: boolean | null;
+  transactionType: string | null;
+  includeInAnalytics: boolean;
+  account: {
+    id: string;
+    name: string;
+    institution: string | null;
+    accountType: string;
+  } | null;
+  category: {
+    id: string;
+    name: string;
+    color: string | null;
+    icon: string | null;
+  } | null;
+  categorySystem: {
+    id: string;
+    name: string;
+    color: string | null;
+    icon: string | null;
+  } | null;
+  recurringTransaction: {
+    id: string;
+    name: string;
+    merchant: string | null;
+    frequency: string;
+  } | null;
+  transactionLink: {
+    groupId: string;
+    linkRole: string;
+  } | null;
+}
+
+function mapTransactionRowsForUi(
+  rows: TransactionRowWithRelations[],
+  contextLabel: string
+): TransactionWithRelations[] {
+  return rows.flatMap((tx) => {
+    if (!tx.account) {
+      console.warn(`[${contextLabel}] Transaction missing account relation`, {
+        transactionId: tx.id,
+        accountId: tx.accountId,
+      });
+      return [];
+    }
+
+    return [
+      {
+        id: tx.id,
+        accountId: tx.accountId,
+        account: {
+          id: tx.account.id,
+          name: tx.account.name,
+          institution: tx.account.institution,
+          accountType: tx.account.accountType,
+        },
+        description: tx.description,
+        merchant: tx.merchant,
+        amount: parseFloat(tx.amount),
+        currency: tx.currency,
+        categoryId: tx.categoryId,
+        category: tx.category
+          ? {
+              id: tx.category.id,
+              name: tx.category.name,
+              color: tx.category.color,
+              icon: tx.category.icon,
+            }
+          : null,
+        categorySystemId: tx.categorySystemId,
+        categorySystem: tx.categorySystem
+          ? {
+              id: tx.categorySystem.id,
+              name: tx.categorySystem.name,
+              color: tx.categorySystem.color,
+              icon: tx.categorySystem.icon,
+            }
+          : null,
+        recurringTransactionId: tx.recurringTransactionId,
+        recurringTransaction: tx.recurringTransaction
+          ? {
+              id: tx.recurringTransaction.id,
+              name: tx.recurringTransaction.name,
+              merchant: tx.recurringTransaction.merchant,
+              frequency: tx.recurringTransaction.frequency,
+            }
+          : null,
+        transactionLink: tx.transactionLink
+          ? {
+              groupId: tx.transactionLink.groupId,
+              linkRole: tx.transactionLink.linkRole,
+            }
+          : null,
+        bookedAt: tx.bookedAt,
+        pending: tx.pending,
+        transactionType: tx.transactionType,
+        includeInAnalytics: tx.includeInAnalytics,
+      },
+    ];
+  });
+}
+
+async function getLatestTransactionDateForScope(
+  userId: string,
+  accountIds: string[]
+): Promise<Date> {
+  const conditions = [eq(transactions.userId, userId)];
+  if (accountIds.length > 0) {
+    conditions.push(inArray(transactions.accountId, accountIds));
+  }
+
+  const result = await db
+    .select({
+      latestDate: sql<string>`MAX(${transactions.bookedAt})`,
+    })
+    .from(transactions)
+    .where(and(...conditions));
+
+  const latestDate = result[0]?.latestDate;
+  return latestDate ? new Date(latestDate) : new Date();
+}
+
+export async function getTransactionsPage(
+  input: TransactionsQueryState
+): Promise<TransactionsPageResult> {
+  const userId = await requireAuth();
+
+  if (!userId) {
+    return {
+      rows: [],
+      totalCount: 0,
+      page: input.page,
+      pageSize: input.pageSize,
+    };
+  }
+
+  const normalizedAccountIds = normalizeAccountIds(input.accountIds);
+  const conditions = [eq(transactions.userId, userId)];
+
+  if (normalizedAccountIds.length > 0) {
+    conditions.push(inArray(transactions.accountId, normalizedAccountIds));
+  }
+
+  let resolvedFrom: Date | undefined;
+  let resolvedTo: Date | undefined;
+  let effectiveHorizon: number | undefined;
+
+  if (input.from) {
+    resolvedFrom = new Date(`${input.from}T00:00:00.000Z`);
+    resolvedTo = input.to
+      ? new Date(`${input.to}T23:59:59.999Z`)
+      : await getLatestTransactionDateForScope(userId, normalizedAccountIds);
+    resolvedTo.setHours(23, 59, 59, 999);
+    if (resolvedTo < resolvedFrom) {
+      resolvedTo = new Date(resolvedFrom);
+      resolvedTo.setHours(23, 59, 59, 999);
+    }
+  } else {
+    const latestDate = await getLatestTransactionDateForScope(userId, normalizedAccountIds);
+    resolvedTo = new Date(latestDate);
+    resolvedTo.setHours(23, 59, 59, 999);
+    effectiveHorizon = input.horizon ?? 30;
+    resolvedFrom = new Date(resolvedTo);
+    resolvedFrom.setDate(resolvedFrom.getDate() - (effectiveHorizon - 1));
+    resolvedFrom.setHours(0, 0, 0, 0);
+  }
+
+  if (resolvedFrom) {
+    conditions.push(gte(transactions.bookedAt, resolvedFrom));
+  }
+  if (resolvedTo) {
+    conditions.push(lte(transactions.bookedAt, resolvedTo));
+  }
+
+  if (input.search) {
+    conditions.push(
+      or(
+        ilike(transactions.description, `%${input.search}%`),
+        ilike(transactions.merchant, `%${input.search}%`)
+      )!
+    );
+  }
+
+  const categoryIds = input.category.filter((value) => value !== "uncategorized");
+  const includeUncategorized = input.category.includes("uncategorized");
+  if (categoryIds.length > 0 || includeUncategorized) {
+    const categoryConditions = [];
+    if (categoryIds.length > 0) {
+      categoryConditions.push(inArray(transactions.categoryId, categoryIds));
+      categoryConditions.push(inArray(transactions.categorySystemId, categoryIds));
+    }
+    if (includeUncategorized) {
+      categoryConditions.push(
+        and(isNull(transactions.categoryId), isNull(transactions.categorySystemId))
+      );
+    }
+    conditions.push(or(...categoryConditions)!);
+  }
+
+  const includesPending = input.status.includes("pending");
+  const includesCompleted = input.status.includes("completed");
+  if (includesPending !== includesCompleted) {
+    if (includesPending) {
+      conditions.push(eq(transactions.pending, true));
+    } else {
+      conditions.push(or(eq(transactions.pending, false), isNull(transactions.pending))!);
+    }
+  }
+
+  const subscriptionIds = input.subscription.filter((value) => value !== "no_subscription");
+  const includesNoSubscription = input.subscription.includes("no_subscription");
+  if (subscriptionIds.length > 0 || includesNoSubscription) {
+    const subscriptionConditions = [];
+    if (subscriptionIds.length > 0) {
+      subscriptionConditions.push(inArray(transactions.recurringTransactionId, subscriptionIds));
+    }
+    if (includesNoSubscription) {
+      subscriptionConditions.push(isNull(transactions.recurringTransactionId));
+    }
+    conditions.push(or(...subscriptionConditions)!);
+  }
+
+  const includesAnalytics = input.analytics.includes("included");
+  const includesNonAnalytics = input.analytics.includes("excluded");
+  if (includesAnalytics !== includesNonAnalytics) {
+    conditions.push(eq(transactions.includeInAnalytics, includesAnalytics));
+  }
+
+  const minAmount = toNumberOrUndefined(input.minAmount);
+  const maxAmount = toNumberOrUndefined(input.maxAmount);
+  if (minAmount !== undefined) {
+    conditions.push(sql`ABS(${transactions.amount}) >= ${minAmount}`);
+  }
+  if (maxAmount !== undefined) {
+    conditions.push(sql`ABS(${transactions.amount}) <= ${maxAmount}`);
+  }
+
+  const whereClause = and(...conditions);
+  const [countRows, rows] = await Promise.all([
+    db
+      .select({
+        count: sql<number>`COUNT(*)::int`,
+      })
+      .from(transactions)
+      .where(whereClause),
+    db.query.transactions.findMany({
+      where: whereClause,
+      orderBy: resolveSortOrder(input.sort, input.order),
+      limit: input.pageSize,
+      offset: (input.page - 1) * input.pageSize,
+      with: {
+        account: true,
+        category: true,
+        categorySystem: true,
+        recurringTransaction: true,
+        transactionLink: true,
+      },
+    }),
+  ]);
+
+  return {
+    rows: mapTransactionRowsForUi(rows, "getTransactionsPage"),
+    totalCount: countRows[0]?.count ?? 0,
+    page: input.page,
+    pageSize: input.pageSize,
+    resolvedFrom: resolvedFrom ? resolvedFrom.toISOString().slice(0, 10) : undefined,
+    resolvedTo: resolvedTo ? resolvedTo.toISOString().slice(0, 10) : undefined,
+    effectiveHorizon,
+  };
+}
+
 export async function getTransactions(): Promise<TransactionWithRelations[]> {
   const userId = await requireAuth();
 
@@ -384,79 +722,20 @@ export async function getTransactions(): Promise<TransactionWithRelations[]> {
         transactionLink: true,
       },
     });
-
-    // Transactions should always have an account (FK w/ cascade), but Drizzle's
-    // relation typing can still be nullable. Enforce non-null at runtime.
-    //
-    // Use `flatMap` instead of `map+filter` so TS never infers `null[]`.
-    return result.flatMap((tx) => {
-      if (!tx.account) {
-        console.warn("[getTransactions] Transaction missing account relation", {
-          transactionId: tx.id,
-          accountId: tx.accountId,
-        });
-        return [];
-      }
-
-      return [
-        {
-          id: tx.id,
-          accountId: tx.accountId,
-          account: {
-            id: tx.account.id,
-            name: tx.account.name,
-            institution: tx.account.institution,
-            accountType: tx.account.accountType,
-          },
-          description: tx.description,
-          merchant: tx.merchant,
-          amount: parseFloat(tx.amount),
-          currency: tx.currency,
-          categoryId: tx.categoryId,
-          category: tx.category
-            ? {
-                id: tx.category.id,
-                name: tx.category.name,
-                color: tx.category.color,
-                icon: tx.category.icon,
-              }
-            : null,
-          categorySystemId: tx.categorySystemId,
-          categorySystem: tx.categorySystem
-            ? {
-                id: tx.categorySystem.id,
-                name: tx.categorySystem.name,
-                color: tx.categorySystem.color,
-                icon: tx.categorySystem.icon,
-              }
-            : null,
-          recurringTransactionId: tx.recurringTransactionId,
-          recurringTransaction: tx.recurringTransaction
-            ? {
-                id: tx.recurringTransaction.id,
-                name: tx.recurringTransaction.name,
-                merchant: tx.recurringTransaction.merchant,
-                frequency: tx.recurringTransaction.frequency,
-              }
-            : null,
-          transactionLink: tx.transactionLink
-            ? {
-                groupId: tx.transactionLink.groupId,
-                linkRole: tx.transactionLink.linkRole,
-              }
-            : null,
-          bookedAt: tx.bookedAt,
-          pending: tx.pending,
-          transactionType: tx.transactionType,
-          includeInAnalytics: tx.includeInAnalytics,
-        },
-      ];
-    });
-  } catch (error: any) {
+    return mapTransactionRowsForUi(result, "getTransactions");
+  } catch (error: unknown) {
+    const normalizedError =
+      error instanceof Error
+        ? {
+            message: error.message,
+            cause: "cause" in error ? (error as Error & { cause?: unknown }).cause : undefined,
+            stack: error.stack,
+          }
+        : { message: String(error), cause: undefined, stack: undefined };
     console.error("[getTransactions] Query failed:", {
-      error: error?.message || String(error),
-      cause: error?.cause,
-      stack: error?.stack,
+      error: normalizedError.message,
+      cause: normalizedError.cause,
+      stack: normalizedError.stack,
       userId,
     });
     // Return empty array on error to prevent app crash
@@ -500,75 +779,20 @@ export async function getTransactionsForAccount(
         transactionLink: true,
       },
     });
-
-    return result.flatMap((tx) => {
-      if (!tx.account) {
-        console.warn("[getTransactionsForAccount] Transaction missing account relation", {
-          transactionId: tx.id,
-          accountId: tx.accountId,
-        });
-        return [];
-      }
-
-      return [
-        {
-          id: tx.id,
-          accountId: tx.accountId,
-          account: {
-            id: tx.account.id,
-            name: tx.account.name,
-            institution: tx.account.institution,
-            accountType: tx.account.accountType,
-          },
-          description: tx.description,
-          merchant: tx.merchant,
-          amount: parseFloat(tx.amount),
-          currency: tx.currency,
-          categoryId: tx.categoryId,
-          category: tx.category
-            ? {
-                id: tx.category.id,
-                name: tx.category.name,
-                color: tx.category.color,
-                icon: tx.category.icon,
-              }
-            : null,
-          categorySystemId: tx.categorySystemId,
-          categorySystem: tx.categorySystem
-            ? {
-                id: tx.categorySystem.id,
-                name: tx.categorySystem.name,
-                color: tx.categorySystem.color,
-                icon: tx.categorySystem.icon,
-              }
-            : null,
-          recurringTransactionId: tx.recurringTransactionId,
-          recurringTransaction: tx.recurringTransaction
-            ? {
-                id: tx.recurringTransaction.id,
-                name: tx.recurringTransaction.name,
-                merchant: tx.recurringTransaction.merchant,
-                frequency: tx.recurringTransaction.frequency,
-              }
-            : null,
-          transactionLink: tx.transactionLink
-            ? {
-                groupId: tx.transactionLink.groupId,
-                linkRole: tx.transactionLink.linkRole,
-              }
-            : null,
-          bookedAt: tx.bookedAt,
-          pending: tx.pending,
-          transactionType: tx.transactionType,
-          includeInAnalytics: tx.includeInAnalytics,
-        },
-      ];
-    });
-  } catch (error: any) {
+    return mapTransactionRowsForUi(result, "getTransactionsForAccount");
+  } catch (error: unknown) {
+    const normalizedError =
+      error instanceof Error
+        ? {
+            message: error.message,
+            cause: "cause" in error ? (error as Error & { cause?: unknown }).cause : undefined,
+            stack: error.stack,
+          }
+        : { message: String(error), cause: undefined, stack: undefined };
     console.error("[getTransactionsForAccount] Query failed:", {
-      error: error?.message || String(error),
-      cause: error?.cause,
-      stack: error?.stack,
+      error: normalizedError.message,
+      cause: normalizedError.cause,
+      stack: normalizedError.stack,
       userId,
       accountId,
     });

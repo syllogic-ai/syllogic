@@ -1,5 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import logging
 import os
 
@@ -10,6 +11,11 @@ logging.basicConfig(
 )
 
 from app.database import engine, Base
+from app.db_helpers import (
+    authenticate_internal_request_from_headers,
+    clear_request_user_id,
+    set_request_user_id,
+)
 from app.routes import api_router
 
 logger = logging.getLogger(__name__)
@@ -54,6 +60,51 @@ app = FastAPI(
     redoc_url="/redoc" if _env_bool("API_DOCS_ENABLED", default=False) else None,
     openapi_url="/openapi.json" if _env_bool("API_DOCS_ENABLED", default=False) else None,
 )
+
+
+UNPROTECTED_API_PATHS = {"/api/health"}
+
+
+@app.middleware("http")
+async def internal_auth_middleware(request: Request, call_next):
+    path = request.url.path
+    if (
+        request.method == "OPTIONS"
+        or not path.startswith("/api/")
+        or path in UNPROTECTED_API_PATHS
+    ):
+        return await call_next(request)
+
+    path_with_query = path
+    if request.url.query:
+        path_with_query = f"{path_with_query}?{request.url.query}"
+
+    try:
+        request_user_id = authenticate_internal_request_from_headers(
+            method=request.method,
+            path_with_query=path_with_query,
+            headers=request.headers,
+        )
+    except Exception as exc:
+        if hasattr(exc, "status_code") and hasattr(exc, "detail"):
+            return JSONResponse(
+                status_code=getattr(exc, "status_code"),
+                content={"detail": getattr(exc, "detail")},
+            )
+        logger.exception("Unexpected internal auth error")
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal authentication failure."},
+        )
+
+    token = set_request_user_id(request_user_id)
+    try:
+        response = await call_next(request)
+    finally:
+        clear_request_user_id(token)
+
+    return response
+
 
 # CORS configuration
 app.add_middleware(

@@ -1,34 +1,26 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-
-const STORAGE_KEY = "dashboardFilters";
+import { useSearchParams } from "next/navigation";
+import {
+  GLOBAL_FILTER_STORAGE_KEY,
+  getGlobalFilterQueryString,
+  hasGlobalFilters,
+  parseGlobalFiltersFromSearchParams,
+} from "@/lib/filters/global-filters";
 
 export function useFilterPersistence() {
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    const current = searchParams.toString();
-    if (!current) {
+    const filters = parseGlobalFiltersFromSearchParams(searchParams);
+    const queryString = getGlobalFilterQueryString(filters);
+
+    if (!hasGlobalFilters(filters) || !queryString) {
+      localStorage.removeItem(GLOBAL_FILTER_STORAGE_KEY);
       return;
     }
 
-    localStorage.setItem(STORAGE_KEY, current);
+    localStorage.setItem(GLOBAL_FILTER_STORAGE_KEY, queryString);
   }, [searchParams]);
-
-  useEffect(() => {
-    const current = searchParams.toString();
-    if (current) {
-      return;
-    }
-
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) {
-      return;
-    }
-
-    router.replace(`?${stored}`, { scroll: false });
-  }, [searchParams, router]);
 }

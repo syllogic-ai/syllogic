@@ -3,7 +3,8 @@
 import { db } from "@/lib/db";
 import { accounts, transactions, categories, users, properties, vehicles, accountBalances, transactionLinks } from "@/lib/db/schema";
 import { getAuthenticatedSession } from "@/lib/auth-helpers";
-import { eq, sql, gte, lte, and, desc, inArray, isNull, or } from "drizzle-orm";
+import { eq, sql, gte, lte, and, desc, inArray, isNull } from "drizzle-orm";
+import { buildConservativeSankey } from "@/lib/dashboard/sankey";
 
 async function getUserCurrency(userId: string): Promise<string> {
   const result = await db
@@ -15,10 +16,35 @@ async function getUserCurrency(userId: string): Promise<string> {
   return result[0]?.functionalCurrency || "EUR";
 }
 
-async function getLatestTransactionDate(userId: string, accountId?: string): Promise<Date> {
+function normalizeAccountIds(accountIds?: string[]): string[] | undefined {
+  if (!accountIds?.length) return undefined;
+  const uniqueIds = Array.from(new Set(accountIds.map((id) => id.trim()).filter(Boolean)));
+  return uniqueIds.length > 0 ? uniqueIds : undefined;
+}
+
+function errorToLogContext(error: unknown): {
+  message: string;
+  cause?: unknown;
+  stack?: string;
+} {
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      cause: "cause" in error ? (error as Error & { cause?: unknown }).cause : undefined,
+      stack: error.stack,
+    };
+  }
+
+  return {
+    message: String(error),
+  };
+}
+
+async function getLatestTransactionDate(userId: string, accountIds?: string[]): Promise<Date> {
+  const normalizedAccountIds = normalizeAccountIds(accountIds);
   const conditions = [eq(transactions.userId, userId)];
-  if (accountId) {
-    conditions.push(eq(transactions.accountId, accountId));
+  if (normalizedAccountIds?.length) {
+    conditions.push(inArray(transactions.accountId, normalizedAccountIds));
   }
 
   const result = await db
@@ -84,7 +110,7 @@ export async function getAvailableMonths() {
   }));
 }
 
-export async function getTotalBalance(accountId?: string) {
+export async function getTotalBalance(accountIds?: string[]) {
   const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
@@ -96,8 +122,9 @@ export async function getTotalBalance(accountId?: string) {
     eq(accounts.userId, session.user.id),
     eq(accounts.isActive, true),
   ];
-  if (accountId) {
-    accountConditions.push(eq(accounts.id, accountId));
+  const normalizedAccountIds = normalizeAccountIds(accountIds);
+  if (normalizedAccountIds?.length) {
+    accountConditions.push(inArray(accounts.id, normalizedAccountIds));
   }
 
   const userAccounts = await db
@@ -110,7 +137,7 @@ export async function getTotalBalance(accountId?: string) {
     return { total: 0, currency };
   }
 
-  const accountIds = userAccounts.map(a => a.id);
+  const selectedAccountIds = userAccounts.map((a) => a.id);
 
   // Get the latest balance for EACH account, then sum them
   // This ensures accounts with different latest dates are all included
@@ -122,7 +149,7 @@ export async function getTotalBalance(accountId?: string) {
       .from(sql`(
         SELECT DISTINCT ON (account_id) account_id, balance_in_functional_currency
         FROM account_balances
-        WHERE account_id IN (${sql.join(accountIds.map(id => sql`${id}`), sql`, `)})
+        WHERE account_id IN (${sql.join(selectedAccountIds.map((id) => sql`${id}`), sql`, `)})
         ORDER BY account_id, date DESC
       ) AS ab`),
     getUserCurrency(session.user.id),
@@ -134,24 +161,22 @@ export async function getTotalBalance(accountId?: string) {
   };
 }
 
-export async function getBalanceHistory(days: number = 7, referenceDate?: Date, accountId?: string) {
+export async function getBalanceHistory(startDate: Date, endDate: Date, accountIds?: string[]) {
   const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return [];
   }
 
-  const refDate = referenceDate || await getLatestTransactionDate(session.user.id, accountId);
-  const startDate = new Date(refDate);
-  startDate.setDate(startDate.getDate() - days);
+  const normalizedAccountIds = normalizeAccountIds(accountIds);
 
   // Get user's active account IDs
   const accountConditions = [
     eq(accounts.userId, session.user.id),
     eq(accounts.isActive, true),
   ];
-  if (accountId) {
-    accountConditions.push(eq(accounts.id, accountId));
+  if (normalizedAccountIds?.length) {
+    accountConditions.push(inArray(accounts.id, normalizedAccountIds));
   }
 
   const userAccounts = await db
@@ -163,7 +188,7 @@ export async function getBalanceHistory(days: number = 7, referenceDate?: Date, 
     return [];
   }
 
-  const accountIds = userAccounts.map(a => a.id);
+  const selectedAccountIds = userAccounts.map((a) => a.id);
 
   // Query account_balances table - sum across accounts per day
   const result = await db
@@ -173,9 +198,9 @@ export async function getBalanceHistory(days: number = 7, referenceDate?: Date, 
     })
     .from(accountBalances)
     .where(and(
-      inArray(accountBalances.accountId, accountIds),
+      inArray(accountBalances.accountId, selectedAccountIds),
       gte(accountBalances.date, startDate),
-      lte(accountBalances.date, refDate)
+      lte(accountBalances.date, endDate)
     ))
     .groupBy(sql`DATE(${accountBalances.date})`)
     .orderBy(sql`DATE(${accountBalances.date})`);
@@ -186,21 +211,14 @@ export async function getBalanceHistory(days: number = 7, referenceDate?: Date, 
   }));
 }
 
-export async function getPeriodSpending(referenceDate?: Date, accountId?: string, horizon: number = 30) {
+export async function getPeriodSpending(startDate: Date, endDate: Date, accountIds?: string[]) {
   const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return { total: 0, currency: "EUR" };
   }
 
-  const refDate = referenceDate || await getLatestTransactionDate(session.user.id, accountId);
-
-  // Use rolling period based on horizon
-  const startDate = new Date(refDate);
-  startDate.setDate(startDate.getDate() - horizon);
-  startDate.setHours(0, 0, 0, 0);
-  const endDate = new Date(refDate);
-  endDate.setHours(23, 59, 59, 999);
+  const normalizedAccountIds = normalizeAccountIds(accountIds);
 
   const conditions = [
     eq(transactions.userId, session.user.id),
@@ -209,8 +227,8 @@ export async function getPeriodSpending(referenceDate?: Date, accountId?: string
     gte(transactions.bookedAt, startDate),
     lte(transactions.bookedAt, endDate),
   ];
-  if (accountId) {
-    conditions.push(eq(transactions.accountId, accountId));
+  if (normalizedAccountIds?.length) {
+    conditions.push(inArray(transactions.accountId, normalizedAccountIds));
   }
 
   // For linked transactions, use net amount (sum of all in group) for primary
@@ -254,10 +272,12 @@ export async function getPeriodSpending(referenceDate?: Date, accountId?: string
       total: parseFloat(result[0]?.total || "0"),
       currency,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const normalizedError = errorToLogContext(error);
     console.error("[getPeriodSpending] Query failed:", {
-      error: error?.message || String(error),
-      stack: error?.stack,
+      error: normalizedError.message,
+      cause: normalizedError.cause,
+      stack: normalizedError.stack,
       userId: session.user.id,
     });
     // Return default on error to prevent app crash
@@ -268,21 +288,14 @@ export async function getPeriodSpending(referenceDate?: Date, accountId?: string
   }
 }
 
-export async function getPeriodIncome(referenceDate?: Date, accountId?: string, horizon: number = 30) {
+export async function getPeriodIncome(startDate: Date, endDate: Date, accountIds?: string[]) {
   const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return { total: 0, currency: "EUR" };
   }
 
-  const refDate = referenceDate || await getLatestTransactionDate(session.user.id, accountId);
-
-  // Use rolling period based on horizon
-  const startDate = new Date(refDate);
-  startDate.setDate(startDate.getDate() - horizon);
-  startDate.setHours(0, 0, 0, 0);
-  const endDate = new Date(refDate);
-  endDate.setHours(23, 59, 59, 999);
+  const normalizedAccountIds = normalizeAccountIds(accountIds);
 
   const conditions = [
     eq(transactions.userId, session.user.id),
@@ -291,8 +304,8 @@ export async function getPeriodIncome(referenceDate?: Date, accountId?: string, 
     gte(transactions.bookedAt, startDate),
     lte(transactions.bookedAt, endDate),
   ];
-  if (accountId) {
-    conditions.push(eq(transactions.accountId, accountId));
+  if (normalizedAccountIds?.length) {
+    conditions.push(inArray(transactions.accountId, normalizedAccountIds));
   }
 
   // For linked transactions, use net amount (sum of all in group) for primary
@@ -336,11 +349,12 @@ export async function getPeriodIncome(referenceDate?: Date, accountId?: string, 
       total: parseFloat(result[0]?.total || "0"),
       currency,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const normalizedError = errorToLogContext(error);
     console.error("[getPeriodIncome] Query failed:", {
-      error: error?.message || String(error),
-      cause: error?.cause,
-      stack: error?.stack,
+      error: normalizedError.message,
+      cause: normalizedError.cause,
+      stack: normalizedError.stack,
       userId: session.user.id,
     });
     // Return default on error to prevent app crash
@@ -351,26 +365,24 @@ export async function getPeriodIncome(referenceDate?: Date, accountId?: string, 
   }
 }
 
-export async function getSpendingHistory(days: number = 7, referenceDate?: Date, accountId?: string) {
+export async function getSpendingHistory(startDate: Date, endDate: Date, accountIds?: string[]) {
   const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return [];
   }
 
-  const refDate = referenceDate || await getLatestTransactionDate(session.user.id, accountId);
-  const startDate = new Date(refDate);
-  startDate.setDate(startDate.getDate() - days);
+  const normalizedAccountIds = normalizeAccountIds(accountIds);
 
   const conditions = [
     eq(transactions.userId, session.user.id),
     eq(transactions.transactionType, "debit"),
     eq(transactions.includeInAnalytics, true),
     gte(transactions.bookedAt, startDate),
-    lte(transactions.bookedAt, refDate),
+    lte(transactions.bookedAt, endDate),
   ];
-  if (accountId) {
-    conditions.push(eq(transactions.accountId, accountId));
+  if (normalizedAccountIds?.length) {
+    conditions.push(inArray(transactions.accountId, normalizedAccountIds));
   }
 
   // Only count transactions categorized as 'expense' (excludes transfers)
@@ -394,26 +406,24 @@ export async function getSpendingHistory(days: number = 7, referenceDate?: Date,
   }));
 }
 
-export async function getIncomeHistory(days: number = 7, referenceDate?: Date, accountId?: string) {
+export async function getIncomeHistory(startDate: Date, endDate: Date, accountIds?: string[]) {
   const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return [];
   }
 
-  const refDate = referenceDate || await getLatestTransactionDate(session.user.id, accountId);
-  const startDate = new Date(refDate);
-  startDate.setDate(startDate.getDate() - days);
+  const normalizedAccountIds = normalizeAccountIds(accountIds);
 
   const conditions = [
     eq(transactions.userId, session.user.id),
     eq(transactions.transactionType, "credit"),
     eq(transactions.includeInAnalytics, true),
     gte(transactions.bookedAt, startDate),
-    lte(transactions.bookedAt, refDate),
+    lte(transactions.bookedAt, endDate),
   ];
-  if (accountId) {
-    conditions.push(eq(transactions.accountId, accountId));
+  if (normalizedAccountIds?.length) {
+    conditions.push(inArray(transactions.accountId, normalizedAccountIds));
   }
 
   // Only count transactions categorized as 'income' (excludes transfers)
@@ -437,31 +447,26 @@ export async function getIncomeHistory(days: number = 7, referenceDate?: Date, a
   }));
 }
 
-export async function getIncomeExpenseData(referenceDate?: Date, accountId?: string) {
+export async function getIncomeExpenseData(startDate: Date, endDate: Date, accountIds?: string[]) {
   const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return [];
   }
 
-  // Use the latest transaction date as reference or provided date
-  const refDate = referenceDate || await getLatestTransactionDate(session.user.id, accountId);
-
-  // Calculate the start date (12 months ago from the reference month)
-  const startDate = new Date(refDate.getFullYear(), refDate.getMonth() - 11, 1);
-  const endOfRefMonth = new Date(refDate.getFullYear(), refDate.getMonth() + 1, 0, 23, 59, 59, 999);
+  const normalizedAccountIds = normalizeAccountIds(accountIds);
 
   const conditions = [
     eq(transactions.userId, session.user.id),
     eq(transactions.includeInAnalytics, true),
     gte(transactions.bookedAt, startDate),
-    lte(transactions.bookedAt, endOfRefMonth),
+    lte(transactions.bookedAt, endDate),
   ];
-  if (accountId) {
-    conditions.push(eq(transactions.accountId, accountId));
+  if (normalizedAccountIds?.length) {
+    conditions.push(inArray(transactions.accountId, normalizedAccountIds));
   }
 
-  // Get monthly income and expenses for the last 12 months
+  // Get monthly income and expenses in the selected range
   // Filter by category type to exclude transfers
   // For linked transactions: use net amount via subquery
   try {
@@ -546,10 +551,16 @@ export async function getIncomeExpenseData(referenceDate?: Date, accountId?: str
       "Dec",
     ];
 
-    // Create array of last 12 months with proper labels (ending at reference month)
+    const startMonth = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    const endMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+
+    // Create array of months in selected range
     const months: { month: string; monthDate: string; income: number; expenses: number }[] = [];
-    for (let i = 0; i < 12; i++) {
-      const date = new Date(refDate.getFullYear(), refDate.getMonth() - 11 + i, 1);
+    for (
+      let date = new Date(startMonth);
+      date <= endMonth;
+      date = new Date(date.getFullYear(), date.getMonth() + 1, 1)
+    ) {
       const monthLabel = monthNames[date.getMonth()];
       const monthDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`;
       months.push({
@@ -565,7 +576,11 @@ export async function getIncomeExpenseData(referenceDate?: Date, accountId?: str
       // Find the corresponding month in our array
       const rowDate = new Date(row.year, row.month - 1, 1);
       const monthIndex = months.findIndex((_, i) => {
-        const targetDate = new Date(refDate.getFullYear(), refDate.getMonth() - 11 + i, 1);
+        const targetDate = new Date(
+          startMonth.getFullYear(),
+          startMonth.getMonth() + i,
+          1
+        );
         return (
           targetDate.getFullYear() === rowDate.getFullYear() &&
           targetDate.getMonth() === rowDate.getMonth()
@@ -579,11 +594,12 @@ export async function getIncomeExpenseData(referenceDate?: Date, accountId?: str
     }
 
     return months;
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const normalizedError = errorToLogContext(error);
     console.error("[getIncomeExpenseData] Query failed:", {
-      error: error?.message || String(error),
-      cause: error?.cause,
-      stack: error?.stack,
+      error: normalizedError.message,
+      cause: normalizedError.cause,
+      stack: normalizedError.stack,
       userId: session.user.id,
     });
     // Return empty array on error to prevent app crash
@@ -591,21 +607,19 @@ export async function getIncomeExpenseData(referenceDate?: Date, accountId?: str
   }
 }
 
-export async function getSpendingByCategory(limit: number = 5, referenceDate?: Date, accountId?: string, horizon: number = 30) {
+export async function getSpendingByCategory(
+  startDate: Date,
+  endDate: Date,
+  accountIds?: string[],
+  limit: number = 5
+) {
   const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
     return { categories: [], total: 0 };
   }
 
-  const refDate = referenceDate || await getLatestTransactionDate(session.user.id, accountId);
-
-  // Use rolling period based on horizon
-  const startDate = new Date(refDate);
-  startDate.setDate(startDate.getDate() - horizon);
-  startDate.setHours(0, 0, 0, 0);
-  const endDate = new Date(refDate);
-  endDate.setHours(23, 59, 59, 999);
+  const normalizedAccountIds = normalizeAccountIds(accountIds);
 
   // Build base conditions
   const baseConditions = [
@@ -615,8 +629,8 @@ export async function getSpendingByCategory(limit: number = 5, referenceDate?: D
     gte(transactions.bookedAt, startDate),
     lte(transactions.bookedAt, endDate),
   ];
-  if (accountId) {
-    baseConditions.push(eq(transactions.accountId, accountId));
+  if (normalizedAccountIds?.length) {
+    baseConditions.push(inArray(transactions.accountId, normalizedAccountIds));
   }
 
   // Get spending by category using net amounts for linked transactions via subquery
@@ -755,11 +769,12 @@ export async function getSpendingByCategory(limit: number = 5, referenceDate?: D
       categories: sortedCategories,
       total: parseFloat(totalResult[0]?.total || "0"),
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const normalizedError = errorToLogContext(error);
     console.error("[getSpendingByCategory] Query failed:", {
-      error: error?.message || String(error),
-      cause: error?.cause,
-      stack: error?.stack,
+      error: normalizedError.message,
+      cause: normalizedError.cause,
+      stack: normalizedError.stack,
       userId: session.user.id,
     });
     // Return empty result on error to prevent app crash
@@ -1018,9 +1033,9 @@ export interface SankeyData {
 }
 
 export async function getSankeyData(
-  dateFrom?: Date,
-  dateTo?: Date,
-  accountId?: string
+  startDate?: Date,
+  endDate?: Date,
+  accountIds?: string[]
 ): Promise<SankeyData> {
   const session = await getAuthenticatedSession();
 
@@ -1028,27 +1043,29 @@ export async function getSankeyData(
     return { nodes: [], links: [] };
   }
 
-  // Use provided dates or default to last 3 months from latest transaction
-  let startDate: Date;
-  let endDate: Date;
+  const normalizedAccountIds = normalizeAccountIds(accountIds);
 
-  if (dateFrom && dateTo) {
-    startDate = dateFrom;
-    endDate = dateTo;
-  } else {
-    const refDate = await getLatestTransactionDate(session.user.id, accountId);
-    startDate = new Date(refDate.getFullYear(), refDate.getMonth() - 2, 1);
-    endDate = new Date(refDate.getFullYear(), refDate.getMonth() + 1, 0, 23, 59, 59, 999);
+  let resolvedStartDate = startDate;
+  let resolvedEndDate = endDate;
+  if (!resolvedStartDate || !resolvedEndDate) {
+    const fallbackRefDate = await getLatestTransactionDate(session.user.id, normalizedAccountIds);
+    resolvedEndDate = new Date(fallbackRefDate);
+    resolvedEndDate.setHours(23, 59, 59, 999);
+    resolvedStartDate = new Date(resolvedEndDate);
+    resolvedStartDate.setDate(resolvedStartDate.getDate() - 29);
+    resolvedStartDate.setHours(0, 0, 0, 0);
   }
+  const rangeStart = resolvedStartDate ?? new Date(0);
+  const rangeEnd = resolvedEndDate ?? new Date();
 
   const conditions = [
     eq(transactions.userId, session.user.id),
     eq(transactions.includeInAnalytics, true),
-    gte(transactions.bookedAt, startDate),
-    lte(transactions.bookedAt, endDate),
+    gte(transactions.bookedAt, rangeStart),
+    lte(transactions.bookedAt, rangeEnd),
   ];
-  if (accountId) {
-    conditions.push(eq(transactions.accountId, accountId));
+  if (normalizedAccountIds?.length) {
+    conditions.push(inArray(transactions.accountId, normalizedAccountIds));
   }
 
   // Get income by category (categories with type 'income' only, excludes transfers)
@@ -1099,16 +1116,6 @@ export async function getSankeyData(
     )
     .orderBy(desc(sql`SUM(ABS(${transactions.amount}))`));
 
-  // Build nodes and links for Sankey diagram
-  // Structure: [Income Categories] → [Expense Categories]
-  const nodes: {
-    name: string;
-    categoryId?: string | null;
-    categoryType?: "income" | "expense";
-    total?: number;
-  }[] = [];
-  const links: { source: number; target: number; value: number }[] = [];
-
   // Filter and limit categories
   const incomeCategories = incomeByCategory
     .filter(c => parseFloat(c.total) > 0)
@@ -1122,58 +1129,24 @@ export async function getSankeyData(
     return { nodes: [], links: [] };
   }
 
-  // Calculate totals
-  // Add income category nodes (left side)
-  const incomeNodeIndices: number[] = [];
-  for (const cat of incomeCategories) {
-    incomeNodeIndices.push(nodes.length);
-    nodes.push({
-      name: cat.categoryName || "Other Income",
-      categoryId: cat.categoryId,
-      categoryType: "income",
-      total: Number(cat.total),
-    });
-  }
-
-  // Add expense category nodes (right side)
-  const expenseNodeIndices: number[] = [];
-  for (const cat of expenseCategories) {
-    expenseNodeIndices.push(nodes.length);
-    nodes.push({
-      name: cat.categoryName || "Other Expenses",
-      categoryId: cat.categoryId,
-      categoryType: "expense",
-      total: Number(cat.total),
-    });
-  }
-
-  // Create links from each income category to expense categories
-  // Each income source distributes to expenses based on expense proportions
-  for (let i = 0; i < incomeCategories.length; i++) {
-    const incomeValue = parseFloat(incomeCategories[i].total);
-    if (incomeValue <= 0) continue;
-
-    // Distribute income to each expense category proportionally
-    for (let j = 0; j < expenseCategories.length; j++) {
-      const expenseValue = parseFloat(expenseCategories[j].total);
-      // Each expense gets its share based on its proportion of total expenses
-      const linkValue = expenseValue;
-
-      if (linkValue > 0) {
-        links.push({
-          source: incomeNodeIndices[i],
-          target: expenseNodeIndices[j],
-          value: Math.round(linkValue * 100) / 100,
-        });
-      }
-    }
-  }
-
-  return { nodes, links };
+  return buildConservativeSankey(
+    incomeCategories.map((category) => ({
+      categoryId: category.categoryId,
+      categoryName: category.categoryName || "Other Income",
+      total: parseFloat(category.total),
+      categoryType: "income" as const,
+    })),
+    expenseCategories.map((category) => ({
+      categoryId: category.categoryId,
+      categoryName: category.categoryName || "Other Expenses",
+      total: parseFloat(category.total),
+      categoryType: "expense" as const,
+    }))
+  );
 }
 
 export interface DashboardFilters {
-  accountId?: string;
+  accountIds?: string[];
   dateFrom?: Date;
   dateTo?: Date;
   horizon?: number;
@@ -1222,19 +1195,32 @@ export async function getDashboardData(filters: DashboardFilters = {}) {
     };
   }
 
-  const { accountId, dateFrom, dateTo, horizon = 30 } = filters;
+  const normalizedAccountIds = normalizeAccountIds(filters.accountIds);
+  const horizonCandidate = filters.horizon ?? 30;
+  const horizonDays = Number.isFinite(horizonCandidate) && horizonCandidate > 0
+    ? horizonCandidate
+    : 30;
+  const isDateRangeMode = Boolean(filters.dateFrom);
+  const latestTransactionDate = await getLatestTransactionDate(session.user.id, normalizedAccountIds);
 
-  // Determine the reference date: use dateTo if provided, otherwise detect from latest transaction
-  let referenceDate: Date;
-  if (dateTo) {
-    referenceDate = new Date(dateTo);
-    referenceDate.setHours(23, 59, 59, 999);
-  } else if (dateFrom) {
-    // If only dateFrom is provided, use it as the reference
-    referenceDate = new Date(dateFrom);
-    referenceDate.setHours(23, 59, 59, 999);
+  // Canonical window for all dashboard datasets/charts
+  let startDate: Date;
+  let endDate: Date;
+  if (isDateRangeMode && filters.dateFrom) {
+    startDate = new Date(filters.dateFrom);
+    startDate.setHours(0, 0, 0, 0);
+    endDate = filters.dateTo ? new Date(filters.dateTo) : new Date(latestTransactionDate);
+    endDate.setHours(23, 59, 59, 999);
+    if (endDate < startDate) {
+      endDate = new Date(startDate);
+      endDate.setHours(23, 59, 59, 999);
+    }
   } else {
-    referenceDate = await getLatestTransactionDate(session.user.id, accountId);
+    endDate = new Date(latestTransactionDate);
+    endDate.setHours(23, 59, 59, 999);
+    startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - (horizonDays - 1));
+    startDate.setHours(0, 0, 0, 0);
   }
 
   const currency = await getUserCurrency(session.user.id);
@@ -1251,16 +1237,16 @@ export async function getDashboardData(filters: DashboardFilters = {}) {
     assetsOverview,
     sankeyData,
   ] = await Promise.all([
-    getTotalBalance(accountId),
-    getBalanceHistory(horizon, referenceDate, accountId),
-    getPeriodSpending(referenceDate, accountId, horizon),
-    getPeriodIncome(referenceDate, accountId, horizon),
-    getSpendingHistory(horizon, referenceDate, accountId),
-    getIncomeHistory(horizon, referenceDate, accountId),
-    getIncomeExpenseData(referenceDate, accountId),
-    getSpendingByCategory(5, referenceDate, accountId, horizon),
+    getTotalBalance(normalizedAccountIds),
+    getBalanceHistory(startDate, endDate, normalizedAccountIds),
+    getPeriodSpending(startDate, endDate, normalizedAccountIds),
+    getPeriodIncome(startDate, endDate, normalizedAccountIds),
+    getSpendingHistory(startDate, endDate, normalizedAccountIds),
+    getIncomeHistory(startDate, endDate, normalizedAccountIds),
+    getIncomeExpenseData(startDate, endDate, normalizedAccountIds),
+    getSpendingByCategory(startDate, endDate, normalizedAccountIds, 5),
     getAssetsOverview(),
-    getSankeyData(dateFrom, dateTo, accountId),
+    getSankeyData(startDate, endDate, normalizedAccountIds),
   ]);
 
   // Calculate savings rate (income - expenses = potential savings)
@@ -1269,13 +1255,94 @@ export async function getDashboardData(filters: DashboardFilters = {}) {
     ? (savingsAmount / periodIncome.total) * 100
     : 0;
 
+  const isSameCalendarDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+
+  const lastDayOfMonth = (date: Date) =>
+    new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+
+  const isFullMonthRange = (rangeStart: Date, rangeEnd: Date) =>
+    rangeStart.getFullYear() === rangeEnd.getFullYear() &&
+    rangeStart.getMonth() === rangeEnd.getMonth() &&
+    rangeStart.getDate() === 1 &&
+    rangeEnd.getDate() === lastDayOfMonth(rangeEnd);
+
+  const isFullQuarterRange = (rangeStart: Date, rangeEnd: Date) => {
+    const quarterStartMonth = Math.floor(rangeStart.getMonth() / 3) * 3;
+    const quarterEndMonth = quarterStartMonth + 2;
+    return (
+      rangeStart.getFullYear() === rangeEnd.getFullYear() &&
+      rangeStart.getMonth() === quarterStartMonth &&
+      rangeStart.getDate() === 1 &&
+      rangeEnd.getMonth() === quarterEndMonth &&
+      rangeEnd.getDate() === lastDayOfMonth(rangeEnd)
+    );
+  };
+
+  const isFullYearRange = (rangeStart: Date, rangeEnd: Date) =>
+    rangeStart.getFullYear() === rangeEnd.getFullYear() &&
+    rangeStart.getMonth() === 0 &&
+    rangeStart.getDate() === 1 &&
+    rangeEnd.getMonth() === 11 &&
+    rangeEnd.getDate() === 31;
+
+  const getQuarter = (date: Date) => Math.floor(date.getMonth() / 3) + 1;
+
+  const formatShortDate = (date: Date) =>
+    date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const formatShortDateNoYear = (date: Date) =>
+    date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const formatLongMonthYear = (date: Date) =>
+    date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+  const getDateModePeriodLabel = (rangeStart: Date, rangeEnd: Date) => {
+    if (isFullYearRange(rangeStart, rangeEnd)) {
+      return { title: "Year", subtitle: String(rangeStart.getFullYear()) };
+    }
+    if (isFullQuarterRange(rangeStart, rangeEnd)) {
+      return {
+        title: "Quarter",
+        subtitle: `Q${getQuarter(rangeStart)} ${rangeStart.getFullYear()}`,
+      };
+    }
+    if (isFullMonthRange(rangeStart, rangeEnd)) {
+      return { title: "Month", subtitle: formatLongMonthYear(rangeStart) };
+    }
+    if (isSameCalendarDay(rangeStart, rangeEnd)) {
+      return { title: "Day", subtitle: formatShortDate(rangeStart) };
+    }
+    if (rangeStart.getFullYear() === rangeEnd.getFullYear()) {
+      if (rangeStart.getMonth() === rangeEnd.getMonth()) {
+        return {
+          title: "Custom",
+          subtitle: `${rangeStart.toLocaleDateString("en-US", {
+            month: "short",
+          })} ${rangeStart.getDate()} - ${rangeEnd.getDate()}, ${rangeStart.getFullYear()}`,
+        };
+      }
+      return {
+        title: "Custom",
+        subtitle: `${formatShortDateNoYear(rangeStart)} - ${formatShortDateNoYear(rangeEnd)}, ${rangeStart.getFullYear()}`,
+      };
+    }
+    return {
+      title: "Custom",
+      subtitle: `${formatShortDate(rangeStart)} - ${formatShortDate(rangeEnd)}`,
+    };
+  };
+
   // Generate period label based on horizon
-  const getPeriodLabel = (h: number) => {
+  const getHorizonPeriodLabel = (h: number) => {
     if (h <= 7) return { title: "7-Day", subtitle: "Last 7 days" };
     if (h <= 30) return { title: "30-Day", subtitle: "Last 30 days" };
     return { title: "12-Month", subtitle: "Last 12 months" };
   };
-  const periodLabel = getPeriodLabel(horizon);
+
+  const periodLabel = isDateRangeMode
+    ? getDateModePeriodLabel(startDate, endDate)
+    : getHorizonPeriodLabel(horizonDays);
 
   return {
     balance,
@@ -1294,11 +1361,11 @@ export async function getDashboardData(filters: DashboardFilters = {}) {
     assetsOverview,
     sankeyData,
     periodLabel,
-    horizon,
+    horizon: horizonDays,
     referencePeriod: {
-      month: monthNames[referenceDate.getMonth()],
-      year: referenceDate.getFullYear(),
-      label: `${monthNames[referenceDate.getMonth()]} ${referenceDate.getFullYear()}`,
+      month: monthNames[endDate.getMonth()],
+      year: endDate.getFullYear(),
+      label: `${monthNames[endDate.getMonth()]} ${endDate.getFullYear()}`,
     },
   };
 }

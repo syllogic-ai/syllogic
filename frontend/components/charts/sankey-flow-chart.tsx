@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/utils";
+import { buildTransactionsDrilldownQuery } from "@/lib/dashboard/drilldown-query";
 
 interface SankeyNode {
   name: string;
@@ -28,7 +29,7 @@ interface SankeyFlowChartProps {
   currency: string;
   subtitle?: string;
   isLoading?: boolean;
-  accountId?: string;
+  accountIds?: string[];
   dateFrom?: string;
   dateTo?: string;
   horizon?: number;
@@ -258,7 +259,7 @@ export function SankeyFlowChart({
   currency,
   subtitle,
   isLoading = false,
-  accountId,
+  accountIds,
   dateFrom,
   dateTo,
   horizon,
@@ -269,29 +270,23 @@ export function SankeyFlowChart({
   const navigateToTransactions = React.useCallback(
     (categoryId?: string | null) => {
       if (!categoryId) return;
-      const params = new URLSearchParams();
-      params.set("category", categoryId);
-      params.set("reset", Date.now().toString());
-      if (accountId) {
-        params.set("account", accountId);
-      }
-      if (dateFrom) {
-        params.set("from", dateFrom);
-        params.set("to", dateTo ?? dateFrom);
-      } else if (horizon) {
-        params.set("horizon", String(horizon));
-      }
-      router.push(`/transactions?${params.toString()}`);
+      const query = buildTransactionsDrilldownQuery({
+        categoryId,
+        accountIds,
+        dateFrom,
+        dateTo,
+        horizon,
+      });
+      router.push(`/transactions?${query}`);
     },
-    [accountId, dateFrom, dateTo, horizon, router]
+    [accountIds, dateFrom, dateTo, horizon, router]
   );
 
-  const selectedNode = React.useMemo(() => {
-    if (!selectedCategory?.key) return null;
-    return data.nodes.find((node) => getCategoryKey(node) === selectedCategory.key) ?? null;
-  }, [data.nodes, selectedCategory?.key]);
+  const selectedNode = selectedCategory?.key
+    ? data.nodes.find((node) => getCategoryKey(node) === selectedCategory.key) ?? null
+    : null;
 
-  const selectedTotal = React.useMemo(() => {
+  const selectedTotal = (() => {
     if (!selectedCategory?.key) return null;
     if (typeof selectedNode?.total === "number") {
       return selectedNode.total;
@@ -311,7 +306,7 @@ export function SankeyFlowChart({
       }
     });
     return total;
-  }, [data.links, data.nodes, selectedCategory?.key, selectedCategory?.type, selectedNode?.total]);
+  })();
 
   React.useEffect(() => {
     if (!selectedCategory?.key) return;
@@ -323,15 +318,22 @@ export function SankeyFlowChart({
     }
   }, [data.nodes, selectedCategory?.key]);
 
+  interface SankeyClickEvent {
+    payload?: SankeyNode & { depth?: number };
+  }
+
   const handleSankeyClick = React.useCallback(
-    (el: any, type: string) => {
+    (el: SankeyClickEvent | undefined, type: string) => {
       if (type !== "node" || !el?.payload) return;
       const categoryKey = getCategoryKey(el.payload);
+      const categoryId = el.payload.categoryId;
       const categoryType: SelectedCategory["type"] =
         el.payload.categoryType ?? (el.payload.depth === 0 ? "income" : "expense");
 
       if (selectedCategory?.key === categoryKey) {
-        navigateToTransactions(categoryKey);
+        if (categoryId) {
+          navigateToTransactions(categoryId);
+        }
         return;
       }
 

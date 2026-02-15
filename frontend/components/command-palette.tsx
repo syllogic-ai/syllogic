@@ -34,6 +34,10 @@ import {
 } from "@/lib/actions/command-palette";
 import { formatAmount, formatDate } from "@/lib/utils";
 import { useCommandPaletteCallbacks } from "./command-palette-context";
+import {
+  GLOBAL_FILTER_STORAGE_KEY,
+  resolveGlobalFilterQueryString,
+} from "@/lib/filters/global-filters";
 
 const MIN_SEARCH_LENGTH = 2;
 
@@ -47,6 +51,31 @@ export function CommandPalette() {
   const router = useRouter();
   const pathname = usePathname();
   const { setTheme, theme } = useTheme();
+
+  const getSharedFilterQueryString = React.useCallback(() => {
+    if (typeof window === "undefined") {
+      return "";
+    }
+
+    let storedQuery: string | null = null;
+    try {
+      storedQuery = localStorage.getItem(GLOBAL_FILTER_STORAGE_KEY);
+    } catch {
+      storedQuery = null;
+    }
+
+    return resolveGlobalFilterQueryString(window.location.search, storedQuery);
+  }, []);
+
+  const getHomePathWithFilters = React.useCallback(() => {
+    const queryString = getSharedFilterQueryString();
+    return queryString ? `/?${queryString}` : "/";
+  }, [getSharedFilterQueryString]);
+
+  const getTransactionsPathWithFilters = React.useCallback(() => {
+    const queryString = getSharedFilterQueryString();
+    return queryString ? `/transactions?${queryString}` : "/transactions";
+  }, [getSharedFilterQueryString]);
 
   // Fetch data when search reaches minimum length
   React.useEffect(() => {
@@ -101,11 +130,11 @@ export function CommandPalette() {
       switch (key) {
         case "b":
           e.preventDefault();
-          router.push("/");
+          router.push(getHomePathWithFilters());
           break;
         case "t":
           e.preventDefault();
-          router.push("/transactions");
+          router.push(getTransactionsPathWithFilters());
           break;
         case "a":
           e.preventDefault();
@@ -128,7 +157,7 @@ export function CommandPalette() {
 
     document.addEventListener("keydown", handleDirectKeys);
     return () => document.removeEventListener("keydown", handleDirectKeys);
-  }, [open, router, theme, setTheme, onAddTransaction]);
+  }, [open, router, theme, setTheme, onAddTransaction, getHomePathWithFilters, getTransactionsPathWithFilters]);
 
   const runCommand = React.useCallback((command: () => void) => {
     setOpen(false);
@@ -421,7 +450,17 @@ export function CommandPalette() {
                     {filteredNavigation.map((item) => (
                       <CommandItem
                         key={item.path}
-                        onSelect={() => runCommand(() => router.push(item.path))}
+                        onSelect={() =>
+                          runCommand(() =>
+                            router.push(
+                              item.path === "/"
+                                ? getHomePathWithFilters()
+                                : item.path === "/transactions"
+                                ? getTransactionsPathWithFilters()
+                                : item.path
+                            )
+                          )
+                        }
                       >
                         <item.icon className="mr-2 h-4 w-4" />
                         <span>{item.label}</span>

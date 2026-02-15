@@ -34,7 +34,8 @@ import {
   type SubscriptionSuggestionWithMeta,
 } from "@/lib/actions/subscription-suggestions";
 import { searchLogo, hasLogoApiKey } from "@/lib/actions/logos";
-import type { RecurringTransaction, CompanyLogo as CompanyLogoType } from "@/lib/db/schema";
+import type { RecurringTransaction } from "@/lib/db/schema";
+import { withAssetVersion } from "@/lib/utils/asset-url";
 
 type SubscriptionFrequency = "monthly" | "weekly" | "yearly" | "quarterly" | "biweekly";
 
@@ -42,6 +43,7 @@ interface SubscriptionWithLogo extends RecurringTransaction {
   logo?: {
     id: string;
     logoUrl: string | null;
+    updatedAt?: Date | null;
   } | null;
 }
 
@@ -110,7 +112,9 @@ export function SubscriptionFormDialog({
         setDescription(subscription.description || "");
         // Set logo
         setLogoId(subscription.logoId || null);
-        setLogoUrl(subscription.logo?.logoUrl || null);
+        setLogoUrl(
+          withAssetVersion(subscription.logo?.logoUrl, subscription.logo?.updatedAt)
+        );
         setLogoSearch("");
         setLogoSearchAttempted(false);
       } else if (suggestion) {
@@ -159,7 +163,7 @@ export function SubscriptionFormDialog({
 
       if (result.success && result.logo) {
         setLogoId(result.logo.id);
-        setLogoUrl(result.logo.logoUrl);
+        setLogoUrl(withAssetVersion(result.logo.logoUrl, result.logo.updatedAt));
         toast.success("Logo found");
       } else if (result.success) {
         toast.info("No logo found for this company");
@@ -245,7 +249,9 @@ export function SubscriptionFormDialog({
             importance,
             frequency,
             description: description.trim() || null,
-            logo: logoId && logoUrl ? { id: logoId, logoUrl } : null,
+            logo: logoId && logoUrl
+              ? { id: logoId, logoUrl, updatedAt: new Date() }
+              : null,
             updatedAt: new Date(),
           };
           onSuccess?.(undefined, updatedSubscription);

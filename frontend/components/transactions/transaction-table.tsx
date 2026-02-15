@@ -1,10 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { useState, useEffect, useCallback, useRef } from "react";
-import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { type DateRange } from "react-day-picker";
-import { type ColumnFiltersState } from "@tanstack/react-table";
+import { useSearchParams, useRouter } from "next/navigation";
+import { type OnChangeFn, type PaginationState, type SortingState } from "@tanstack/react-table";
 import { DataTable } from "@/components/ui/data-table";
 import type { TransactionWithRelations } from "@/lib/actions/transactions";
 import type { CategoryDisplay, AccountForFilter } from "@/types";
@@ -13,11 +11,18 @@ import { transactionColumns } from "./columns";
 import { TransactionFilters } from "./transaction-filters";
 import { TransactionPagination } from "./transaction-pagination";
 import { BulkActionsDock } from "./bulk-actions-dock";
-
-const FILTER_STORAGE_KEY = "filters:/transactions";
+import { useFilterPersistence } from "@/lib/hooks/use-filter-persistence";
+import {
+  parseTransactionsSearchParamsFromUrlSearchParams,
+  toTransactionsSearchParams,
+  type TransactionSortField,
+  type TransactionsQueryState,
+} from "@/lib/transactions/query-state";
 
 interface TransactionTableProps {
   transactions: TransactionWithRelations[];
+  totalCount: number;
+  queryState: TransactionsQueryState;
   categories?: CategoryDisplay[];
   accounts?: AccountForFilter[];
   onUpdateTransaction?: (id: string, updates: Partial<TransactionWithRelations>) => void;
@@ -26,8 +31,48 @@ interface TransactionTableProps {
   action?: React.ReactNode;
 }
 
+const MANAGED_QUERY_KEYS = [
+  "page",
+  "pageSize",
+  "search",
+  "category",
+  "account",
+  "status",
+  "subscription",
+  "analytics",
+  "minAmount",
+  "maxAmount",
+  "from",
+  "to",
+  "horizon",
+  "sort",
+  "order",
+];
+
+function mergeManagedQueryParams(
+  currentSearchParams: URLSearchParams,
+  nextState: TransactionsQueryState
+): URLSearchParams {
+  const nextParams = new URLSearchParams(currentSearchParams.toString());
+  MANAGED_QUERY_KEYS.forEach((key) => nextParams.delete(key));
+  const managed = toTransactionsSearchParams(nextState);
+  managed.forEach((value, key) => {
+    nextParams.append(key, value);
+  });
+  return nextParams;
+}
+
+function mapSortColumnIdToSortField(id: string): TransactionSortField {
+  if (id === "amount" || id === "description" || id === "merchant") {
+    return id;
+  }
+  return "bookedAt";
+}
+
 export function TransactionTable({
   transactions,
+  totalCount,
+  queryState,
   categories = [],
   accounts = [],
   onUpdateTransaction,
@@ -35,177 +80,121 @@ export function TransactionTable({
   onBulkUpdate,
   action,
 }: TransactionTableProps) {
-  const [selectedTransaction, setSelectedTransaction] = useState<TransactionWithRelations | null>(null);
+  const [selectedTransaction, setSelectedTransaction] = React.useState<TransactionWithRelations | null>(null);
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const searchKey = searchParams.toString();
-  const resetToken = searchParams.get("reset");
-  const [tableKey, setTableKey] = useState(() =>
-    resetToken ? `reset-${resetToken}` : "default"
-  );
-  const hasInitializedRef = useRef(false);
+  useFilterPersistence();
 
-  useEffect(() => {
-    if (!resetToken) return;
-    setTableKey(`reset-${resetToken}`);
+  const updateQueryState = React.useCallback(
+    (patch: Partial<TransactionsQueryState>, options?: { resetPage?: boolean }) => {
+      const currentParams = new URLSearchParams(searchParams.toString());
+      const currentState = parseTransactionsSearchParamsFromUrlSearchParams(currentParams);
+      const nextState: TransactionsQueryState = {
+        ...currentState,
+        ...patch,
+      };
+
+      if (options?.resetPage ?? true) {
+        nextState.page = 1;
+      }
+
+      const merged = mergeManagedQueryParams(currentParams, nextState);
+      const queryString = merged.toString();
+      router.replace(queryString ? `/transactions?${queryString}` : "/transactions", {
+        scroll: false,
+      });
+    },
+    [router, searchParams]
+  );
+
+  const sortingState = React.useMemo<SortingState>(
+    () => [
+      {
+        id: queryState.sort,
+        desc: queryState.order === "desc",
+      },
+    ],
+    [queryState.order, queryState.sort]
+  );
+
+  const paginationState = React.useMemo<PaginationState>(
+    () => ({
+      pageIndex: Math.max(0, queryState.page - 1),
+      pageSize: queryState.pageSize,
+    }),
+    [queryState.page, queryState.pageSize]
+  );
+
+  const pageCount = Math.max(1, Math.ceil(totalCount / queryState.pageSize));
+
+  const handleSortingStateChange = React.useCallback<OnChangeFn<SortingState>>(
+    (updater) => {
+      const current = sortingState;
+      const next = typeof updater === "function" ? updater(current) : updater;
+      const nextSort = next[0];
+      if (!nextSort) {
+        updateQueryState({ sort: "bookedAt", order: "desc" }, { resetPage: false });
+        return;
+      }
+
+      updateQueryState(
+        {
+          sort: mapSortColumnIdToSortField(nextSort.id),
+          order: nextSort.desc ? "desc" : "asc",
+        },
+        { resetPage: false }
+      );
+    },
+    [sortingState, updateQueryState]
+  );
+
+  const handlePaginationStateChange = React.useCallback<OnChangeFn<PaginationState>>(
+    (updater) => {
+      const current = paginationState;
+      const next = typeof updater === "function" ? updater(current) : updater;
+      updateQueryState(
+        {
+          page: next.pageIndex + 1,
+          pageSize: next.pageSize,
+        },
+        { resetPage: false }
+      );
+    },
+    [paginationState, updateQueryState]
+  );
+
+  const recurringOptions = React.useMemo(() => {
+    const byId = new Map<string, { id: string; name: string; merchant?: string; frequency: string }>();
+    transactions.forEach((transaction) => {
+      const recurring = transaction.recurringTransaction;
+      if (!recurring || byId.has(recurring.id)) {
+        return;
+      }
+      byId.set(recurring.id, {
+        id: recurring.id,
+        name: recurring.name,
+        merchant: recurring.merchant ?? undefined,
+        frequency: recurring.frequency,
+      });
+    });
+    return Array.from(byId.values());
+  }, [transactions]);
+
+  React.useEffect(() => {
+    const txId = searchParams.get("tx");
+    if (!txId) return;
+    const tx = transactions.find((transaction) => transaction.id === txId);
+    if (!tx) return;
+
+    setSelectedTransaction(tx);
     const params = new URLSearchParams(searchParams.toString());
-    params.delete("reset");
+    params.delete("tx");
     const queryString = params.toString();
     router.replace(queryString ? `/transactions?${queryString}` : "/transactions", {
       scroll: false,
     });
-  }, [resetToken, router, searchParams]);
-
-  // Check if URL has filter-related params
-  const hasUrlFilters = React.useMemo(() => {
-    const params = new URLSearchParams(searchKey);
-    return params.has("category") || params.has("account") || params.has("from") || params.has("to") || params.has("horizon");
-  }, [searchKey]);
-
-  // Build filters from URL params
-  const urlBasedFilters = React.useMemo(() => {
-    const filters: ColumnFiltersState = [];
-    const params = new URLSearchParams(searchKey);
-    const categoryParam = params.get("category");
-    const accountParam = params.get("account");
-    const fromParam = params.get("from");
-    const toParam = params.get("to");
-    const horizonParam = params.get("horizon");
-
-    if (categoryParam) {
-      filters.push({ id: "category", value: [categoryParam] });
-    }
-
-    if (accountParam) {
-      filters.push({ id: "account", value: [accountParam] });
-    }
-
-    let dateRange: DateRange | undefined;
-    if (fromParam) {
-      const fromDate = new Date(fromParam);
-      const toDate = new Date(toParam ?? fromParam);
-      if (!Number.isNaN(fromDate.getTime())) {
-        dateRange = {
-          from: fromDate,
-          to: Number.isNaN(toDate.getTime()) ? fromDate : toDate,
-        };
-      }
-    } else if (horizonParam) {
-      const horizon = parseInt(horizonParam, 10);
-      if (!Number.isNaN(horizon) && horizon > 0) {
-        const referenceDate = transactions
-          .filter((tx) => !accountParam || tx.accountId === accountParam)
-          .reduce<Date | null>((latest, tx) => {
-            const bookedAt = new Date(tx.bookedAt);
-            if (Number.isNaN(bookedAt.getTime())) return latest;
-            if (!latest || bookedAt > latest) return bookedAt;
-            return latest;
-          }, null);
-
-        if (referenceDate) {
-          const fromDate = new Date(referenceDate);
-          fromDate.setDate(fromDate.getDate() - horizon);
-          fromDate.setHours(0, 0, 0, 0);
-          const toDate = new Date(referenceDate);
-          toDate.setHours(23, 59, 59, 999);
-          dateRange = { from: fromDate, to: toDate };
-        }
-      }
-    }
-
-    if (dateRange) {
-      filters.push({ id: "bookedAt", value: dateRange });
-    }
-
-    return filters;
-  }, [searchKey, transactions]);
-
-  // Track mounted state to know when we can access localStorage
-  const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
-  // Load saved filters from localStorage (only on client after mount)
-  const savedFilters = React.useMemo((): ColumnFiltersState => {
-    if (!isMounted) return [];
-    try {
-      const saved = localStorage.getItem(FILTER_STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved) as ColumnFiltersState;
-        return parsed.map((filter) => {
-          if (filter.id === "bookedAt" && filter.value) {
-            const val = filter.value as { from?: string; to?: string };
-            return {
-              ...filter,
-              value: {
-                from: val.from ? new Date(val.from) : undefined,
-                to: val.to ? new Date(val.to) : undefined,
-              },
-            };
-          }
-          return filter;
-        });
-      }
-    } catch {
-      // Ignore parse errors
-    }
-    return [];
-  }, [isMounted]);
-
-  // Compute initial filters - URL takes precedence, then localStorage
-  const initialColumnFilters = hasUrlFilters ? urlBasedFilters : savedFilters;
-
-  // Force table remount when saved filters are loaded
-  useEffect(() => {
-    if (isMounted && !hasUrlFilters && savedFilters.length > 0) {
-      setTableKey(`restored-${Date.now()}`);
-    }
-  }, [isMounted, hasUrlFilters, savedFilters.length]);
-
-  // Save filters to localStorage when they change
-  const handleColumnFiltersChange = useCallback((filters: ColumnFiltersState) => {
-    try {
-      if (!hasInitializedRef.current) {
-        hasInitializedRef.current = true;
-        if (filters.length === 0) {
-          return;
-        }
-      }
-
-      // Convert dates to ISO strings for storage
-      const serializable = filters.map((filter) => {
-        if (filter.id === "bookedAt" && filter.value) {
-          const val = filter.value as DateRange;
-          return {
-            ...filter,
-            value: {
-              from: val.from?.toISOString(),
-              to: val.to?.toISOString(),
-            },
-          };
-        }
-        return filter;
-      });
-      localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(serializable));
-    } catch {
-      // Ignore storage errors
-    }
-  }, []);
-
-  // Handle URL query param for auto-selecting a transaction
-  useEffect(() => {
-    const txId = searchParams.get("tx");
-    if (txId) {
-      const tx = transactions.find((t) => t.id === txId);
-      if (tx) {
-        setSelectedTransaction(tx);
-        // Clear the URL param to avoid re-selecting on navigation
-        router.replace("/transactions", { scroll: false });
-      }
-    }
-  }, [searchParams, transactions, router]);
+  }, [router, searchParams, transactions]);
 
   const handleRowClick = (transaction: TransactionWithRelations) => {
     setSelectedTransaction(transaction);
@@ -214,27 +203,72 @@ export function TransactionTable({
   const handleUpdateTransaction = (id: string, updates: Partial<TransactionWithRelations>) => {
     onUpdateTransaction?.(id, updates);
     if (selectedTransaction?.id === id) {
-      setSelectedTransaction((prev) => prev ? { ...prev, ...updates } : null);
+      setSelectedTransaction((prev) => (prev ? { ...prev, ...updates } : null));
     }
   };
 
   return (
     <>
       <DataTable
-        key={tableKey}
         columns={transactionColumns}
         data={transactions}
         onRowClick={handleRowClick}
         enableColumnResizing={true}
         enableRowSelection={true}
         enablePagination={true}
-        pageSize={20}
-        initialColumnFilters={initialColumnFilters}
-        onColumnFiltersChange={handleColumnFiltersChange}
-        toolbar={(table) => (
-          <TransactionFilters table={table} categories={categories} accounts={accounts} action={action} />
+        manualPagination={true}
+        manualSorting={true}
+        rowCount={totalCount}
+        pageCount={pageCount}
+        paginationState={paginationState}
+        onPaginationStateChange={handlePaginationStateChange}
+        sortingState={sortingState}
+        onSortingStateChange={handleSortingStateChange}
+        toolbar={() => (
+          <TransactionFilters
+            filters={queryState}
+            categories={categories}
+            accounts={accounts}
+            recurringOptions={recurringOptions}
+            action={action}
+            totalCount={totalCount}
+            currentPageCount={transactions.length}
+            onFiltersChange={updateQueryState}
+            onClearFilters={() =>
+              updateQueryState(
+                {
+                  page: 1,
+                  search: undefined,
+                  category: [],
+                  accountIds: [],
+                  status: [],
+                  subscription: [],
+                  analytics: [],
+                  minAmount: undefined,
+                  maxAmount: undefined,
+                  from: undefined,
+                  to: undefined,
+                  horizon: 30,
+                  sort: "bookedAt",
+                  order: "desc",
+                },
+                { resetPage: false }
+              )
+            }
+          />
         )}
-        pagination={(table) => <TransactionPagination table={table} />}
+        pagination={(table) => (
+          <TransactionPagination
+            table={table}
+            totalCount={totalCount}
+            page={queryState.page}
+            pageSize={queryState.pageSize}
+            onPageChange={(page) => updateQueryState({ page }, { resetPage: false })}
+            onPageSizeChange={(pageSize) =>
+              updateQueryState({ pageSize, page: 1 }, { resetPage: false })
+            }
+          />
+        )}
         bulkActions={(table) => {
           const selectedRows = table.getSelectedRowModel().rows;
           const selectedIds = selectedRows.map((row) => row.original.id);
@@ -257,8 +291,8 @@ export function TransactionTable({
             />
           );
         }}
-        wrapperClassName="flex flex-col min-h-0 flex-1"
-        tableContainerClassName="flex-1 min-h-0 overflow-y-auto"
+        wrapperClassName="flex min-h-0 flex-1 flex-col"
+        tableContainerClassName="min-h-0 flex-1 overflow-y-auto"
       />
 
       <TransactionSheet

@@ -1,8 +1,17 @@
 import type { NextRequest } from "next/server";
 import { getBackendBaseUrl } from "@/lib/backend-url";
+import { auth } from "@/lib/auth";
+import {
+  createInternalAuthHeaders,
+  INTERNAL_AUTH_SIGNATURE_HEADER,
+  INTERNAL_AUTH_TIMESTAMP_HEADER,
+  INTERNAL_AUTH_USER_HEADER,
+} from "@/lib/internal-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const UNPROTECTED_API_PATHS = new Set(["/api/health"]);
 
 function buildUpstreamUrl(req: NextRequest, pathSegments: string[]): URL {
   const backendBase = getBackendBaseUrl().replace(/\/+$/, "");
@@ -17,16 +26,49 @@ function cloneRequestHeaders(req: NextRequest): Headers {
   headers.delete("host");
   headers.delete("connection");
   headers.delete("content-length");
+  headers.delete(INTERNAL_AUTH_USER_HEADER);
+  headers.delete(INTERNAL_AUTH_TIMESTAMP_HEADER);
+  headers.delete(INTERNAL_AUTH_SIGNATURE_HEADER);
   return headers;
 }
 
 async function proxy(req: NextRequest, pathSegments: string[]) {
   const upstreamUrl = buildUpstreamUrl(req, pathSegments);
   const method = req.method.toUpperCase();
+  const isProtectedPath = !UNPROTECTED_API_PATHS.has(upstreamUrl.pathname);
+
+  const session = await auth.api.getSession({ headers: req.headers });
+  if (isProtectedPath && !session?.user?.id) {
+    return Response.json({ detail: "Not authenticated" }, { status: 401 });
+  }
+
+  const requestHeaders = cloneRequestHeaders(req);
+  if (isProtectedPath && session?.user?.id) {
+    try {
+      const signatureHeaders = createInternalAuthHeaders({
+        method,
+        pathWithQuery: `${upstreamUrl.pathname}${upstreamUrl.search}`,
+        userId: session.user.id,
+      });
+      Object.entries(signatureHeaders).forEach(([key, value]) => {
+        requestHeaders.set(key, value);
+      });
+    } catch (error) {
+      return Response.json(
+        {
+          detail:
+            error instanceof Error
+              ? error.message
+              : "Failed to sign internal request",
+        },
+        { status: 500 }
+      );
+    }
+  }
 
   const init: RequestInit = {
     method,
-    headers: cloneRequestHeaders(req),
+    headers: requestHeaders,
     cache: "no-store",
   };
 

@@ -11,6 +11,7 @@ from typing import AsyncGenerator
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
+from app.db_helpers import get_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -92,8 +93,8 @@ def get_cors_origin() -> str:
     return os.getenv("FRONTEND_URL") or os.getenv("APP_URL", "http://localhost:3000")
 
 
-@router.get("/import-status/{user_id}/{import_id}")
-async def stream_import_status(user_id: str, import_id: str, request: Request):
+@router.get("/import-status/{import_id}")
+async def stream_import_status(import_id: str, request: Request):
     """
     Stream import status updates via Server-Sent Events.
 
@@ -111,17 +112,18 @@ async def stream_import_status(user_id: str, import_id: str, request: Request):
     or import_failed events.
 
     Args:
-        user_id: The user ID
         import_id: The CSV import ID
 
     Returns:
         StreamingResponse with SSE content type
     """
+    resolved_user_id = get_user_id()
+
     # Use configured frontend URL for CORS instead of wildcard
     cors_origin = get_cors_origin()
 
     return StreamingResponse(
-        import_status_generator(user_id, import_id),
+        import_status_generator(resolved_user_id, import_id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

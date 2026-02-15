@@ -3,8 +3,6 @@
 import * as React from "react";
 import { type DateRange } from "react-day-picker";
 import {
-  startOfDay,
-  endOfDay,
   startOfWeek,
   endOfWeek,
   startOfMonth,
@@ -13,8 +11,9 @@ import {
   endOfQuarter,
   startOfYear,
   endOfYear,
-  subDays,
   subMonths,
+  subQuarters,
+  subYears,
   format,
 } from "date-fns";
 import {
@@ -28,13 +27,13 @@ import { cn } from "@/lib/utils";
 
 // Date range presets
 const datePresets = [
-  { label: "Today", getValue: () => ({ from: startOfDay(new Date()), to: endOfDay(new Date()) }) },
-  { label: "Yesterday", getValue: () => ({ from: startOfDay(subDays(new Date(), 1)), to: endOfDay(subDays(new Date(), 1)) }) },
   { label: "This Week", getValue: () => ({ from: startOfWeek(new Date(), { weekStartsOn: 1 }), to: endOfWeek(new Date(), { weekStartsOn: 1 }) }) },
   { label: "This Month", getValue: () => ({ from: startOfMonth(new Date()), to: endOfMonth(new Date()) }) },
   { label: "Last Month", getValue: () => ({ from: startOfMonth(subMonths(new Date(), 1)), to: endOfMonth(subMonths(new Date(), 1)) }) },
   { label: "This Quarter", getValue: () => ({ from: startOfQuarter(new Date()), to: endOfQuarter(new Date()) }) },
+  { label: "Last Quarter", getValue: () => ({ from: startOfQuarter(subQuarters(new Date(), 1)), to: endOfQuarter(subQuarters(new Date(), 1)) }) },
   { label: "This Year", getValue: () => ({ from: startOfYear(new Date()), to: endOfYear(new Date()) }) },
+  { label: "Last Year", getValue: () => ({ from: startOfYear(subYears(new Date(), 1)), to: endOfYear(subYears(new Date(), 1)) }) },
 ];
 
 interface DateRangePickerProps {
@@ -43,6 +42,8 @@ interface DateRangePickerProps {
   className?: string;
   placeholder?: string;
   showIcon?: boolean;
+  showSelectedText?: boolean;
+  active?: boolean;
 }
 
 export function DateRangePicker({
@@ -51,11 +52,14 @@ export function DateRangePicker({
   className,
   placeholder = "All time",
   showIcon = true,
+  showSelectedText = true,
+  active = false,
 }: DateRangePickerProps) {
   const [open, setOpen] = React.useState(false);
 
   const getDisplayText = () => {
     if (!value?.from) return placeholder;
+    if (!showSelectedText) return placeholder;
     if (!value.to) return format(value.from, "MMM d, yyyy");
     return `${format(value.from, "MMM d")} - ${format(value.to, "MMM d, yyyy")}`;
   };
@@ -64,17 +68,32 @@ export function DateRangePicker({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         className={cn(
-          "flex items-center justify-between gap-2 border border-input bg-transparent px-2.5 text-xs hover:bg-muted transition-colors",
+          "flex items-center justify-between gap-2 border border-input px-2.5 text-xs transition-colors",
+          active
+            ? "bg-primary text-primary-foreground hover:bg-primary/90"
+            : "bg-transparent text-foreground hover:bg-muted",
           className
         )}
       >
-        {showIcon && <RiCalendarLine className="h-4 w-4 text-muted-foreground" />}
+        {showIcon && (
+          <RiCalendarLine
+            className={cn(
+              "h-4 w-4",
+              active ? "text-primary-foreground" : "text-muted-foreground"
+            )}
+          />
+        )}
         <span className="truncate">{getDisplayText()}</span>
-        <RiArrowDownSLine className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <RiArrowDownSLine
+          className={cn(
+            "h-4 w-4 shrink-0",
+            active ? "text-primary-foreground" : "text-muted-foreground"
+          )}
+        />
       </PopoverTrigger>
       <PopoverContent align="start" className="w-auto p-0">
         <div className="flex">
-          <div className="border-r p-2 space-y-0.5 w-28">
+          <div className="border-r p-2 space-y-0.5 w-32">
             <button
               type="button"
               onClick={() => {
@@ -82,7 +101,7 @@ export function DateRangePicker({
                 setOpen(false);
               }}
               className={cn(
-                "w-full px-2 py-1.5 text-left text-xs hover:bg-accent",
+                "w-full whitespace-nowrap px-2 py-1.5 text-left text-xs hover:bg-accent",
                 !value?.from && "bg-accent"
               )}
             >
@@ -96,8 +115,8 @@ export function DateRangePicker({
                   onChange(preset.getValue());
                   setOpen(false);
                 }}
-                className="w-full px-2 py-1.5 text-left text-xs hover:bg-accent"
-              >
+                  className="w-full whitespace-nowrap px-2 py-1.5 text-left text-xs hover:bg-accent"
+                >
                 {preset.label}
               </button>
             ))}

@@ -12,44 +12,39 @@ import {
   getUserAccounts,
   type DashboardFilters as DashboardFiltersType,
 } from "@/lib/actions/dashboard";
+import { parseDashboardSearchParams } from "@/lib/dashboard/query-params";
 
 interface PageProps {
   searchParams: Promise<{
-    account?: string;
-    from?: string;
-    to?: string;
-    horizon?: string;
+    [key: string]: string | string[] | undefined;
   }>;
 }
 
 export default async function HomePage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const accountParam = params.account;
-  const accountId = accountParam && accountParam !== "all" ? accountParam : undefined;
-  const dateFromParam = params.from;
-  const dateToParam = params.to;
-  const horizonParam = params.horizon;
-  const parsedHorizon = horizonParam ? parseInt(horizonParam, 10) : undefined;
-  const horizonValue = Number.isNaN(parsedHorizon) ? undefined : parsedHorizon;
+  const parsedParams = parseDashboardSearchParams(params);
+  const accountIds = parsedParams.accountIds;
+  const dateFromParam = parsedParams.dateFrom;
+  const dateToParam = parsedParams.dateTo;
+  const horizonValue = parsedParams.horizon;
+  const effectiveHorizon = parsedParams.effectiveHorizon;
 
   // Parse filters from URL search params
   const filters: DashboardFiltersType = {};
 
-  if (params.account && params.account !== "all") {
-    filters.accountId = params.account;
+  if (accountIds?.length) {
+    filters.accountIds = accountIds;
   }
 
-  if (params.from) {
-    filters.dateFrom = new Date(params.from);
+  if (dateFromParam) {
+    filters.dateFrom = new Date(dateFromParam);
   }
 
-  if (params.to) {
-    filters.dateTo = new Date(params.to);
+  if (dateToParam) {
+    filters.dateTo = new Date(dateToParam);
   }
 
-  if (params.horizon) {
-    filters.horizon = parseInt(params.horizon, 10);
-  }
+  filters.horizon = horizonValue;
 
   // Fetch data in parallel
   const [data, accounts] = await Promise.all([
@@ -57,21 +52,11 @@ export default async function HomePage({ searchParams }: PageProps) {
     getUserAccounts(),
   ]);
 
-  // Build Sankey subtitle based on date range or horizon
-  const formatDateShort = (date: Date) => {
-    return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
-  };
-
-  let sankeySubtitle: string;
-  if (filters.dateFrom && filters.dateTo) {
-    sankeySubtitle = `${formatDateShort(filters.dateFrom)} - ${formatDateShort(filters.dateTo)}`;
-  } else if (filters.dateFrom) {
-    sankeySubtitle = `From ${formatDateShort(filters.dateFrom)}`;
-  } else if (filters.dateTo) {
-    sankeySubtitle = `Until ${formatDateShort(filters.dateTo)}`;
-  } else {
-    sankeySubtitle = data.periodLabel.subtitle;
-  }
+  const accountSubtitle = !accountIds?.length
+    ? "Across all accounts"
+    : accountIds.length === 1
+      ? "Selected account"
+      : "Selected accounts";
 
   return (
     <>
@@ -90,7 +75,7 @@ export default async function HomePage({ searchParams }: PageProps) {
             title="Total Balance"
             value={data.balance.total}
             currency={data.balance.currency}
-            subtitle={filters.accountId ? "Selected account" : "Across all accounts"}
+            subtitle={accountSubtitle}
             sparkData={data.balanceHistory}
           />
           <KpiSparkCard
@@ -136,10 +121,10 @@ export default async function HomePage({ searchParams }: PageProps) {
             total={data.spendingByCategory.total}
             currency={data.balance.currency}
             periodTitle={data.periodLabel.title}
-            accountId={accountId}
+            accountIds={accountIds}
             dateFrom={dateFromParam}
             dateTo={dateToParam}
-            horizon={horizonValue}
+            horizon={effectiveHorizon}
           />
         </div>
 
@@ -148,11 +133,11 @@ export default async function HomePage({ searchParams }: PageProps) {
           <SankeyFlowChart
             data={data.sankeyData}
             currency={data.balance.currency}
-            subtitle={sankeySubtitle}
-            accountId={accountId}
+            subtitle={data.periodLabel.subtitle}
+            accountIds={accountIds}
             dateFrom={dateFromParam}
             dateTo={dateToParam}
-            horizon={horizonValue}
+            horizon={effectiveHorizon}
           />
         </div>
 

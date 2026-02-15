@@ -7,6 +7,7 @@ import { csvImports, accounts, transactions, type NewTransaction } from "@/lib/d
 import { getAuthenticatedSession, requireAuth } from "@/lib/auth-helpers";
 import { storage } from "@/lib/storage";
 import { getBackendBaseUrl } from "@/lib/backend-url";
+import { createInternalAuthHeaders } from "@/lib/internal-auth";
 import { detectDuplicates, markDuplicates } from "@/lib/utils/duplicate-detection";
 import OpenAI from "openai";
 
@@ -977,7 +978,7 @@ interface BackendDailyBalance {
 // Backend API request format
 interface BackendTransactionImportRequest {
   transactions: BackendTransactionImportItem[];
-  user_id: string;
+  user_id?: string;
   sync_exchange_rates: boolean;
   update_functional_amounts: boolean;
   calculate_balances: boolean;
@@ -1112,7 +1113,6 @@ export async function finalizeImport(
         // Build the backend request for this batch
         const backendRequest: BackendTransactionImportRequest = {
           transactions: batch,
-          user_id: session.user.id,
           // Only sync exchange rates and calculate balances on the last batch for efficiency
           sync_exchange_rates: isLastBatch,
           update_functional_amounts: isLastBatch,
@@ -1126,10 +1126,16 @@ export async function finalizeImport(
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000); // 5 minutes per batch
 
-        const response = await fetch(`${backendUrl}/api/transactions/import`, {
+        const pathWithQuery = "/api/transactions/import";
+        const response = await fetch(`${backendUrl}${pathWithQuery}`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            ...createInternalAuthHeaders({
+              method: "POST",
+              pathWithQuery,
+              userId: session.user.id,
+            }),
           },
           body: JSON.stringify(backendRequest),
           signal: controller.signal,
@@ -1317,17 +1323,22 @@ export async function enqueueBackgroundImport(
     const backendUrl = getBackendBaseUrl();
     const enqueueRequest = {
       csv_import_id: importId,
-      user_id: session.user.id,
       transactions,
       daily_balances: previewResult.dailyBalances || undefined,
       starting_balance: previewResult.balanceVerification?.fileStartingBalance ?? undefined,
     };
 
     // Call backend enqueue endpoint
-    const response = await fetch(`${backendUrl}/api/csv-import/enqueue`, {
+    const pathWithQuery = "/api/csv-import/enqueue";
+    const response = await fetch(`${backendUrl}${pathWithQuery}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...createInternalAuthHeaders({
+          method: "POST",
+          pathWithQuery,
+          userId: session.user.id,
+        }),
       },
       body: JSON.stringify(enqueueRequest),
     });

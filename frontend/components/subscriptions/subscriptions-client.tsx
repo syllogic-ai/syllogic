@@ -12,11 +12,11 @@ import {
   type SubscriptionKpis,
 } from "@/lib/actions/subscriptions";
 import {
-  verifySuggestion,
   dismissSuggestion,
   type SubscriptionSuggestionWithMeta,
 } from "@/lib/actions/subscription-suggestions";
 import type { RecurringTransaction } from "@/lib/db/schema";
+import { withAssetVersion } from "@/lib/utils/asset-url";
 
 interface SubscriptionWithCategory extends RecurringTransaction {
   category?: {
@@ -27,6 +27,7 @@ interface SubscriptionWithCategory extends RecurringTransaction {
   logo?: {
     id: string;
     logoUrl: string | null;
+    updatedAt?: Date | null;
   } | null;
 }
 
@@ -80,11 +81,19 @@ export function SubscriptionsClient({
   // Order: Active subscriptions first, then suggestions, then inactive subscriptions
   const activeSubscriptions = subscriptions
     .filter((s) => s.isActive)
-    .map((s) => ({ ...s, isSuggestion: false, logoUrl: s.logo?.logoUrl || null }));
+    .map((s) => ({
+      ...s,
+      isSuggestion: false,
+      logoUrl: withAssetVersion(s.logo?.logoUrl, s.logo?.updatedAt),
+    }));
 
   const inactiveSubscriptions = subscriptions
     .filter((s) => !s.isActive)
-    .map((s) => ({ ...s, isSuggestion: false, logoUrl: s.logo?.logoUrl || null }));
+    .map((s) => ({
+      ...s,
+      isSuggestion: false,
+      logoUrl: withAssetVersion(s.logo?.logoUrl, s.logo?.updatedAt),
+    }));
 
   const suggestionRows = suggestions.map((s) => ({
     id: s.id,

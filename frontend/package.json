@@ -18,12 +18,12 @@
     "@remixicon/react": "^4.8.0",
     "@tanstack/react-query": "^5.90.18",
     "@tanstack/react-table": "^8.21.3",
-    "better-auth": "^1.4.6",
     "bcryptjs": "^2.4.3",
+    "better-auth": "^1.4.6",
+    "canvas-confetti": "^1.9.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
-    "canvas-confetti": "^1.9.3",
     "date-fns": "^4.1.0",
     "drizzle-orm": "^0.45.1",
     "motion": "^12.26.2",
@@ -54,7 +54,8 @@
     "eslint": "^9",
     "eslint-config-next": "^16.1.5",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.0.18"
   },
   "pnpm": {
     "overrides": {

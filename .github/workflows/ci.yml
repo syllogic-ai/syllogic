@@ -68,6 +68,10 @@ jobs:
       working-directory: ./frontend
       run: pnpm install --frozen-lockfile
 
+    - name: Lint frontend
+      working-directory: ./frontend
+      run: pnpm lint
+
     - name: Run DB migrations (Drizzle)
       working-directory: ./frontend
       env:

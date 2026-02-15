@@ -17,15 +17,20 @@ import {
 import { useSession } from "@/lib/auth-client";
 import type { TransactionWithRelations } from "@/lib/actions/transactions";
 import type { CategoryDisplay, AccountForFilter } from "@/types";
+import type { TransactionsQueryState } from "@/lib/transactions/query-state";
 
 interface TransactionsClientProps {
   initialTransactions: TransactionWithRelations[];
+  totalCount: number;
+  initialQueryState: TransactionsQueryState;
   categories: CategoryDisplay[];
   accounts: AccountForFilter[];
 }
 
 export function TransactionsClient({
   initialTransactions,
+  totalCount,
+  initialQueryState,
   categories,
   accounts,
 }: TransactionsClientProps) {
@@ -35,6 +40,13 @@ export function TransactionsClient({
   const [transactions, setTransactions] = useState(initialTransactions);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [importStatus, setImportStatus] = useState<"importing" | "completed" | "failed" | null>(null);
+
+  const clearImportingParam = useCallback(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("importing");
+    const queryString = params.toString();
+    router.replace(queryString ? `/transactions?${queryString}` : "/transactions");
+  }, [router, searchParams]);
 
   useEffect(() => {
     setTransactions(initialTransactions);
@@ -94,22 +106,13 @@ export function TransactionsClient({
     }
 
     try {
-      const backendBase =
-        process.env.NODE_ENV === "development"
-          ? process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"
-          : process.env.NEXT_PUBLIC_BACKEND_URL || "";
-
-      const base = backendBase
-        ? `${backendBase}/api/csv-import/status/${pendingImport.importId}`
-        : `/api/csv-import/status/${pendingImport.importId}`;
-
-      const response = await fetch(`${base}?user_id=${pendingImport.userId}`);
+      const response = await fetch(`/api/csv-import/status/${pendingImport.importId}`);
       if (response.status === 404 || response.status === 403) {
         clearPendingImport();
         setPendingImportState(null);
         setImportStatus(null);
         if (importingId) {
-          router.replace("/transactions");
+          clearImportingParam();
         }
         return;
       }
@@ -167,13 +170,13 @@ export function TransactionsClient({
         }
         router.refresh();
         if (importingId) {
-          router.replace("/transactions");
+          clearImportingParam();
         }
       }
     } catch {
       // Status check failed; rely on SSE updates
     }
-  }, [pendingImport?.importId, pendingImport?.userId, importingId, router]);
+  }, [pendingImport?.importId, pendingImport?.userId, importingId, router, clearImportingParam]);
 
   useEffect(() => {
     checkImportStatus();
@@ -191,13 +194,13 @@ export function TransactionsClient({
         setPendingImportState(null);
         setImportStatus("completed");
         router.refresh();
-        if (importingId) router.replace("/transactions");
+        if (importingId) clearImportingParam();
       },
       onFailed: () => {
         clearPendingImport();
         setPendingImportState(null);
         setImportStatus("failed");
-        if (importingId) router.replace("/transactions");
+        if (importingId) clearImportingParam();
       },
       showToasts: false,  // Global ImportStatusNotifier handles toasts
     }
@@ -265,6 +268,8 @@ export function TransactionsClient({
       <div className="min-h-0 flex-1 flex flex-col">
         <TransactionTable
           transactions={transactions}
+          totalCount={totalCount}
+          queryState={initialQueryState}
           categories={categories}
           accounts={accounts}
           onUpdateTransaction={handleUpdateTransaction}

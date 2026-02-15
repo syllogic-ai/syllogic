@@ -59,6 +59,7 @@ services:
       FRONTEND_URL: ${APP_URL:-http://localhost:8080}
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-${APP_URL:-http://localhost:8080}}
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
+      INTERNAL_AUTH_SECRET: ${INTERNAL_AUTH_SECRET:?set INTERNAL_AUTH_SECRET in .env}
       # Optional integrations / features
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
@@ -152,6 +153,7 @@ services:
       BETTER_AUTH_URL: ${APP_URL:-http://localhost:8080}
       NEXT_PUBLIC_BETTER_AUTH_URL: ${APP_URL:-http://localhost:8080}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env}
+      INTERNAL_AUTH_SECRET: ${INTERNAL_AUTH_SECRET:?set INTERNAL_AUTH_SECRET in .env}
       BACKEND_URL: ${BACKEND_URL:-http://backend:8000}
       STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
       LOCAL_STORAGE_PATH: ${LOCAL_STORAGE_PATH:-uploads}

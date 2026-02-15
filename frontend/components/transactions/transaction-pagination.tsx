@@ -19,14 +19,52 @@ import type { TransactionWithRelations } from "@/lib/actions/transactions";
 
 interface TransactionPaginationProps {
   table: Table<TransactionWithRelations>;
+  totalCount?: number;
+  page?: number;
+  pageSize?: number;
+  onPageChange?: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
 }
 
-export function TransactionPagination({ table }: TransactionPaginationProps) {
-  const pageCount = table.getPageCount();
-  const pageIndex = table.getState().pagination.pageIndex;
-  const pageSize = table.getState().pagination.pageSize;
-  const totalRows = table.getFilteredRowModel().rows.length;
-  const selectedRows = table.getFilteredSelectedRowModel().rows.length;
+export function TransactionPagination({
+  table,
+  totalCount,
+  page,
+  pageSize,
+  onPageChange,
+  onPageSizeChange,
+}: TransactionPaginationProps) {
+  const legacyPageSize = table.getState().pagination.pageSize;
+  const legacyPage = table.getState().pagination.pageIndex + 1;
+  const legacyTotalCount = table.getFilteredRowModel().rows.length;
+  const resolvedPageSize = pageSize ?? legacyPageSize;
+  const resolvedPage = page ?? legacyPage;
+  const resolvedTotalCount = totalCount ?? legacyTotalCount;
+  const pageCount = totalCount
+    ? Math.max(1, Math.ceil(totalCount / resolvedPageSize))
+    : Math.max(1, table.getPageCount());
+  const selectedRows = table.getSelectedRowModel().rows.length;
+  const currentPageRows = table.getRowModel().rows.length;
+  const startRow = resolvedTotalCount === 0 ? 0 : (resolvedPage - 1) * resolvedPageSize + 1;
+  const endRow = resolvedTotalCount === 0
+    ? 0
+    : Math.min(resolvedTotalCount, (resolvedPage - 1) * resolvedPageSize + currentPageRows);
+  const canPrevious = totalCount ? resolvedPage > 1 : table.getCanPreviousPage();
+  const canNext = totalCount ? resolvedPage < pageCount : table.getCanNextPage();
+  const goToPage = (nextPage: number) => {
+    if (onPageChange) {
+      onPageChange(nextPage);
+      return;
+    }
+    table.setPageIndex(Math.max(0, nextPage - 1));
+  };
+  const setRowsPerPage = (nextPageSize: number) => {
+    if (onPageSizeChange) {
+      onPageSizeChange(nextPageSize);
+      return;
+    }
+    table.setPageSize(nextPageSize);
+  };
 
   return (
     <div className="flex items-center justify-between py-4">
@@ -34,11 +72,11 @@ export function TransactionPagination({ table }: TransactionPaginationProps) {
         <p className="text-xs text-muted-foreground">
           {selectedRows > 0 ? (
             <>
-              {selectedRows} of {totalRows} row(s) selected
+              {selectedRows} of {currentPageRows} row(s) selected
             </>
           ) : (
             <>
-              {totalRows} transaction{totalRows !== 1 ? "s" : ""}
+              {startRow}-{endRow} of {resolvedTotalCount} transaction{resolvedTotalCount !== 1 ? "s" : ""}
             </>
           )}
         </p>
@@ -48,8 +86,8 @@ export function TransactionPagination({ table }: TransactionPaginationProps) {
         <div className="flex items-center gap-2">
           <p className="text-xs text-muted-foreground">Rows per page</p>
           <Select
-            value={pageSize.toString()}
-            onValueChange={(value) => table.setPageSize(Number(value))}
+            value={resolvedPageSize.toString()}
+            onValueChange={(value) => setRowsPerPage(Number(value))}
           >
             <SelectTrigger className="w-[70px]" size="sm">
               <SelectValue />
@@ -66,7 +104,7 @@ export function TransactionPagination({ table }: TransactionPaginationProps) {
 
         <div className="flex items-center gap-1">
           <p className="text-xs text-muted-foreground">
-            Page {pageIndex + 1} of {pageCount || 1}
+            Page {resolvedPage} of {pageCount}
           </p>
         </div>
 
@@ -75,8 +113,8 @@ export function TransactionPagination({ table }: TransactionPaginationProps) {
             variant="outline"
             size="icon"
             className="h-7 w-7"
-            onClick={() => table.setPageIndex(0)}
-            disabled={!table.getCanPreviousPage()}
+            onClick={() => goToPage(1)}
+            disabled={!canPrevious}
           >
             <RiSkipLeftLine className="h-4 w-4" />
           </Button>
@@ -84,8 +122,8 @@ export function TransactionPagination({ table }: TransactionPaginationProps) {
             variant="outline"
             size="icon"
             className="h-7 w-7"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
+            onClick={() => goToPage(resolvedPage - 1)}
+            disabled={!canPrevious}
           >
             <RiArrowLeftSLine className="h-4 w-4" />
           </Button>
@@ -93,8 +131,8 @@ export function TransactionPagination({ table }: TransactionPaginationProps) {
             variant="outline"
             size="icon"
             className="h-7 w-7"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
+            onClick={() => goToPage(resolvedPage + 1)}
+            disabled={!canNext}
           >
             <RiArrowRightSLine className="h-4 w-4" />
           </Button>
@@ -102,8 +140,8 @@ export function TransactionPagination({ table }: TransactionPaginationProps) {
             variant="outline"
             size="icon"
             className="h-7 w-7"
-            onClick={() => table.setPageIndex(pageCount - 1)}
-            disabled={!table.getCanNextPage()}
+            onClick={() => goToPage(pageCount)}
+            disabled={!canNext}
           >
             <RiSkipRightLine className="h-4 w-4" />
           </Button>

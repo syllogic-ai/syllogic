@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { type Table } from "@tanstack/react-table";
 import { type DateRange } from "react-day-picker";
 import {
   startOfDay,
@@ -14,7 +13,9 @@ import {
   endOfQuarter,
   startOfYear,
   endOfYear,
-  subDays,
+  subMonths,
+  subQuarters,
+  subYears,
   format,
 } from "date-fns";
 import { Input } from "@/components/ui/input";
@@ -41,15 +42,30 @@ import {
   RiRepeatLine,
   RiLineChartLine,
 } from "@remixicon/react";
-import type { TransactionWithRelations } from "@/lib/actions/transactions";
 import type { CategoryForFilter, AccountForFilter } from "@/types";
+import type { TransactionsQueryState } from "@/lib/transactions/query-state";
 import { cn } from "@/lib/utils";
 
+interface RecurringFilterOption {
+  id: string;
+  name: string;
+  merchant?: string;
+  frequency: string;
+}
+
 interface TransactionFiltersProps {
-  table: Table<TransactionWithRelations>;
+  filters: TransactionsQueryState;
   categories: CategoryForFilter[];
   accounts: AccountForFilter[];
+  recurringOptions: RecurringFilterOption[];
   action?: React.ReactNode;
+  totalCount: number;
+  currentPageCount: number;
+  onFiltersChange: (
+    patch: Partial<TransactionsQueryState>,
+    options?: { resetPage?: boolean }
+  ) => void;
+  onClearFilters: () => void;
 }
 
 interface FilterOption {
@@ -58,17 +74,49 @@ interface FilterOption {
   color?: string;
 }
 
-// Date range presets
 const datePresets = [
-  { label: "Today", getValue: () => ({ from: startOfDay(new Date()), to: endOfDay(new Date()) }) },
-  { label: "Yesterday", getValue: () => ({ from: startOfDay(subDays(new Date(), 1)), to: endOfDay(subDays(new Date(), 1)) }) },
-  { label: "This Week", getValue: () => ({ from: startOfWeek(new Date(), { weekStartsOn: 1 }), to: endOfWeek(new Date(), { weekStartsOn: 1 }) }) },
-  { label: "This Month", getValue: () => ({ from: startOfMonth(new Date()), to: endOfMonth(new Date()) }) },
-  { label: "This Quarter", getValue: () => ({ from: startOfQuarter(new Date()), to: endOfQuarter(new Date()) }) },
-  { label: "This Year", getValue: () => ({ from: startOfYear(new Date()), to: endOfYear(new Date()) }) },
+  {
+    label: "This Week",
+    getValue: () => ({
+      from: startOfWeek(new Date(), { weekStartsOn: 1 }),
+      to: endOfWeek(new Date(), { weekStartsOn: 1 }),
+    }),
+  },
+  {
+    label: "This Month",
+    getValue: () => ({ from: startOfMonth(new Date()), to: endOfMonth(new Date()) }),
+  },
+  {
+    label: "Last Month",
+    getValue: () => {
+      const date = subMonths(new Date(), 1);
+      return { from: startOfMonth(date), to: endOfMonth(date) };
+    },
+  },
+  {
+    label: "This Quarter",
+    getValue: () => ({ from: startOfQuarter(new Date()), to: endOfQuarter(new Date()) }),
+  },
+  {
+    label: "Last Quarter",
+    getValue: () => {
+      const date = subQuarters(new Date(), 1);
+      return { from: startOfQuarter(date), to: endOfQuarter(date) };
+    },
+  },
+  {
+    label: "This Year",
+    getValue: () => ({ from: startOfYear(new Date()), to: endOfYear(new Date()) }),
+  },
+  {
+    label: "Last Year",
+    getValue: () => {
+      const date = subYears(new Date(), 1);
+      return { from: startOfYear(date), to: endOfYear(date) };
+    },
+  },
 ];
 
-// Multi-select filter with search
 interface MultiSelectFilterProps {
   label: string;
   icon: React.ReactNode;
@@ -100,17 +148,18 @@ function MultiSelectFilter({
 
   const toggleOption = (id: string) => {
     if (selectedIds.includes(id)) {
-      onSelectionChange(selectedIds.filter((i) => i !== id));
-    } else {
-      onSelectionChange([...selectedIds, id]);
+      onSelectionChange(selectedIds.filter((value) => value !== id));
+      return;
     }
+    onSelectionChange([...selectedIds, id]);
   };
 
   const getDisplayText = () => {
     if (selectedIds.length === 0) return "Select...";
     if (selectedIds.length === 1) {
       if (selectedIds[0] === "uncategorized") return "Uncategorized";
-      const option = options.find((o) => o.id === selectedIds[0]);
+      if (selectedIds[0] === "no_subscription") return "No Subscription";
+      const option = options.find((item) => item.id === selectedIds[0]);
       return option?.label || selectedIds[0];
     }
     return `${selectedIds.length} selected`;
@@ -132,11 +181,11 @@ function MultiSelectFilter({
         </PopoverTrigger>
         <PopoverContent align="start" className="w-64 p-0">
           {searchable && (
-            <div className="p-2 border-b">
+            <div className="border-b p-2">
               <Input
                 placeholder={`Search ${label.toLowerCase()}...`}
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(event) => setSearch(event.target.value)}
                 className="h-7 text-xs"
               />
             </div>
@@ -152,7 +201,7 @@ function MultiSelectFilter({
                   checked={selectedIds.includes("uncategorized")}
                   className="pointer-events-none"
                 />
-                <span className="inline-flex items-center px-1.5 py-0.5 text-xs bg-muted text-muted-foreground">
+                <span className="inline-flex items-center bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                   Uncategorized
                 </span>
               </button>
@@ -170,7 +219,7 @@ function MultiSelectFilter({
                 />
                 {option.color ? (
                   <span
-                    className="inline-flex items-center px-1.5 py-0.5 text-xs text-white truncate"
+                    className="inline-flex items-center truncate px-1.5 py-0.5 text-xs text-white"
                     style={{ backgroundColor: option.color }}
                   >
                     {option.label}
@@ -192,38 +241,41 @@ function MultiSelectFilter({
   );
 }
 
-// Date range filter component
 interface DateRangeFilterProps {
   dateRange: DateRange | undefined;
   onDateRangeChange: (range: DateRange | undefined) => void;
 }
 
+function formatDateRangeDisplay(range: DateRange | undefined): string {
+  if (!range?.from) return "Range";
+  if (!range.to) return format(range.from, "MMM d, yyyy");
+
+  const spansDifferentYears = range.from.getFullYear() !== range.to.getFullYear();
+  if (spansDifferentYears) {
+    return `${format(range.from, "MMM d, yyyy")} - ${format(range.to, "MMM d, yyyy")}`;
+  }
+
+  return `${format(range.from, "MMM d")} - ${format(range.to, "MMM d, yyyy")}`;
+}
+
 function DateRangeFilter({ dateRange, onDateRangeChange }: DateRangeFilterProps) {
   const [open, setOpen] = React.useState(false);
-
-  const getDisplayText = () => {
-    if (!dateRange?.from) return "All time";
-    if (!dateRange.to) return format(dateRange.from, "MMM d, yyyy");
-    return `${format(dateRange.from, "MMM d")} - ${format(dateRange.to, "MMM d, yyyy")}`;
-  };
 
   return (
     <div className="space-y-2">
       <Label className="flex items-center gap-2 text-xs text-muted-foreground">
         <RiCalendarLine className="h-4 w-4" />
         Date Range
-        {dateRange?.from && (
-          <span className="text-foreground">(1)</span>
-        )}
+        {dateRange?.from && <span className="text-foreground">(1)</span>}
       </Label>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger className="flex h-8 w-full items-center justify-between border border-input bg-background px-2.5 text-xs hover:bg-accent hover:text-accent-foreground">
-          <span className="truncate">{getDisplayText()}</span>
+          <span className="truncate">{formatDateRangeDisplay(dateRange)}</span>
           <RiArrowDownSLine className="h-4 w-4 shrink-0 text-muted-foreground" />
         </PopoverTrigger>
         <PopoverContent align="start" className="w-auto p-0">
           <div className="flex">
-            <div className="border-r p-2 space-y-0.5 w-28">
+            <div className="w-28 space-y-0.5 border-r p-2">
               <button
                 type="button"
                 onClick={() => {
@@ -235,7 +287,7 @@ function DateRangeFilter({ dateRange, onDateRangeChange }: DateRangeFilterProps)
                   !dateRange?.from && "bg-accent"
                 )}
               >
-                All time
+                Clear
               </button>
               {datePresets.map((preset) => (
                 <button
@@ -267,7 +319,6 @@ function DateRangeFilter({ dateRange, onDateRangeChange }: DateRangeFilterProps)
   );
 }
 
-// Amount range filter component
 interface AmountRangeFilterProps {
   minAmount: string;
   maxAmount: string;
@@ -288,24 +339,22 @@ function AmountRangeFilter({
       <Label className="flex items-center gap-2 text-xs text-muted-foreground">
         <RiMoneyDollarCircleLine className="h-4 w-4" />
         Amount Range
-        {hasFilter && (
-          <span className="text-foreground">(1)</span>
-        )}
+        {hasFilter && <span className="text-foreground">(1)</span>}
       </Label>
       <div className="flex items-center gap-2">
         <Input
           type="number"
           placeholder="Min"
           value={minAmount}
-          onChange={(e) => onMinChange(e.target.value)}
+          onChange={(event) => onMinChange(event.target.value)}
           className="h-8 text-xs"
         />
-        <span className="text-muted-foreground text-xs">to</span>
+        <span className="text-xs text-muted-foreground">to</span>
         <Input
           type="number"
           placeholder="Max"
           value={maxAmount}
-          onChange={(e) => onMaxChange(e.target.value)}
+          onChange={(event) => onMaxChange(event.target.value)}
           className="h-8 text-xs"
         />
       </div>
@@ -313,13 +362,7 @@ function AmountRangeFilter({
   );
 }
 
-// Active filter tag component
-interface FilterTagProps {
-  label: string;
-  onRemove: () => void;
-}
-
-function FilterTag({ label, onRemove }: FilterTagProps) {
+function FilterTag({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
     <button
       type="button"
@@ -332,63 +375,63 @@ function FilterTag({ label, onRemove }: FilterTagProps) {
   );
 }
 
-export function TransactionFilters({ table, categories, accounts, action }: TransactionFiltersProps) {
-  const descriptionColumn = table.getColumn("description");
-  const categoryColumn = table.getColumn("category");
-  const accountColumn = table.getColumn("account");
-  const pendingColumn = table.getColumn("pending");
-  const bookedAtColumn = table.getColumn("bookedAt");
-  const amountColumn = table.getColumn("amount");
-  const recurringTransactionColumn = table.getColumn("recurringTransaction");
-  const includeInAnalyticsColumn = table.getColumn("includeInAnalytics");
+export function TransactionFilters({
+  filters,
+  categories,
+  accounts,
+  recurringOptions,
+  action,
+  totalCount,
+  currentPageCount,
+  onFiltersChange,
+  onClearFilters,
+}: TransactionFiltersProps) {
+  const [searchInput, setSearchInput] = React.useState(filters.search ?? "");
 
-  const descriptionValue = (descriptionColumn?.getFilterValue() as string) ?? "";
+  React.useEffect(() => {
+    setSearchInput(filters.search ?? "");
+  }, [filters.search]);
 
-  // Multi-select filter values
-  const categoryValues = (categoryColumn?.getFilterValue() as string[]) ?? [];
-  const accountValues = (accountColumn?.getFilterValue() as string[]) ?? [];
-  const statusValues = (pendingColumn?.getFilterValue() as string[]) ?? [];
-  const recurringTransactionValues = (recurringTransactionColumn?.getFilterValue() as string[]) ?? [];
-  const analyticsValues = (includeInAnalyticsColumn?.getFilterValue() as string[]) ?? [];
+  React.useEffect(() => {
+    const normalizedSearch = searchInput.trim();
+    const currentSearch = filters.search ?? "";
+    if (normalizedSearch === currentSearch) return;
+    const timeout = window.setTimeout(() => {
+      onFiltersChange({ search: normalizedSearch || undefined }, { resetPage: true });
+    }, 250);
 
-  // Date range filter
-  const dateRange = (bookedAtColumn?.getFilterValue() as DateRange | undefined);
+    return () => window.clearTimeout(timeout);
+  }, [searchInput, filters.search, onFiltersChange]);
 
-  // Amount range filter
-  const amountRange = (amountColumn?.getFilterValue() as { min?: string; max?: string } | undefined);
-  const minAmount = amountRange?.min ?? "";
-  const maxAmount = amountRange?.max ?? "";
+  const dateRange = React.useMemo<DateRange | undefined>(() => {
+    if (!filters.from) return undefined;
+    const from = new Date(`${filters.from}T00:00:00.000Z`);
+    if (Number.isNaN(from.getTime())) return undefined;
+    const to = filters.to ? new Date(`${filters.to}T00:00:00.000Z`) : undefined;
+    if (to && Number.isNaN(to.getTime())) {
+      return { from };
+    }
+    return { from, to };
+  }, [filters.from, filters.to]);
 
-  // Count active filters
   const activeFilterCount =
-    categoryValues.length +
-    accountValues.length +
-    statusValues.length +
-    recurringTransactionValues.length +
-    analyticsValues.length +
-    (dateRange?.from ? 1 : 0) +
-    (minAmount || maxAmount ? 1 : 0);
+    filters.category.length +
+    filters.accountIds.length +
+    filters.status.length +
+    filters.subscription.length +
+    filters.analytics.length +
+    (filters.from ? 1 : 0) +
+    (filters.minAmount || filters.maxAmount ? 1 : 0);
 
-  const clearFilters = () => {
-    categoryColumn?.setFilterValue([]);
-    accountColumn?.setFilterValue([]);
-    pendingColumn?.setFilterValue([]);
-    recurringTransactionColumn?.setFilterValue([]);
-    includeInAnalyticsColumn?.setFilterValue([]);
-    bookedAtColumn?.setFilterValue(undefined);
-    amountColumn?.setFilterValue(undefined);
-  };
-
-  // Prepare options from props
-  const categoryOptions: FilterOption[] = categories.map((cat) => ({
-    id: cat.id,
-    label: cat.name,
-    color: cat.color ?? undefined,
+  const categoryOptions: FilterOption[] = categories.map((category) => ({
+    id: category.id,
+    label: category.name,
+    color: category.color ?? undefined,
   }));
 
-  const accountOptions: FilterOption[] = accounts.map((acc) => ({
-    id: acc.id,
-    label: acc.name,
+  const accountOptions: FilterOption[] = accounts.map((account) => ({
+    id: account.id,
+    label: account.name,
   }));
 
   const statusOptions: FilterOption[] = [
@@ -401,120 +444,129 @@ export function TransactionFilters({ table, categories, accounts, action }: Tran
     { id: "excluded", label: "Excluded from Analytics" },
   ];
 
-  // Extract unique recurring transactions from table data
-  const recurringTransactionMap = new Map<string, { id: string; name: string; merchant?: string; frequency: string }>();
-  table.getPreFilteredRowModel().rows.forEach((row) => {
-    const recurring = row.original.recurringTransaction;
-    if (recurring && !recurringTransactionMap.has(recurring.id)) {
-      recurringTransactionMap.set(recurring.id, {
-        id: recurring.id,
-        name: recurring.name,
-        merchant: recurring.merchant ?? undefined,
-        frequency: recurring.frequency,
-      });
-    }
-  });
-  const recurringTransactionOptions: FilterOption[] = Array.from(recurringTransactionMap.values()).map((rt) => ({
-    id: rt.id,
-    label: rt.merchant ? `${rt.name} (${rt.merchant})` : rt.name,
-  }));
+  const subscriptionOptions: FilterOption[] = [
+    { id: "no_subscription", label: "No Subscription" },
+    ...recurringOptions.map((recurring) => ({
+      id: recurring.id,
+      label: recurring.merchant ? `${recurring.name} (${recurring.merchant})` : recurring.name,
+    })),
+  ];
 
-  // Build active filter tags
   const filterTags: { label: string; onRemove: () => void }[] = [];
 
-  // Category tags
-  categoryValues.forEach((id) => {
+  filters.category.forEach((id) => {
     if (id === "uncategorized") {
       filterTags.push({
         label: "Uncategorized",
-        onRemove: () => categoryColumn?.setFilterValue(categoryValues.filter((v) => v !== id)),
+        onRemove: () =>
+          onFiltersChange(
+            { category: filters.category.filter((value) => value !== id) },
+            { resetPage: true }
+          ),
       });
-    } else {
-      const cat = categories.find((c) => c.id === id);
-      if (cat) {
-        filterTags.push({
-          label: cat.name,
-          onRemove: () => categoryColumn?.setFilterValue(categoryValues.filter((v) => v !== id)),
-        });
-      }
+      return;
     }
-  });
-
-  // Account tags
-  accountValues.forEach((id) => {
-    const acc = accounts.find((a) => a.id === id);
-    if (acc) {
-      filterTags.push({
-        label: acc.name,
-        onRemove: () => accountColumn?.setFilterValue(accountValues.filter((v) => v !== id)),
-      });
-    }
-  });
-
-  // Status tags
-  statusValues.forEach((id) => {
+    const category = categories.find((item) => item.id === id);
+    if (!category) return;
     filterTags.push({
-      label: id === "pending" ? "Pending" : "Completed",
-      onRemove: () => pendingColumn?.setFilterValue(statusValues.filter((v) => v !== id)),
+      label: category.name,
+      onRemove: () =>
+        onFiltersChange(
+          { category: filters.category.filter((value) => value !== id) },
+          { resetPage: true }
+        ),
     });
   });
 
-  // Subscription tags
-  recurringTransactionValues.forEach((id) => {
+  filters.accountIds.forEach((id) => {
+    const account = accounts.find((item) => item.id === id);
+    if (!account) return;
+    filterTags.push({
+      label: account.name,
+      onRemove: () =>
+        onFiltersChange(
+          { accountIds: filters.accountIds.filter((value) => value !== id) },
+          { resetPage: true }
+        ),
+    });
+  });
+
+  filters.status.forEach((id) => {
+    filterTags.push({
+      label: id === "pending" ? "Pending" : "Completed",
+      onRemove: () =>
+        onFiltersChange(
+          { status: filters.status.filter((value) => value !== id) },
+          { resetPage: true }
+        ),
+    });
+  });
+
+  filters.subscription.forEach((id) => {
     if (id === "no_subscription") {
       filterTags.push({
         label: "No Subscription",
-        onRemove: () => recurringTransactionColumn?.setFilterValue(recurringTransactionValues.filter((v) => v !== id)),
+        onRemove: () =>
+          onFiltersChange(
+            { subscription: filters.subscription.filter((value) => value !== id) },
+            { resetPage: true }
+          ),
       });
-    } else {
-      const rt = recurringTransactionMap.get(id);
-      if (rt) {
-        filterTags.push({
-          label: rt.merchant ? `${rt.name} (${rt.merchant})` : rt.name,
-          onRemove: () => recurringTransactionColumn?.setFilterValue(recurringTransactionValues.filter((v) => v !== id)),
-        });
-      }
+      return;
     }
+    const recurring = recurringOptions.find((item) => item.id === id);
+    if (!recurring) return;
+    filterTags.push({
+      label: recurring.merchant ? `${recurring.name} (${recurring.merchant})` : recurring.name,
+      onRemove: () =>
+        onFiltersChange(
+          { subscription: filters.subscription.filter((value) => value !== id) },
+          { resetPage: true }
+        ),
+    });
   });
 
-  // Date range tag
-  if (dateRange?.from) {
-    const label = dateRange.to
-      ? `${format(dateRange.from, "MMM d")} - ${format(dateRange.to, "MMM d")}`
-      : format(dateRange.from, "MMM d, yyyy");
-    filterTags.push({
-      label,
-      onRemove: () => bookedAtColumn?.setFilterValue(undefined),
-    });
-  }
-
-  // Amount range tag
-  if (minAmount || maxAmount) {
-    let label = "";
-    if (minAmount && maxAmount) {
-      label = `€${minAmount} - €${maxAmount}`;
-    } else if (minAmount) {
-      label = `≥ €${minAmount}`;
-    } else {
-      label = `≤ €${maxAmount}`;
-    }
-    filterTags.push({
-      label,
-      onRemove: () => amountColumn?.setFilterValue(undefined),
-    });
-  }
-
-  // Analytics tags
-  analyticsValues.forEach((id) => {
+  filters.analytics.forEach((id) => {
     filterTags.push({
       label: id === "included" ? "In Analytics" : "Excluded from Analytics",
-      onRemove: () => includeInAnalyticsColumn?.setFilterValue(analyticsValues.filter((v) => v !== id)),
+      onRemove: () =>
+        onFiltersChange(
+          { analytics: filters.analytics.filter((value) => value !== id) },
+          { resetPage: true }
+        ),
     });
   });
 
-  const totalRows = table.getFilteredRowModel().rows.length;
-  const totalUnfiltered = table.getPreFilteredRowModel().rows.length;
-  const isFiltered = totalRows !== totalUnfiltered;
+  if (filters.from) {
+    filterTags.push({
+      label: formatDateRangeDisplay(dateRange),
+      onRemove: () =>
+        onFiltersChange(
+          { from: undefined, to: undefined, horizon: 30 },
+          { resetPage: true }
+        ),
+    });
+  }
+
+  if (filters.minAmount || filters.maxAmount) {
+    let amountLabel = "";
+    if (filters.minAmount && filters.maxAmount) {
+      amountLabel = `EUR ${filters.minAmount} - EUR ${filters.maxAmount}`;
+    } else if (filters.minAmount) {
+      amountLabel = `>= EUR ${filters.minAmount}`;
+    } else {
+      amountLabel = `<= EUR ${filters.maxAmount}`;
+    }
+
+    filterTags.push({
+      label: amountLabel,
+      onRemove: () =>
+        onFiltersChange(
+          { minAmount: undefined, maxAmount: undefined },
+          { resetPage: true }
+        ),
+    });
+  }
 
   return (
     <div className="space-y-3">
@@ -524,16 +576,14 @@ export function TransactionFilters({ table, categories, accounts, action }: Tran
             <RiSearchLine className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Search transactions..."
-              value={descriptionValue}
-              onChange={(event) =>
-                descriptionColumn?.setFilterValue(event.target.value)
-              }
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
               className="pl-8"
             />
           </div>
 
           <Popover>
-            <PopoverTrigger className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-transparent hover:bg-accent hover:text-accent-foreground h-8 px-3">
+            <PopoverTrigger className="inline-flex h-8 items-center justify-center gap-2 whitespace-nowrap border border-input bg-transparent px-3 text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50">
               <RiFilter3Line className="h-4 w-4" />
               Filters
               {activeFilterCount > 0 && (
@@ -542,111 +592,140 @@ export function TransactionFilters({ table, categories, accounts, action }: Tran
                 </span>
               )}
             </PopoverTrigger>
-          <PopoverContent align="start" className="w-80">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Filters</span>
-              {activeFilterCount > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearFilters}
-                  className="h-auto p-0 text-xs text-muted-foreground hover:text-foreground"
-                >
-                  Clear all
-                </Button>
-              )}
-            </div>
+            <PopoverContent align="start" className="w-80">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Filters</span>
+                {activeFilterCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onClearFilters}
+                    className="h-auto p-0 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Clear all
+                  </Button>
+                )}
+              </div>
 
-            <Separator className="my-3" />
+              <Separator className="my-3" />
 
-            <div className="space-y-4">
-              <DateRangeFilter
-                dateRange={dateRange}
-                onDateRangeChange={(range) => bookedAtColumn?.setFilterValue(range)}
-              />
+              <div className="space-y-4">
+                <DateRangeFilter
+                  dateRange={dateRange}
+                  onDateRangeChange={(range) => {
+                    if (!range?.from) {
+                      onFiltersChange(
+                        { from: undefined, to: undefined, horizon: 30 },
+                        { resetPage: true }
+                      );
+                      return;
+                    }
+                    const normalizedFrom = format(startOfDay(range.from), "yyyy-MM-dd");
+                    const normalizedTo = range.to
+                      ? format(endOfDay(range.to), "yyyy-MM-dd")
+                      : undefined;
+                    onFiltersChange(
+                      {
+                        from: normalizedFrom,
+                        to: normalizedTo,
+                        horizon: undefined,
+                      },
+                      { resetPage: true }
+                    );
+                  }}
+                />
 
-              <MultiSelectFilter
-                label="Category"
-                icon={<RiPriceTag3Line className="h-4 w-4" />}
-                options={categoryOptions}
-                selectedIds={categoryValues}
-                onSelectionChange={(ids) => categoryColumn?.setFilterValue(ids)}
-                includeUncategorized
-                searchable
-              />
+                <MultiSelectFilter
+                  label="Category"
+                  icon={<RiPriceTag3Line className="h-4 w-4" />}
+                  options={categoryOptions}
+                  selectedIds={filters.category}
+                  onSelectionChange={(ids) =>
+                    onFiltersChange({ category: ids }, { resetPage: true })
+                  }
+                  includeUncategorized
+                  searchable
+                />
 
-              <MultiSelectFilter
-                label="Account"
-                icon={<RiBankLine className="h-4 w-4" />}
-                options={accountOptions}
-                selectedIds={accountValues}
-                onSelectionChange={(ids) => accountColumn?.setFilterValue(ids)}
-              />
+                <MultiSelectFilter
+                  label="Account"
+                  icon={<RiBankLine className="h-4 w-4" />}
+                  options={accountOptions}
+                  selectedIds={filters.accountIds}
+                  onSelectionChange={(ids) =>
+                    onFiltersChange({ accountIds: ids }, { resetPage: true })
+                  }
+                />
 
-              <MultiSelectFilter
-                label="Status"
-                icon={<RiTimeLine className="h-4 w-4" />}
-                options={statusOptions}
-                selectedIds={statusValues}
-                onSelectionChange={(ids) => pendingColumn?.setFilterValue(ids)}
-              />
+                <MultiSelectFilter
+                  label="Status"
+                  icon={<RiTimeLine className="h-4 w-4" />}
+                  options={statusOptions}
+                  selectedIds={filters.status}
+                  onSelectionChange={(ids) =>
+                    onFiltersChange({ status: ids }, { resetPage: true })
+                  }
+                />
 
-              <MultiSelectFilter
-                label="Subscription"
-                icon={<RiRepeatLine className="h-4 w-4" />}
-                options={[
-                  { id: "no_subscription", label: "No Subscription" },
-                  ...recurringTransactionOptions,
-                ]}
-                selectedIds={recurringTransactionValues}
-                onSelectionChange={(ids) => recurringTransactionColumn?.setFilterValue(ids)}
-                searchable
-              />
+                <MultiSelectFilter
+                  label="Subscription"
+                  icon={<RiRepeatLine className="h-4 w-4" />}
+                  options={subscriptionOptions}
+                  selectedIds={filters.subscription}
+                  onSelectionChange={(ids) =>
+                    onFiltersChange({ subscription: ids }, { resetPage: true })
+                  }
+                  searchable
+                />
 
-              <AmountRangeFilter
-                minAmount={minAmount}
-                maxAmount={maxAmount}
-                onMinChange={(value) =>
-                  amountColumn?.setFilterValue({
-                    ...amountRange,
-                    min: value || undefined,
-                  })
-                }
-                onMaxChange={(value) =>
-                  amountColumn?.setFilterValue({
-                    ...amountRange,
-                    max: value || undefined,
-                  })
-                }
-              />
+                <AmountRangeFilter
+                  minAmount={filters.minAmount ?? ""}
+                  maxAmount={filters.maxAmount ?? ""}
+                  onMinChange={(value) =>
+                    onFiltersChange(
+                      { minAmount: value.trim() || undefined },
+                      { resetPage: true }
+                    )
+                  }
+                  onMaxChange={(value) =>
+                    onFiltersChange(
+                      { maxAmount: value.trim() || undefined },
+                      { resetPage: true }
+                    )
+                  }
+                />
 
-              <MultiSelectFilter
-                label="Analytics"
-                icon={<RiLineChartLine className="h-4 w-4" />}
-                options={analyticsOptions}
-                selectedIds={analyticsValues}
-                onSelectionChange={(ids) => includeInAnalyticsColumn?.setFilterValue(ids)}
-              />
-            </div>
-          </PopoverContent>
-        </Popover>
+                <MultiSelectFilter
+                  label="Analytics"
+                  icon={<RiLineChartLine className="h-4 w-4" />}
+                  options={analyticsOptions}
+                  selectedIds={filters.analytics}
+                  onSelectionChange={(ids) =>
+                    onFiltersChange({ analytics: ids }, { resetPage: true })
+                  }
+                />
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
         {action}
       </div>
 
-      {/* Active filter tags */}
       {filterTags.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
           {filterTags.map((tag, index) => (
-            <FilterTag key={index} label={tag.label} onRemove={tag.onRemove} />
+            <FilterTag
+              key={`${tag.label}-${index}`}
+              label={tag.label}
+              onRemove={tag.onRemove}
+            />
           ))}
         </div>
       )}
 
-      {/* Filter summary */}
-      {isFiltered && (
+      {totalCount !== currentPageCount && (
         <p className="text-xs text-muted-foreground">
-          Showing {totalRows} of {totalUnfiltered} transactions
+          Showing {currentPageCount} of {totalCount} transactions
         </p>
       )}
     </div>

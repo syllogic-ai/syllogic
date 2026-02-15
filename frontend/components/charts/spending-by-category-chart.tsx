@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/utils";
+import { buildTransactionsDrilldownQuery } from "@/lib/dashboard/drilldown-query";
 
 interface CategoryData {
   id: string | null;
@@ -21,7 +22,7 @@ interface SpendingByCategoryChartProps {
   limit?: number;
   isLoading?: boolean;
   periodTitle?: string;
-  accountId?: string;
+  accountIds?: string[];
   dateFrom?: string;
   dateTo?: string;
   horizon?: number;
@@ -59,12 +60,27 @@ export function SpendingByCategoryChart({
   limit = 5,
   isLoading = false,
   periodTitle = "30-Day",
-  accountId,
+  accountIds,
   dateFrom,
   dateTo,
   horizon,
 }: SpendingByCategoryChartProps) {
   const router = useRouter();
+
+  const navigateToTransactions = React.useCallback(
+    (categoryId: string | null) => {
+      if (!categoryId) return;
+      const query = buildTransactionsDrilldownQuery({
+        categoryId,
+        accountIds,
+        dateFrom,
+        dateTo,
+        horizon,
+      });
+      router.push(`/transactions?${query}`);
+    },
+    [accountIds, dateFrom, dateTo, horizon, router]
+  );
 
   if (isLoading) {
     return <SpendingByCategoryChartSkeleton />;
@@ -72,26 +88,6 @@ export function SpendingByCategoryChart({
 
   const displayData = data.slice(0, limit);
   const maxAmount = Math.max(...displayData.map((d) => d.amount), 1);
-
-  const navigateToTransactions = React.useCallback(
-    (categoryId: string | null) => {
-      if (!categoryId) return;
-      const params = new URLSearchParams();
-      params.set("category", categoryId);
-      params.set("reset", Date.now().toString());
-      if (accountId) {
-        params.set("account", accountId);
-      }
-      if (dateFrom) {
-        params.set("from", dateFrom);
-        params.set("to", dateTo ?? dateFrom);
-      } else if (horizon) {
-        params.set("horizon", String(horizon));
-      }
-      router.push(`/transactions?${params.toString()}`);
-    },
-    [accountId, dateFrom, dateTo, horizon, router]
-  );
 
   return (
     <Card className="col-span-2">

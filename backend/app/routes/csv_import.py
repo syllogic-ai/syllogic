@@ -41,7 +41,7 @@ class DailyBalanceForImport(BaseModel):
 class EnqueueImportRequest(BaseModel):
     """Request to enqueue a CSV import for background processing."""
     csv_import_id: str
-    user_id: str
+    user_id: Optional[str] = None
     transactions: List[TransactionForImport]
     daily_balances: Optional[List[DailyBalanceForImport]] = None
     starting_balance: Optional[float] = None

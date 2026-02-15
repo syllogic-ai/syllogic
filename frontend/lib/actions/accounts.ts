@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { accounts, accountBalances, transactions, type NewAccount } from "@/lib/db/schema";
 import { requireAuth } from "@/lib/auth-helpers";
 import { getBackendBaseUrl } from "@/lib/backend-url";
+import { createInternalAuthHeaders } from "@/lib/internal-auth";
 
 export interface CreateAccountInput {
   name: string;
@@ -247,8 +248,14 @@ export async function recalculateStartingBalance(
     // Trigger backend timeseries recalculation
     try {
       const backendUrl = getBackendBaseUrl();
-      await fetch(`${backendUrl}/api/accounts/${accountId}/recalculate-timeseries?user_id=${userId}`, {
+      const pathWithQuery = `/api/accounts/${accountId}/recalculate-timeseries`;
+      await fetch(`${backendUrl}${pathWithQuery}`, {
         method: "POST",
+        headers: createInternalAuthHeaders({
+          method: "POST",
+          pathWithQuery,
+          userId,
+        }),
       });
     } catch (backendError) {
       console.warn("Failed to trigger backend timeseries recalculation:", backendError);
@@ -497,10 +504,16 @@ export async function recalculateAccountTimeseries(
 
     // Call backend to recalculate timeseries
     const backendUrl = getBackendBaseUrl();
-    const response = await fetch(`${backendUrl}/api/accounts/${accountId}/recalculate-timeseries?user_id=${userId}`, {
+    const pathWithQuery = `/api/accounts/${accountId}/recalculate-timeseries`;
+    const response = await fetch(`${backendUrl}${pathWithQuery}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...createInternalAuthHeaders({
+          method: "POST",
+          pathWithQuery,
+          userId,
+        }),
       },
     });
 

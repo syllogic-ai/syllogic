@@ -33,6 +33,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  GLOBAL_FILTER_STORAGE_KEY,
+  resolveGlobalFilterQueryString,
+} from "@/lib/filters/global-filters";
 
 const navItems = [
   {
@@ -78,6 +82,31 @@ export function AppSidebar() {
     | undefined;
   const avatarSrc = userWithProfilePhoto?.profilePhotoPath ?? userWithProfilePhoto?.image ?? undefined;
 
+  const getSharedFilterQueryString = () => {
+    if (typeof window === "undefined") {
+      return "";
+    }
+
+    let storedQuery: string | null = null;
+    try {
+      storedQuery = localStorage.getItem(GLOBAL_FILTER_STORAGE_KEY);
+    } catch {
+      storedQuery = null;
+    }
+
+    return resolveGlobalFilterQueryString(window.location.search, storedQuery);
+  };
+
+  const getHomePathWithFilters = () => {
+    const queryString = getSharedFilterQueryString();
+    return queryString ? `/?${queryString}` : "/";
+  };
+
+  const getTransactionsPathWithFilters = () => {
+    const queryString = getSharedFilterQueryString();
+    return queryString ? `/transactions?${queryString}` : "/transactions";
+  };
+
   const handleSignOut = async () => {
     await signOut();
     window.location.href = "/login";
@@ -101,7 +130,7 @@ export function AppSidebar() {
             <div className="flex items-center gap-1">
               <SidebarMenuButton
                 size="lg"
-                onClick={() => router.push("/")}
+                onClick={() => router.push(getHomePathWithFilters())}
                 className={isCollapsed ? "justify-center" : "w-full"}
               >
                 <div className="bg-sidebar-accent border-sidebar-border flex aspect-square size-8 items-center justify-center overflow-hidden border shrink-0">
@@ -136,7 +165,15 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     isActive={isActive}
                     tooltip={item.title}
-                    onClick={() => router.push(item.href)}
+                    onClick={() =>
+                      router.push(
+                        item.href === "/"
+                          ? getHomePathWithFilters()
+                          : item.href === "/transactions"
+                          ? getTransactionsPathWithFilters()
+                          : item.href
+                      )
+                    }
                   >
                     <item.icon className="shrink-0" />
                     {!isCollapsed && <span>{item.title}</span>}

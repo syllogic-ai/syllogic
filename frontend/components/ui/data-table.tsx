@@ -15,6 +15,7 @@ import {
   type ColumnSizingState,
   type OnChangeFn,
   type RowSelectionState,
+  type PaginationState,
   type Table as TanStackTable,
 } from "@tanstack/react-table";
 
@@ -34,6 +35,14 @@ interface DataTableProps<TData, TValue> {
   enableColumnResizing?: boolean;
   enableRowSelection?: boolean;
   enablePagination?: boolean;
+  manualPagination?: boolean;
+  manualSorting?: boolean;
+  pageCount?: number;
+  rowCount?: number;
+  paginationState?: PaginationState;
+  onPaginationStateChange?: OnChangeFn<PaginationState>;
+  sortingState?: SortingState;
+  onSortingStateChange?: OnChangeFn<SortingState>;
   pageSize?: number;
   initialColumnFilters?: ColumnFiltersState;
   onColumnFiltersChange?: (filters: ColumnFiltersState) => void;
@@ -52,6 +61,14 @@ export function DataTable<TData, TValue>({
   enableColumnResizing = true,
   enableRowSelection = true,
   enablePagination = true,
+  manualPagination = false,
+  manualSorting = false,
+  pageCount,
+  rowCount,
+  paginationState,
+  onPaginationStateChange,
+  sortingState,
+  onSortingStateChange,
   pageSize = 20,
   initialColumnFilters = [],
   onColumnFiltersChange,
@@ -62,7 +79,15 @@ export function DataTable<TData, TValue>({
   wrapperClassName,
   tableContainerClassName,
 }: DataTableProps<TData, TValue>) {
-  const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [uncontrolledSorting, setUncontrolledSorting] = React.useState<SortingState>([]);
+  const resolvedSorting = sortingState ?? uncontrolledSorting;
+  const setResolvedSorting: OnChangeFn<SortingState> = (updater) => {
+    if (onSortingStateChange) {
+      onSortingStateChange(updater);
+      return;
+    }
+    setUncontrolledSorting(updater);
+  };
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     initialColumnFilters
   );
@@ -74,15 +99,33 @@ export function DataTable<TData, TValue>({
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
   const [columnSizing, setColumnSizing] = React.useState<ColumnSizingState>({});
+  const [uncontrolledPagination, setUncontrolledPagination] = React.useState<PaginationState>({
+    pageIndex: 0,
+    pageSize,
+  });
+  const resolvedPagination = paginationState ?? uncontrolledPagination;
+  const setResolvedPagination: OnChangeFn<PaginationState> = (updater) => {
+    if (onPaginationStateChange) {
+      onPaginationStateChange(updater);
+      return;
+    }
+    setUncontrolledPagination(updater);
+  };
 
   const table = useReactTable({
     data,
     columns,
-    onSortingChange: setSorting,
+    onSortingChange: setResolvedSorting,
     onColumnFiltersChange: setColumnFilters,
     getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: enablePagination ? getPaginationRowModel() : undefined,
-    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel:
+      enablePagination && !manualPagination ? getPaginationRowModel() : undefined,
+    getSortedRowModel: manualSorting ? undefined : getSortedRowModel(),
+    manualPagination,
+    manualSorting,
+    pageCount,
+    rowCount,
+    onPaginationChange: enablePagination ? setResolvedPagination : undefined,
     getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: enableRowSelection ? setRowSelection : undefined,
@@ -90,11 +133,12 @@ export function DataTable<TData, TValue>({
     enableColumnResizing,
     columnResizeMode: "onChange",
     state: {
-      sorting,
+      sorting: resolvedSorting,
       columnFilters,
       columnVisibility,
       rowSelection,
       columnSizing,
+      pagination: resolvedPagination,
     },
     initialState: {
       pagination: {
