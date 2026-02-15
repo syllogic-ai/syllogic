@@ -422,6 +422,7 @@ export function TransactionFilters({
     filters.analytics.length +
     (filters.from ? 1 : 0) +
     (filters.minAmount || filters.maxAmount ? 1 : 0);
+  const hasTimeScope = Boolean(filters.from || filters.horizon);
 
   const categoryOptions: FilterOption[] = categories.map((category) => ({
     id: category.id,
@@ -543,6 +544,16 @@ export function TransactionFilters({
       onRemove: () =>
         onFiltersChange(
           { from: undefined, to: undefined, horizon: 30 },
+          { resetPage: true }
+        ),
+    });
+  } else if (filters.horizon) {
+    const horizonLabel = filters.horizon === 365 ? "12M" : `${filters.horizon}D`;
+    filterTags.push({
+      label: horizonLabel,
+      onRemove: () =>
+        onFiltersChange(
+          { horizon: undefined, from: undefined, to: undefined },
           { resetPage: true }
         ),
     });
@@ -726,6 +737,7 @@ export function TransactionFilters({
       {totalCount !== currentPageCount && (
         <p className="text-xs text-muted-foreground">
           Showing {currentPageCount} of {totalCount} transactions
+          {hasTimeScope ? " in current time window" : ""}
         </p>
       )}
     </div>

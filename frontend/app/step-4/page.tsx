@@ -115,14 +115,14 @@ export default function StepFourImportPage() {
               </div>
             ) : (
               <Select value={selectedAccountId} onValueChange={(v) => v && setSelectedAccountId(v)}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select an account">
                     {accounts.find((a) => a.id === selectedAccountId)?.name ?? "Select an account"}
                   </SelectValue>
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="w-auto min-w-[var(--anchor-width)] max-w-[90vw]">
                   {accounts.map((account) => (
-                    <SelectItem key={account.id} value={account.id}>
+                    <SelectItem key={account.id} value={account.id} className="pr-10">
                       {account.name} ({account.currency})
                     </SelectItem>
                   ))}

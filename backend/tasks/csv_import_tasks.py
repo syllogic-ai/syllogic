@@ -9,6 +9,7 @@ from decimal import Decimal
 
 from celery_app import celery_app
 from app.database import SessionLocal
+from app.db_helpers import set_request_user_id, clear_request_user_id
 from app.models import CsvImport, Account, Transaction, User, Category
 from app.services.event_publisher import EventPublisher
 from app.services.category_matcher import CategoryMatcher
@@ -313,6 +314,7 @@ def process_csv_import(
     """
     logger.info(f"[CSV_IMPORT_TASK] Starting import {csv_import_id} for user {user_id}")
 
+    request_token = set_request_user_id(user_id)
     db = SessionLocal()
     publisher = EventPublisher()
 
@@ -469,6 +471,7 @@ def process_csv_import(
     finally:
         db.close()
         publisher.close()
+        clear_request_user_id(request_token)
 
 
 def _match_subscriptions(db, user_id: str, transactions: List[Transaction]) -> None:

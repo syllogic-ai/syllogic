@@ -4,8 +4,6 @@ Test transaction import API endpoint.
 import sys
 import os
 import requests
-import json
-from uuid import uuid4
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -13,8 +11,9 @@ from decimal import Decimal
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.database import SessionLocal, Base, engine
-from app.models import User, Account, Category
+from app.models import Account, Category
 from app.db_helpers import get_or_create_system_user
+from tests.internal_auth import build_internal_auth_headers
 
 BASE_URL = "http://localhost:8000/api"
 
@@ -69,6 +68,7 @@ def test_transaction_import():
         
         # Test transaction import
         url = f"{BASE_URL}/transactions/import"
+        path_with_query = "/api/transactions/import"
         
         payload = {
             "transactions": [
@@ -91,13 +91,17 @@ def test_transaction_import():
                     "currency": "EUR"
                 }
             ],
-            "user_id": user_id,
             "sync_exchange_rates": False,
             "update_functional_amounts": False,
             "calculate_balances": False
         }
-        
-        response = requests.post(url, json=payload, timeout=30)
+
+        response = requests.post(
+            url,
+            json=payload,
+            headers=build_internal_auth_headers("POST", path_with_query, user_id),
+            timeout=30,
+        )
         
         if response.status_code == 200:
             result = response.json()

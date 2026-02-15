@@ -9,7 +9,6 @@ const DEFAULT_PAGE = 1;
 const DEFAULT_PAGE_SIZE = 20;
 const MIN_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 100;
-const DEFAULT_HORIZON: SupportedHorizon = 30;
 const DEFAULT_SORT = "bookedAt";
 const DEFAULT_ORDER = "desc";
 
@@ -132,7 +131,7 @@ function parseInternal(searchParams: URLSearchParams): TransactionsQueryState {
   const { from, to } = normalizeDateRange(searchParams.get("from") || undefined, searchParams.get("to") || undefined);
   const horizon = from
     ? undefined
-    : parseHorizonParam(searchParams.get("horizon")) ?? DEFAULT_HORIZON;
+    : parseHorizonParam(searchParams.get("horizon"));
   const sort = parseSortField(searchParams.get("sort"));
   const order = parseSortOrder(searchParams.get("order"));
 

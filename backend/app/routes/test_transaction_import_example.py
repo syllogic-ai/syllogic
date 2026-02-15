@@ -250,19 +250,14 @@ def _create_account_direct():
             sys.path.insert(0, str(backend_dir))
         
         from app.database import SessionLocal
-        from app.models import Account, User
-        from app.db_helpers import get_user_id
+        from app.models import Account
+        from app.db_helpers import get_or_create_system_user
         
         db = SessionLocal()
         try:
-            # Get or use default user
-            user_id = get_user_id()
-            
-            # Check if user exists
-            user = db.query(User).filter(User.id == user_id).first()
-            if not user:
-                print(f"   ⚠️  User {user_id} not found. Cannot create account.")
-                return None
+            # Example script fallback: ensure a local test user exists.
+            user = get_or_create_system_user(db)
+            user_id = str(user.id)
             
             # Check if account already exists
             existing_account = db.query(Account).filter(

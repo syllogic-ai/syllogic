@@ -401,7 +401,7 @@ export function SubscriptionsGroupedList({
           <div className="bg-muted/40 px-4 py-2 text-xs font-semibold uppercase text-muted-foreground">
             Suggestions
           </div>
-          <div className="divide-y max-h-72 overflow-y-auto">
+          <div className="divide-y">
             {suggestionRows.map((item) => renderSubscriptionRow(item))}
           </div>
         </div>

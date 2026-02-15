@@ -4,15 +4,15 @@ Test categorizer API endpoint.
 import sys
 import os
 import requests
-import json
 from decimal import Decimal
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.database import SessionLocal, Base, engine
-from app.models import User, Account, Category
+from app.models import Account, Category
 from app.db_helpers import get_or_create_system_user
+from tests.internal_auth import build_internal_auth_headers
 
 BASE_URL = "http://localhost:8000/api"
 
@@ -60,7 +60,8 @@ def test_categorizer_single():
     
     try:
         user_id = setup_test_data()
-        url = f"{BASE_URL}/categories/categorize?user_id={user_id}"
+        url = f"{BASE_URL}/categories/categorize"
+        path_with_query = "/api/categories/categorize"
         
         payload = {
             "description": "TESCO SUPERMARKET",
@@ -70,7 +71,12 @@ def test_categorizer_single():
             "use_llm": False  # Use deterministic matching for faster tests
         }
         
-        response = requests.post(url, json=payload, timeout=30)
+        response = requests.post(
+            url,
+            json=payload,
+            headers=build_internal_auth_headers("POST", path_with_query, user_id),
+            timeout=30,
+        )
     
         if response.status_code == 200:
             result = response.json()
@@ -96,7 +102,8 @@ def test_categorizer_batch():
     
     try:
         user_id = setup_test_data()
-        url = f"{BASE_URL}/categories/categorize/batch?user_id={user_id}"
+        url = f"{BASE_URL}/categories/categorize/batch"
+        path_with_query = "/api/categories/categorize/batch"
         
         payload = {
             "transactions": [
@@ -122,7 +129,12 @@ def test_categorizer_batch():
             "use_llm": False  # Use deterministic matching for faster tests
         }
         
-        response = requests.post(url, json=payload, timeout=30)
+        response = requests.post(
+            url,
+            json=payload,
+            headers=build_internal_auth_headers("POST", path_with_query, user_id),
+            timeout=30,
+        )
     
         if response.status_code == 200:
             result = response.json()

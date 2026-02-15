@@ -7,6 +7,7 @@ import {
   RiHomeLine,
   RiExchangeLine,
   RiSettings3Line,
+  RiLoopRightLine,
   RiAddLine,
   RiMoonLine,
   RiSunLine,
@@ -30,6 +31,7 @@ import {
 } from "@/components/ui/command";
 import {
   getCommandPaletteData,
+  searchCommandPaletteTransactions,
   type CommandPaletteData,
 } from "@/lib/actions/command-palette";
 import { formatAmount, formatDate } from "@/lib/utils";
@@ -47,7 +49,12 @@ export function CommandPalette() {
   const [open, setOpen] = React.useState(false);
   const [data, setData] = React.useState<CommandPaletteData | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
+  const [isSearchingTransactions, setIsSearchingTransactions] = React.useState(false);
+  const [transactionSearchResults, setTransactionSearchResults] = React.useState<
+    CommandPaletteData["transactions"]
+  >([]);
   const [search, setSearch] = React.useState("");
+  const transactionSearchRequestIdRef = React.useRef(0);
   const router = useRouter();
   const pathname = usePathname();
   const { setTheme, theme } = useTheme();
@@ -91,6 +98,8 @@ export function CommandPalette() {
   React.useEffect(() => {
     if (!open) {
       setSearch("");
+      setTransactionSearchResults([]);
+      setIsSearchingTransactions(false);
     }
   }, [open]);
 
@@ -141,6 +150,10 @@ export function CommandPalette() {
           router.push("/assets");
           break;
         case "s":
+          e.preventDefault();
+          router.push("/subscriptions");
+          break;
+        case "d":
           e.preventDefault();
           router.push("/settings");
           break;
@@ -223,6 +236,48 @@ export function CommandPalette() {
   // Determine if we should show search results
   const shouldSearch = search.length >= MIN_SEARCH_LENGTH;
 
+  React.useEffect(() => {
+    if (!open || !shouldSearch) {
+      setTransactionSearchResults([]);
+      setIsSearchingTransactions(false);
+      return;
+    }
+
+    const normalizedSearch = search.trim();
+    if (normalizedSearch.length < MIN_SEARCH_LENGTH) {
+      setTransactionSearchResults([]);
+      setIsSearchingTransactions(false);
+      return;
+    }
+
+    const requestId = transactionSearchRequestIdRef.current + 1;
+    transactionSearchRequestIdRef.current = requestId;
+    setIsSearchingTransactions(true);
+
+    const timeoutId = window.setTimeout(() => {
+      searchCommandPaletteTransactions(normalizedSearch)
+        .then((results) => {
+          if (transactionSearchRequestIdRef.current === requestId) {
+            setTransactionSearchResults(results);
+          }
+        })
+        .catch(() => {
+          if (transactionSearchRequestIdRef.current === requestId) {
+            setTransactionSearchResults([]);
+          }
+        })
+        .finally(() => {
+          if (transactionSearchRequestIdRef.current === requestId) {
+            setIsSearchingTransactions(false);
+          }
+        });
+    }, 200);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [open, search, shouldSearch]);
+
   // Filter function for search
   const filteredAccounts = React.useMemo(() => {
     if (!data?.accounts || !shouldSearch) return [];
@@ -245,14 +300,9 @@ export function CommandPalette() {
   }, [data?.assets, search, shouldSearch]);
 
   const filteredTransactions = React.useMemo(() => {
-    if (!data?.transactions || !shouldSearch) return [];
-    const term = search.toLowerCase();
-    return data.transactions.filter(
-      (t) =>
-        t.merchant?.toLowerCase().includes(term) ||
-        t.description?.toLowerCase().includes(term)
-    );
-  }, [data?.transactions, search, shouldSearch]);
+    if (!shouldSearch) return [];
+    return transactionSearchResults;
+  }, [shouldSearch, transactionSearchResults]);
 
   // Check if we have any search results
   const hasSearchResults =
@@ -264,8 +314,9 @@ export function CommandPalette() {
   const navigationItems = [
     { label: "Dashboard", path: "/", icon: RiHomeLine, shortcut: "B" },
     { label: "Transactions", path: "/transactions", icon: RiExchangeLine, shortcut: "T" },
+    { label: "Subscriptions", path: "/subscriptions", icon: RiLoopRightLine, shortcut: "S" },
     { label: "Assets", path: "/assets", icon: RiWallet3Line, shortcut: "A" },
-    { label: "Settings", path: "/settings", icon: RiSettings3Line, shortcut: "S" },
+    { label: "Settings", path: "/settings", icon: RiSettings3Line, shortcut: "D" },
   ];
 
   // Theme items for filtering
@@ -307,6 +358,10 @@ export function CommandPalette() {
     filteredNavigation.length > 0 ||
     filteredActions.length > 0 ||
     filteredTheme.length > 0;
+  const shouldShowLoading =
+    shouldSearch &&
+    (isSearchingTransactions ||
+      (isLoading && !data && transactionSearchResults.length === 0));
 
   return (
     <CommandDialog
@@ -324,7 +379,7 @@ export function CommandPalette() {
           onValueChange={setSearch}
         />
         <CommandList>
-          {isLoading && shouldSearch ? (
+          {shouldShowLoading ? (
             <div className="flex items-center justify-center py-6">
               <RiLoader4Line className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>

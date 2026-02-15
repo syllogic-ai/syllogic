@@ -1,6 +1,6 @@
 "use server";
 
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, ilike, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { accounts, properties, vehicles, transactions } from "@/lib/db/schema";
 import { requireAuth } from "@/lib/auth-helpers";
@@ -53,7 +53,7 @@ export async function getCommandPaletteData(): Promise<CommandPaletteData> {
   }
 
   // Fetch all data in parallel
-  const [accountsData, propertiesData, vehiclesData, transactionsData] = await Promise.all([
+  const [accountsData, propertiesData, vehiclesData] = await Promise.all([
     db.query.accounts.findMany({
       where: and(eq(accounts.userId, userId), eq(accounts.isActive, true)),
       orderBy: [desc(accounts.createdAt)],
@@ -65,11 +65,6 @@ export async function getCommandPaletteData(): Promise<CommandPaletteData> {
     db.query.vehicles.findMany({
       where: and(eq(vehicles.userId, userId), eq(vehicles.isActive, true)),
       orderBy: [desc(vehicles.createdAt)],
-    }),
-    db.query.transactions.findMany({
-      where: eq(transactions.userId, userId),
-      orderBy: [desc(transactions.bookedAt)],
-      limit: 50,
     }),
   ]);
 
@@ -105,8 +100,40 @@ export async function getCommandPaletteData(): Promise<CommandPaletteData> {
     })),
   ];
 
-  // Transform transactions
-  const formattedTransactions: CommandPaletteTransaction[] = transactionsData.map((tx) => ({
+  return {
+    accounts: formattedAccounts,
+    assets: formattedAssets,
+    transactions: [],
+  };
+}
+
+export async function searchCommandPaletteTransactions(
+  query: string
+): Promise<CommandPaletteTransaction[]> {
+  const userId = await requireAuth();
+
+  if (!userId) {
+    return [];
+  }
+
+  const normalizedQuery = query.trim();
+  if (normalizedQuery.length < 2) {
+    return [];
+  }
+
+  const transactionRows = await db.query.transactions.findMany({
+    where: and(
+      eq(transactions.userId, userId),
+      or(
+        ilike(transactions.merchant, `%${normalizedQuery}%`),
+        ilike(transactions.description, `%${normalizedQuery}%`)
+      )!
+    ),
+    orderBy: [desc(transactions.bookedAt)],
+    limit: 20,
+  });
+
+  return transactionRows.map((tx) => ({
     id: tx.id,
     merchant: tx.merchant,
     description: tx.description,
@@ -115,10 +142,4 @@ export async function getCommandPaletteData(): Promise<CommandPaletteData> {
     bookedAt: tx.bookedAt,
     transactionType: tx.transactionType,
   }));
-
-  return {
-    accounts: formattedAccounts,
-    assets: formattedAssets,
-    transactions: formattedTransactions,
-  };
 }

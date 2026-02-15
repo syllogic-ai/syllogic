@@ -589,11 +589,11 @@ export async function getTransactionsPage(
       resolvedTo = new Date(resolvedFrom);
       resolvedTo.setHours(23, 59, 59, 999);
     }
-  } else {
+  } else if (input.horizon) {
     const latestDate = await getLatestTransactionDateForScope(userId, normalizedAccountIds);
     resolvedTo = new Date(latestDate);
     resolvedTo.setHours(23, 59, 59, 999);
-    effectiveHorizon = input.horizon ?? 30;
+    effectiveHorizon = input.horizon;
     resolvedFrom = new Date(resolvedTo);
     resolvedFrom.setDate(resolvedFrom.getDate() - (effectiveHorizon - 1));
     resolvedFrom.setHours(0, 0, 0, 0);

@@ -121,6 +121,45 @@ export async function verifySuggestion(
   }
 
   try {
+    const resolveInheritedCategoryId = async (
+      candidateTransactionIds: string[]
+    ): Promise<string | null> => {
+      if (candidateTransactionIds.length === 0) {
+        return null;
+      }
+
+      const matchedTransactions = await db.query.transactions.findMany({
+        where: and(
+          inArray(transactions.id, candidateTransactionIds),
+          eq(transactions.userId, userId)
+        ),
+        columns: {
+          categoryId: true,
+          categorySystemId: true,
+        },
+      });
+
+      const counts = new Map<string, number>();
+      for (const tx of matchedTransactions) {
+        const categoryId = tx.categoryId ?? tx.categorySystemId;
+        if (!categoryId) {
+          continue;
+        }
+        counts.set(categoryId, (counts.get(categoryId) ?? 0) + 1);
+      }
+
+      let selectedCategoryId: string | null = null;
+      let selectedCount = 0;
+      for (const [categoryId, count] of counts.entries()) {
+        if (count > selectedCount) {
+          selectedCategoryId = categoryId;
+          selectedCount = count;
+        }
+      }
+
+      return selectedCategoryId;
+    };
+
     // Get the suggestion
     const suggestion = await db.query.subscriptionSuggestions.findFirst({
       where: and(
@@ -151,6 +190,8 @@ export async function verifySuggestion(
     const finalAmount = overrides?.amount?.toFixed(2) || suggestion.suggestedAmount;
     const finalFrequency = overrides?.frequency || (suggestion.detectedFrequency as "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly");
     const finalImportance = overrides?.importance ?? 2;
+    const inheritedCategoryId = await resolveInheritedCategoryId(transactionIds);
+    const finalCategoryId = overrides?.categoryId ?? inheritedCategoryId ?? null;
 
     // Check for duplicate subscription name
     const existingSubscription = await db.query.recurringTransactions.findFirst({
@@ -178,7 +219,7 @@ export async function verifySuggestion(
         currency: suggestion.currency,
         frequency: finalFrequency,
         importance: finalImportance,
-        categoryId: overrides?.categoryId || null,
+        categoryId: finalCategoryId,
         logoId: overrides?.logoId || null,
         description: overrides?.description?.trim() || null,
         isActive: true,

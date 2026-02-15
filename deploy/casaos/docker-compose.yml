@@ -86,6 +86,7 @@ services:
       FRONTEND_URL: ${APP_URL:-http://localhost:8080}
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-${APP_URL:-http://localhost:8080}}
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
+      INTERNAL_AUTH_SECRET: ${INTERNAL_AUTH_SECRET:-change-me}
       # Optional integrations / features
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       KRAKEN_API_KEY: ${KRAKEN_API_KEY:-}
@@ -106,6 +107,9 @@ services:
         - container: API_DOCS_ENABLED
           description:
             en_US: Enable FastAPI docs (true/false).
+        - container: INTERNAL_AUTH_SECRET
+          description:
+            en_US: Shared secret used for internal signed API requests.
         - container: OPENAI_API_KEY
           description:
             en_US: OpenAI API key (optional).
@@ -186,6 +190,7 @@ services:
       BETTER_AUTH_URL: ${APP_URL:-http://localhost:8080}
       NEXT_PUBLIC_BETTER_AUTH_URL: ${APP_URL:-http://localhost:8080}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-change-me}
+      INTERNAL_AUTH_SECRET: ${INTERNAL_AUTH_SECRET:-change-me}
       BACKEND_URL: ${BACKEND_URL:-http://backend:8000}
       STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
       LOCAL_STORAGE_PATH: ${LOCAL_STORAGE_PATH:-uploads}
@@ -211,6 +216,9 @@ services:
         - container: BACKEND_URL
           description:
             en_US: Backend internal URL (default uses Docker network).
+        - container: INTERNAL_AUTH_SECRET
+          description:
+            en_US: Shared secret used for internal signed API requests.
         - container: STORAGE_PROVIDER
           description:
             en_US: Storage provider (local).
@@ -258,8 +266,11 @@ services:
           	@auth path /api/auth/*
           	reverse_proxy @auth app:3000
 
+          	@health path /api/health
+          	reverse_proxy @health backend:8000
+
           	@api path /api/*
-          	reverse_proxy @api backend:8000
+          	reverse_proxy @api app:3000
 
           	reverse_proxy app:3000
           }
@@ -316,5 +327,5 @@ x-casaos:
   tips:
     before_install:
       en_US: |
-        Set BETTER_AUTH_SECRET and POSTGRES_PASSWORD before installing.
+        Set BETTER_AUTH_SECRET, INTERNAL_AUTH_SECRET, and POSTGRES_PASSWORD before installing.
         The app will be available on http://<CasaOS-IP>:${WEBUI_PORT:-8080}

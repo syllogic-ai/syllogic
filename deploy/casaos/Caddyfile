@@ -4,8 +4,11 @@
 	@auth path /api/auth/*
 	reverse_proxy @auth app:3000
 
+	@health path /api/health
+	reverse_proxy @health backend:8000
+
 	@api path /api/*
-	reverse_proxy @api backend:8000
+	reverse_proxy @api app:3000
 
 	reverse_proxy app:3000
 }

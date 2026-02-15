@@ -12,7 +12,7 @@ export default async function SubscriptionsPage() {
   ]);
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col gap-4 p-4">
+    <div className="flex min-h-[calc(100vh-4rem)] flex-col gap-4 p-4">
       <SubscriptionsClient
         initialSubscriptions={subscriptions}
         categories={categories}

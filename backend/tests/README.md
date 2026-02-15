@@ -7,6 +7,7 @@ This directory contains integration tests for the backend API endpoints.
 ### Prerequisites
 1. PostgreSQL and Redis must be running
 2. Backend server must be running on `http://localhost:8000`
+3. `INTERNAL_AUTH_SECRET` must be set (tests generate signed internal auth headers)
 
 ### Setup
 ```bash
@@ -18,9 +19,11 @@ pip install -r requirements.txt
 
 ```bash
 # Start the backend server first
+export INTERNAL_AUTH_SECRET=test-internal-auth-secret
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 # In another terminal, run tests
+export INTERNAL_AUTH_SECRET=test-internal-auth-secret
 python tests/test_transaction_import.py
 python tests/test_categorizer.py
 python tests/test_subscription_identifier.py

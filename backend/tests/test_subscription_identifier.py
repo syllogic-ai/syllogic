@@ -4,13 +4,11 @@ Test subscription identifier API endpoint.
 import sys
 import os
 import requests
-import json
-from uuid import uuid4
 from datetime import datetime, timezone, timedelta
-from decimal import Decimal
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from tests.internal_auth import build_internal_auth_headers
 
 BASE_URL = "http://localhost:8000/api"
 
@@ -57,6 +55,7 @@ def test_subscription_detection():
         
         # Step 1: Import transactions that look like subscriptions
         import_url = f"{BASE_URL}/transactions/import"
+        path_with_query = "/api/transactions/import"
         
         # Create recurring transactions (same merchant, similar amounts, monthly pattern)
         base_date = datetime.now(timezone.utc)
@@ -76,14 +75,18 @@ def test_subscription_detection():
         
         import_payload = {
             "transactions": transactions,
-            "user_id": test_user_id,
             "sync_exchange_rates": False,
             "update_functional_amounts": False,
             "calculate_balances": False
         }
         
         # Import transactions
-        import_response = requests.post(import_url, json=import_payload, timeout=60)
+        import_response = requests.post(
+            import_url,
+            json=import_payload,
+            headers=build_internal_auth_headers("POST", path_with_query, test_user_id),
+            timeout=60,
+        )
         
         if import_response.status_code == 200:
             import_result = import_response.json()
