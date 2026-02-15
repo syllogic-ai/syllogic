@@ -47,7 +47,7 @@ services:
 
   # ── Backend API (FastAPI) ─────────────────────────────────
   backend:
-    image: ghcr.io/syllogic-ai/personal-finance-backend:sha-495e6e2
+    image: ghcr.io/syllogic-ai/personal-finance-backend:sha-d8236be
     environment:
       DATABASE_URL: ${{shared.DATABASE_URL}}
       REDIS_URL: ${{shared.REDIS_URL}}
@@ -60,7 +60,7 @@ services:
 
   # ── MCP Server (FastMCP) ──────────────────────────────────
   mcp:
-    image: ghcr.io/syllogic-ai/personal-finance-backend:sha-495e6e2
+    image: ghcr.io/syllogic-ai/personal-finance-backend:sha-d8236be
     command: uvicorn mcp_server:app --host 0.0.0.0 --port 8001
     environment:
       DATABASE_URL: ${{shared.DATABASE_URL}}
@@ -69,7 +69,7 @@ services:
 
   # ── Celery Worker ─────────────────────────────────────────
   worker:
-    image: ghcr.io/syllogic-ai/personal-finance-backend:sha-495e6e2
+    image: ghcr.io/syllogic-ai/personal-finance-backend:sha-d8236be
     command: celery -A celery_app worker --loglevel=info --concurrency=4
     environment:
       DATABASE_URL: ${{shared.DATABASE_URL}}
@@ -82,7 +82,7 @@ services:
 
   # ── Celery Beat (scheduler) ───────────────────────────────
   beat:
-    image: ghcr.io/syllogic-ai/personal-finance-backend:sha-495e6e2
+    image: ghcr.io/syllogic-ai/personal-finance-backend:sha-d8236be
     command: celery -A celery_app beat --loglevel=info
     environment:
       DATABASE_URL: ${{shared.DATABASE_URL}}
@@ -97,7 +97,7 @@ services:
   # Migrations run automatically at startup before Next.js boot.
   # Keep PORT=3000 so Railway proxy routes traffic correctly.
   app:
-    image: ghcr.io/syllogic-ai/personal-finance-frontend:sha-495e6e2
+    image: ghcr.io/syllogic-ai/personal-finance-frontend:sha-d8236be
     command:
       - /bin/sh
       - -lc
