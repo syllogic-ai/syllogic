@@ -134,17 +134,11 @@ cp deploy/compose/.env.example deploy/compose/.env
 For full production details, see `/Users/gianniskotsas/Documents/WebDev/personal-finance-app/deploy/compose/README.md`.
 For CasaOS installs, see `/Users/gianniskotsas/Documents/WebDev/personal-finance-app/deploy/casaos/README.md`.
 
-## One-Click Deploy (Render)
+## Cloud Deploy (Recommended)
 
-This repository includes a root `render.yaml` Blueprint, so users can deploy with one click:
-
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/syllogic-ai/personal-finance-app)
-
-Recommended explicit branch link:
-
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/syllogic-ai/personal-finance-app/tree/main)
-
-The deploy button reads `/Users/gianniskotsas/Documents/WebDev/personal-finance-app/render.yaml`.
+- Railway (recommended): deploy once, then publish a Railway Template URL for one-click sharing.
+- DigitalOcean App Platform: good managed alternative if you want team-friendly app specs and predictable managed services.
+- Self-hosted Docker Compose remains the most complete/supported path in this repository.
 
 ### Prerequisites
 
