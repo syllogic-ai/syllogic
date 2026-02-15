@@ -78,7 +78,8 @@ export async function updateUserProfile(
       })
       .where(eq(users.id, session.user.id));
 
-    revalidatePath("/");
+    // Ensure layout consumers (sidebar avatar) pick up the updated image immediately.
+    revalidatePath("/", "layout");
     revalidatePath("/settings");
     return { success: true };
   } catch (error) {

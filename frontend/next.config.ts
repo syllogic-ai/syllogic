@@ -9,6 +9,12 @@ const nextConfig: NextConfig = {
       dynamic: 0,
       static: 30, // Minimum allowed by Next.js
     },
+    // Profile photo and CSV flows submit larger payloads via server actions.
+    serverActions: {
+      // Keep comfortably above the 10MB client-side CSV limit to account for
+      // multipart/serialization overhead.
+      bodySizeLimit: "25mb",
+    },
   },
   images: {
     remotePatterns: [

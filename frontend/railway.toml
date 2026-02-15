@@ -1,0 +1,11 @@
+# Railway config-as-code for the app (frontend) service.
+# Used when this service is deployed from source (GitHub, template, or `railway up`).
+# Configuration here overrides dashboard settings for each deployment.
+#
+# Note: When the app is created by importing deploy/railway/docker-compose.yml
+# and uses the pre-built image (no source deploy), this file is not used — set
+# the pre-deploy command once in Railway dashboard (Settings > Deploy > Pre-deploy Command).
+
+[deploy]
+# Run DB migrations before each deploy so auth (users, sessions) tables exist.
+preDeployCommand = "node scripts/migrate.js"

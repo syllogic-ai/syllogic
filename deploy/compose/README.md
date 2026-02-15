@@ -112,6 +112,10 @@ From repository root:
 - Local infra + migrations for source development: `./scripts/dev-up.sh --local`
 - Full prebuilt self-host stack: `./scripts/prod-up.sh`
 
+## Railway Deployment
+
+See [`deploy/railway/`](../railway/) for a Railway-specific compose file and instructions.
+
 ## Backups (Docs-Only in v1)
 
 Example manual backup:

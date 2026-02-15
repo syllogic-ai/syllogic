@@ -69,7 +69,12 @@ export type RecurringTransactionUpdateInput = SubscriptionUpdateInput;
  */
 export async function createSubscription(
   input: SubscriptionCreateInput
-): Promise<{ success: boolean; error?: string; subscriptionId?: string }> {
+): Promise<{
+  success: boolean;
+  error?: string;
+  subscriptionId?: string;
+  subscription?: Subscription;
+}> {
   const userId = await requireAuth();
 
   if (!userId) {
@@ -136,8 +141,19 @@ export async function createSubscription(
       })
       .returning({ id: recurringTransactions.id });
 
+    const subscription = await db.query.recurringTransactions.findFirst({
+      where: and(
+        eq(recurringTransactions.id, created.id),
+        eq(recurringTransactions.userId, userId)
+      ),
+      with: {
+        category: true,
+        logo: true,
+      },
+    });
+
     revalidatePath("/subscriptions");
-    return { success: true, subscriptionId: created.id };
+    return { success: true, subscriptionId: created.id, subscription: subscription ?? undefined };
   } catch (error) {
     console.error("Failed to create subscription:", error);
     return { success: false, error: "Failed to create subscription" };

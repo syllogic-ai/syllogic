@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SubscriptionsGroupedList } from "./subscriptions-grouped-list";
 import { SubscriptionFormDialog } from "./subscription-form-dialog";
@@ -76,6 +76,16 @@ export function SubscriptionsClient({
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
   const [selectedSubscription, setSelectedSubscription] =
     useState<SubscriptionWithCategory | null>(null);
+
+  // Keep local state in sync with server-refreshes.
+  // This prevents "stale" rows (e.g. missing logo relation) after router.refresh().
+  useEffect(() => {
+    setSubscriptions(initialSubscriptions);
+  }, [initialSubscriptions]);
+
+  useEffect(() => {
+    setSuggestions(initialSuggestions);
+  }, [initialSuggestions]);
 
   // Combine subscriptions and suggestions for table display
   // Order: Active subscriptions first, then suggestions, then inactive subscriptions

@@ -110,7 +110,10 @@ export async function verifySuggestion(
   }
 ): Promise<{
   success: boolean;
-  subscription?: typeof recurringTransactions.$inferSelect;
+  subscription?: (typeof recurringTransactions.$inferSelect) & {
+    category?: unknown;
+    logo?: unknown;
+  };
   linkedCount?: number;
   error?: string;
 }> {
@@ -267,6 +270,7 @@ export async function verifySuggestion(
       where: eq(recurringTransactions.id, created.id),
       with: {
         category: true,
+        logo: true,
       },
     });
 
