@@ -142,7 +142,7 @@ For CasaOS installs, see `/Users/gianniskotsas/Documents/WebDev/personal-finance
 
 ### Deploy To Railway (One-Click)
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template/REPLACE_ME)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/workspace/templates/0fff90d4-89df-4c27-906c-c623afde8960)
 
 This template provisions 7 services: `postgres`, `redis`, `backend`, `worker`, `beat`, `mcp`, `app`.
 
@@ -162,7 +162,7 @@ After deploy, set these **Shared Variables** in Railway (do not hardcode secrets
 - `OPENAI_API_KEY` (optional, enables AI categorization)
 - `LOGO_DEV_API_KEY` (optional, enables company logo search)
 
-Template note: replace `REPLACE_ME` with your published Railway template code/slug (see `/deploy/railway/README.md`).
+Template note: this button links to the Railway template page (no secrets in the URL).
 
 ### Prerequisites
 

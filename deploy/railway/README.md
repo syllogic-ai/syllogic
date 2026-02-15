@@ -2,9 +2,9 @@
 
 ## One-Click Deploy
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template/REPLACE_ME)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/workspace/templates/0fff90d4-89df-4c27-906c-c623afde8960)
 
-Replace `REPLACE_ME` with your published Railway template code/slug. Keep secrets in Railway Shared Variables, not in the URL.
+Keep secrets in Railway Shared Variables, not in the URL.
 
 ## 1. Import
 
