@@ -41,7 +41,8 @@ COPY . .
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres"
-ENV BETTER_AUTH_URL="http://localhost:3000"
+ENV APP_URL="http://localhost:8080"
+ENV BETTER_AUTH_URL="http://localhost:8080"
 ENV BETTER_AUTH_SECRET="build-only-secret"
 
 RUN pnpm build

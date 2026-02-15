@@ -29,6 +29,7 @@ export const auth = betterAuth({
   },
   trustedOrigins: (() => {
     const baseOrigins = [
+      process.env.APP_URL,
       process.env.BETTER_AUTH_URL,
       process.env.NEXT_PUBLIC_BETTER_AUTH_URL,
       process.env.RENDER_EXTERNAL_URL,

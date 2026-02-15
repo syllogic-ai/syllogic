@@ -29,6 +29,7 @@ const SIDEBAR_WIDTH = "14rem"
 const SIDEBAR_WIDTH_MOBILE = "16rem"
 const SIDEBAR_WIDTH_ICON = "3.5rem"
 const SIDEBAR_OPEN_STORAGE_KEY = "syllogic.sidebar.open"
+const SIDEBAR_OPEN_COOKIE_KEY = "syllogic.sidebar.open"
 
 type SidebarContextProps = {
   state: "expanded" | "collapsed"
@@ -66,7 +67,6 @@ function SidebarProvider({
 }) {
   const isMobile = useIsMobile()
   const [openMobile, setOpenMobile] = React.useState(false)
-  const [hasInitializedOpenState, setHasInitializedOpenState] = React.useState(false)
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
@@ -85,28 +85,13 @@ function SidebarProvider({
   )
 
   React.useEffect(() => {
-    if (hasInitializedOpenState) {
-      return
-    }
-
-    const stored = window.localStorage.getItem(SIDEBAR_OPEN_STORAGE_KEY)
-    if (stored === "true" || stored === "false") {
-      const nextOpen = stored === "true"
-      if (nextOpen !== open) {
-        setOpen(nextOpen)
-      }
-    }
-
-    setHasInitializedOpenState(true)
-  }, [hasInitializedOpenState, open, setOpen])
-
-  React.useEffect(() => {
-    if (!hasInitializedOpenState || isMobile) {
+    if (isMobile) {
       return
     }
 
     window.localStorage.setItem(SIDEBAR_OPEN_STORAGE_KEY, String(open))
-  }, [hasInitializedOpenState, isMobile, open])
+    document.cookie = `${SIDEBAR_OPEN_COOKIE_KEY}=${String(open)}; Path=/; Max-Age=31536000; SameSite=Lax`
+  }, [isMobile, open])
 
   const toggleSidebar = React.useCallback(() => {
     if (isMobile) {

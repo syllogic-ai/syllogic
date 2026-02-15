@@ -56,8 +56,8 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      FRONTEND_URL: ${APP_URL}
-      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS}
+      FRONTEND_URL: ${APP_URL:-http://localhost:8080}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-${APP_URL:-http://localhost:8080}}
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
       # Optional integrations / features
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -79,12 +79,11 @@ services:
       retries: 10
     restart: unless-stopped
 
-  # Optional MCP server (FastMCP) for Claude Desktop / programmatic access.
+  # MCP server (FastMCP) for Claude Desktop / programmatic access.
   #
-  # Enabled only when the "mcp" profile is selected:
-  #   docker compose --profile mcp ...
+  # Internal service port is fixed at 8001.
+  # External host port defaults to 8001 and is configurable via MCP_PORT.
   mcp:
-    profiles: ["mcp"]
     image: ghcr.io/syllogic-ai/personal-finance-backend:${APP_VERSION:-edge}
     container_name: syllogic-mcp
     command: uvicorn mcp_server:app --host 0.0.0.0 --port 8001
@@ -108,8 +107,8 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      FRONTEND_URL: ${APP_URL}
-      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS}
+      FRONTEND_URL: ${APP_URL:-http://localhost:8080}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-${APP_URL:-http://localhost:8080}}
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
       # Optional integrations / features
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -129,8 +128,8 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      FRONTEND_URL: ${APP_URL}
-      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS}
+      FRONTEND_URL: ${APP_URL:-http://localhost:8080}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-${APP_URL:-http://localhost:8080}}
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
       # Optional integrations / features
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -149,8 +148,9 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
-      BETTER_AUTH_URL: ${APP_URL}
-      NEXT_PUBLIC_BETTER_AUTH_URL: ${APP_URL}
+      APP_URL: ${APP_URL:-http://localhost:8080}
+      BETTER_AUTH_URL: ${APP_URL:-http://localhost:8080}
+      NEXT_PUBLIC_BETTER_AUTH_URL: ${APP_URL:-http://localhost:8080}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env}
       BACKEND_URL: ${BACKEND_URL:-http://backend:8000}
       STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}

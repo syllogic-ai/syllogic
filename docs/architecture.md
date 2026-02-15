@@ -628,8 +628,8 @@ services:
       - "3000:3000"
     environment:
       DATABASE_URL: postgres://finance:finance_secret@postgres:5432/finance
+      APP_URL: http://localhost:8080
       BETTER_AUTH_SECRET: your-secret-key-here
-      BETTER_AUTH_URL: http://localhost:3000
     depends_on:
       postgres:
         condition: service_healthy
@@ -688,8 +688,8 @@ volumes:
 |----------|---------|-------------|
 | `DATABASE_URL` | All | PostgreSQL connection string |
 | `REDIS_URL` | Backend | Redis connection string |
+| `APP_URL` | Frontend | Canonical public app URL |
 | `BETTER_AUTH_SECRET` | Frontend | Session encryption key |
-| `BETTER_AUTH_URL` | Frontend | App URL for callbacks |
 | `OPENAI_API_KEY` | Backend | OpenAI API for categorization |
 
 ---

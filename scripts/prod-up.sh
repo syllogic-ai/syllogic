@@ -3,32 +3,23 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="$ROOT_DIR/deploy/compose/.env"
-MCP_ENABLED="false"
 
 usage() {
   cat <<'EOF'
-Usage: prod-up.sh [--mcp]
-
-  --mcp  Enable the MCP service.
+Usage: prod-up.sh
 EOF
 }
 
-for arg in "$@"; do
-  case "$arg" in
-    --mcp)
-      MCP_ENABLED="true"
-      ;;
-    -h|--help)
-      usage
-      exit 0
-      ;;
-    *)
-      echo "Unknown option: $arg"
-      usage
-      exit 1
-      ;;
-  esac
-done
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+  usage
+  exit 0
+fi
+
+if [ "$#" -gt 0 ]; then
+  echo "Unknown option: $1"
+  usage
+  exit 1
+fi
 
 if [ ! -f "$ENV_FILE" ]; then
   echo "Missing $ENV_FILE."
@@ -36,15 +27,10 @@ if [ ! -f "$ENV_FILE" ]; then
   exit 1
 fi
 
-MCP_PROFILE_ARGS=()
-if [ "$MCP_ENABLED" = "true" ]; then
-  MCP_PROFILE_ARGS=(--profile mcp)
-fi
-
 echo "Pulling prebuilt images (GHCR)..."
 docker compose --env-file "$ENV_FILE" -f "$ROOT_DIR/deploy/compose/docker-compose.yml" pull
 
 echo "Starting production stack..."
-docker compose "${MCP_PROFILE_ARGS[@]}" --env-file "$ENV_FILE" -f "$ROOT_DIR/deploy/compose/docker-compose.yml" up -d
+docker compose --env-file "$ENV_FILE" -f "$ROOT_DIR/deploy/compose/docker-compose.yml" up -d
 
 echo "Done."

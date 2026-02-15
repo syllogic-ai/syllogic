@@ -89,7 +89,7 @@ async def import_status_generator(user_id: str, import_id: str) -> AsyncGenerato
 
 def get_cors_origin() -> str:
     """Get allowed CORS origin from environment."""
-    return os.getenv("FRONTEND_URL", "http://localhost:3000")
+    return os.getenv("FRONTEND_URL") or os.getenv("APP_URL", "http://localhost:3000")
 
 
 @router.get("/import-status/{user_id}/{import_id}")

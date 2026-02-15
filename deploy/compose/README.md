@@ -12,7 +12,10 @@ This directory contains the production-grade Docker Compose bundle:
 ## Quick Start
 
 1. Copy `deploy/compose/.env.example` to `deploy/compose/.env`.
-2. Edit `.env` values (at minimum: `POSTGRES_PASSWORD`, `APP_URL`, `CADDY_ADDRESS`, `ACME_EMAIL`).
+2. Edit `.env` values (at minimum: `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`).
+   - `APP_URL` defaults to `http://localhost:8080`.
+   - `HTTP_PORT` defaults to `8080` in the example env for a conflict-free local default.
+   - For a real domain, set `APP_URL`, `CADDY_ADDRESS`, and `ACME_EMAIL`.
 3. Start:
 
 ```bash
@@ -50,19 +53,22 @@ docker compose \
 - This bundle defaults to **Postgres 16**. If you have an existing local Docker volume created by **Postgres 15**, you must dump/restore to upgrade (or temporarily set `POSTGRES_IMAGE=postgres:15-alpine` to keep running on 15).
 - We set explicit `container_name` values to avoid the `*-1` suffix. This makes container names stable, but it also means you **cannot** scale services with `--scale`, and you shouldn't run multiple Syllogic stacks on the same Docker host without changing names.
 
-## Optional: MCP Server (Claude Desktop / Programmatic Access)
+## MCP Server (Enabled By Default)
 
-This bundle includes an optional **MCP HTTP server** (FastMCP). It's disabled by default and only starts when you enable the `mcp` profile.
+This bundle includes an **MCP HTTP server** (FastMCP) and starts it by default.
 
 1. Generate an API key in the app UI (Settings -> API Keys).
 2. Configure your MCP client to send `Authorization: Bearer pf_...`.
-3. Start (or restart) with the profile enabled:
+3. Start (or restart) normally:
 
 ```bash
-docker compose --profile mcp --env-file deploy/compose/.env -f deploy/compose/docker-compose.yml up -d
+docker compose --env-file deploy/compose/.env -f deploy/compose/docker-compose.yml up -d
 ```
 
-By default it binds to host port `8001` (override with `MCP_PORT`).
+MCP port contract:
+- Internal container port is fixed at `8001`.
+- External host port defaults to `8001`.
+- Override external port with `MCP_PORT` (example: `MCP_PORT=9001` maps `9001 -> 8001`).
 
 Security note: the MCP service is currently best treated as **single-user** and should only be exposed to trusted networks (LAN/VPN), or protected by an auth layer.
 

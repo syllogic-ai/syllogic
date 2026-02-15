@@ -164,9 +164,8 @@ cp .env.example .env.local
 **Frontend `.env.local` configuration:**
 ```env
 DATABASE_URL=postgresql://financeuser:financepass@localhost:5433/finance_db
+APP_URL=http://localhost:8080
 BETTER_AUTH_SECRET=your-secret-key-here
-BETTER_AUTH_URL=http://localhost:3000
-NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
 ### 5. Initialize Database
@@ -187,10 +186,10 @@ python seed_data.py
 ### Development Mode
 
 **One-click helpers:**
-- `scripts/dev-up.sh` (builds local images for dev; use `--prebuilt` to pull GHCR)
-- `scripts/prod-up.sh` (pulls prebuilt GHCR images)
+- `scripts/dev-up.sh` (starts local DB/Redis infra + migrations; use `--prebuilt` for full container stack)
+- `scripts/prod-up.sh` (pulls/runs prebuilt GHCR images, including MCP)
 
-Dev script builds local, prod pulls images.
+MCP is included by default in self-hosted compose deployments (external port defaults to `8001`, configurable via `MCP_PORT`).
 
 **Start all services with Docker Compose:**
 ```bash
@@ -271,9 +270,8 @@ pnpm db:studio
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `DATABASE_URL` | PostgreSQL connection string | Yes |
+| `APP_URL` | Canonical public app URL | Yes |
 | `BETTER_AUTH_SECRET` | Secret key for authentication | Yes |
-| `BETTER_AUTH_URL` | App URL for auth callbacks | Yes |
-| `NEXT_PUBLIC_APP_URL` | Public app URL | Yes |
 
 #### Backend (.env)
 | Variable | Description | Required |

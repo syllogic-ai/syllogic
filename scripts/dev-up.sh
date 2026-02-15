@@ -4,15 +4,13 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 MODE="local"
-MCP_ENABLED="false"
 
 usage() {
   cat <<'EOF'
-Usage: dev-up.sh [--local|--prebuilt] [--mcp]
+Usage: dev-up.sh [--local|--prebuilt]
 
-  --local     Build local images (default).
+  --local     Start local DB/Redis infra + run migrations (default).
   --prebuilt  Pull GHCR images via deploy/compose.
-  --mcp       Enable the MCP service (deploy/compose stack only).
 EOF
 }
 
@@ -23,9 +21,6 @@ for arg in "$@"; do
       ;;
     --prebuilt)
       MODE="prebuilt"
-      ;;
-    --mcp)
-      MCP_ENABLED="true"
       ;;
     -h|--help)
       usage
@@ -39,11 +34,6 @@ for arg in "$@"; do
   esac
 done
 
-MCP_PROFILE_ARGS=()
-if [ "$MCP_ENABLED" = "true" ]; then
-  MCP_PROFILE_ARGS=(--profile mcp)
-fi
-
 if [ "$MODE" = "prebuilt" ]; then
   ENV_FILE="$ROOT_DIR/deploy/compose/.env"
   if [ ! -f "$ENV_FILE" ]; then
@@ -55,24 +45,7 @@ if [ "$MODE" = "prebuilt" ]; then
   echo "Pulling prebuilt images (GHCR)..."
   docker compose --env-file "$ENV_FILE" -f "$ROOT_DIR/deploy/compose/docker-compose.yml" pull
   echo "Starting prebuilt stack..."
-  docker compose "${MCP_PROFILE_ARGS[@]}" --env-file "$ENV_FILE" -f "$ROOT_DIR/deploy/compose/docker-compose.yml" up -d
-  echo "Done."
-  exit 0
-fi
-
-if [ "$MCP_ENABLED" = "true" ]; then
-  ENV_FILE="$ROOT_DIR/deploy/compose/.env"
-  if [ ! -f "$ENV_FILE" ]; then
-    echo "Missing $ENV_FILE."
-    echo "Copy deploy/compose/.env.example to deploy/compose/.env and edit it first."
-    exit 1
-  fi
-  echo "Starting local stack with MCP (build from source)..."
-  docker compose "${MCP_PROFILE_ARGS[@]}" \
-    --env-file "$ENV_FILE" \
-    -f "$ROOT_DIR/deploy/compose/docker-compose.yml" \
-    -f "$ROOT_DIR/deploy/compose/docker-compose.local.yml" \
-    up -d --build
+  docker compose --env-file "$ENV_FILE" -f "$ROOT_DIR/deploy/compose/docker-compose.yml" up -d
   echo "Done."
   exit 0
 fi

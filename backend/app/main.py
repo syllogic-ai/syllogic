@@ -26,7 +26,7 @@ def _get_cors_origins() -> list[str]:
     """
     Determine allowed CORS origins.
 
-    Production deployments should set `CORS_ALLOW_ORIGINS` explicitly.
+    If CORS_ALLOW_ORIGINS is not set, APP_URL/FRONTEND_URL is used.
     """
     raw = os.getenv("CORS_ALLOW_ORIGINS")
     if raw:
@@ -34,7 +34,7 @@ def _get_cors_origins() -> list[str]:
         if origins:
             return origins
 
-    frontend_url = os.getenv("FRONTEND_URL")
+    frontend_url = os.getenv("FRONTEND_URL") or os.getenv("APP_URL")
     if frontend_url:
         return [frontend_url]
 

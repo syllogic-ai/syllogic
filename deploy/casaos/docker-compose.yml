@@ -84,7 +84,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-financeuser}:${POSTGRES_PASSWORD:-financepass}@postgres:5432/${POSTGRES_DB:-finance_db}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       FRONTEND_URL: ${APP_URL:-http://localhost:8080}
-      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:8080}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-${APP_URL:-http://localhost:8080}}
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
       # Optional integrations / features
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -109,6 +109,32 @@ services:
         - container: OPENAI_API_KEY
           description:
             en_US: OpenAI API key (optional).
+
+  mcp:
+    image: ghcr.io/syllogic-ai/personal-finance-backend:${APP_VERSION:-edge}
+    command: uvicorn mcp_server:app --host 0.0.0.0 --port 8001
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-UTC}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-financeuser}:${POSTGRES_PASSWORD:-financepass}@postgres:5432/${POSTGRES_DB:-finance_db}
+      # Optional integrations / features
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      KRAKEN_API_KEY: ${KRAKEN_API_KEY:-}
+      KRAKEN_PRIVATE_KEY: ${KRAKEN_PRIVATE_KEY:-}
+    depends_on:
+      - postgres
+      - migrate
+    ports:
+      - target: 8001
+        published: ${MCP_PORT:-8001}
+        protocol: tcp
+    restart: unless-stopped
+    x-casaos:
+      ports:
+        - container: "8001"
+          description:
+            en_US: MCP external port (maps to internal 8001).
 
   worker:
     image: ghcr.io/syllogic-ai/personal-finance-backend:${APP_VERSION:-edge}
