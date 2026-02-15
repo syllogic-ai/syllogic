@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 
@@ -72,16 +73,40 @@ export function CompanyLogo({
   size = "default",
   className,
 }: CompanyLogoProps) {
+  const [status, setStatus] = useState<"empty" | "loading" | "loaded" | "error">(() =>
+    logoUrl ? "loading" : "empty"
+  );
+
   const initials = getInitials(name);
   const bgColor = generateColor(name);
+
+  const showInitialsFallback = !logoUrl || status === "error";
 
   return (
     <Avatar size={size} className={cn("shrink-0", className)}>
       {logoUrl ? (
-        <AvatarImage src={logoUrl} alt={name} />
+        <AvatarImage
+          src={logoUrl}
+          alt={name}
+          loading="eager"
+          key={logoUrl}
+          onLoad={() => setStatus("loaded")}
+          onError={() => setStatus("error")}
+        />
       ) : null}
-      <AvatarFallback style={{ backgroundColor: bgColor, color: "white" }}>
-        {initials}
+      <AvatarFallback
+        style={
+          showInitialsFallback
+            ? { backgroundColor: bgColor, color: "white" }
+            : undefined
+        }
+        className={cn(showInitialsFallback ? "" : "bg-muted text-muted-foreground")}
+      >
+        {showInitialsFallback ? (
+          initials
+        ) : (
+          <span className="block size-full animate-pulse bg-muted" />
+        )}
       </AvatarFallback>
     </Avatar>
   );
