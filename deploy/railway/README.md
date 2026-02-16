@@ -2,7 +2,7 @@
 
 ## One-Click Deploy
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/workspace/templates/0fff90d4-89df-4c27-906c-c623afde8960)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/N98lwA?referralCode=25KFsK&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
 Keep secrets in Railway Shared Variables, not in the URL.
 
