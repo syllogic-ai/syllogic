@@ -35,7 +35,7 @@ export default async function DashboardLayout({
 
   return (
     <SidebarProvider defaultOpen={defaultSidebarOpen}>
-      <AppSidebar />
+      <AppSidebar initialUser={session.user} />
       <SidebarInset>{children}</SidebarInset>
       <ImportStatusNotifier />
     </SidebarProvider>

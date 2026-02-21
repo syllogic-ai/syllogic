@@ -36,6 +36,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 ENV PATH="/opt/venv/bin:$PATH"
+ENV PROCESS_TYPE=api
 
 # Runtime deps (libpq for Postgres connectivity)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -52,6 +53,5 @@ USER app
 
 EXPOSE 8000
 
-# Default: production API server (can be overridden for celery worker/beat).
-# Bind to $PORT if set (Render), else default to 8000 (Compose/self-host).
-CMD ["sh", "-c", "gunicorn -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:${PORT:-8000} --workers 2 --timeout 120"]
+# Use PROCESS_TYPE to run API, Celery worker, or Celery beat from the same image.
+CMD ["sh", "-c", "if [ \"$PROCESS_TYPE\" = \"worker\" ]; then exec celery -A celery_app worker --loglevel=info --concurrency=4; elif [ \"$PROCESS_TYPE\" = \"beat\" ]; then exec celery -A celery_app beat --loglevel=info; else exec gunicorn -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:${PORT:-8000} --workers 2 --timeout 120; fi"]

@@ -298,6 +298,7 @@ export function useImportStatus(
  * Storage key for persisting pending import ID across navigation
  */
 export const PENDING_IMPORT_STORAGE_KEY = "pendingCsvImport";
+const PENDING_IMPORT_MAX_AGE_MS = 20 * 60 * 1000;
 
 /**
  * Store a pending import ID in sessionStorage
@@ -327,14 +328,14 @@ export function getPendingImport(): { importId: string; userId: string } | null 
 
   try {
     const data = JSON.parse(stored);
-    // Check if the import is older than 1 hour (stale)
-    const ONE_HOUR = 60 * 60 * 1000;
-    if (Date.now() - data.timestamp > ONE_HOUR) {
+    // Clear stale pending imports to avoid indefinite "importing" UI state.
+    if (Date.now() - data.timestamp > PENDING_IMPORT_MAX_AGE_MS) {
       clearPendingImport();
       return null;
     }
     return { importId: data.importId, userId: data.userId };
   } catch {
+    clearPendingImport();
     return null;
   }
 }

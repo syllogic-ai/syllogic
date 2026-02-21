@@ -32,11 +32,22 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   GLOBAL_FILTER_STORAGE_KEY,
   resolveGlobalFilterQueryString,
 } from "@/lib/filters/global-filters";
+
+type SidebarUser = {
+  name?: string | null;
+  email?: string | null;
+  profilePhotoPath?: string | null;
+  image?: string | null;
+};
+
+interface AppSidebarProps {
+  initialUser?: SidebarUser | null;
+}
 
 const navItems = [
   {
@@ -66,21 +77,23 @@ const navItems = [
   },
 ];
 
-export function AppSidebar() {
+export function AppSidebar({ initialUser }: AppSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session } = useSession();
   const { isMobile, state, setOpen } = useSidebar();
   const [hasMarkError, setHasMarkError] = useState(false);
+  const [avatarLoadError, setAvatarLoadError] = useState(false);
   const isCollapsed = state === "collapsed";
   const brandImageSrc =
     isCollapsed && !hasMarkError
       ? "/brand/syllogic-mark.png"
       : "/brand/syllogic-logo.png";
-  const userWithProfilePhoto = session?.user as
-    | { profilePhotoPath?: string | null; image?: string | null }
-    | undefined;
-  const avatarSrc = userWithProfilePhoto?.profilePhotoPath ?? userWithProfilePhoto?.image ?? undefined;
+  const resolvedUser: SidebarUser | undefined =
+    (session?.user as SidebarUser | undefined) ?? initialUser ?? undefined;
+  const avatarSrc =
+    resolvedUser?.profilePhotoPath ?? resolvedUser?.image ?? undefined;
+  const showAvatarFallback = !avatarSrc || avatarLoadError;
 
   const getSharedFilterQueryString = () => {
     if (typeof window === "undefined") {
@@ -213,22 +226,30 @@ export function AppSidebar() {
                   className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                 >
                   <Avatar className="h-8 w-8 shrink-0">
-                    <AvatarImage
-                      src={avatarSrc}
-                      alt={session?.user?.name || "User"}
-                    />
-                    <AvatarFallback>
-                      {getInitials(session?.user?.name)}
-                    </AvatarFallback>
+                    {avatarSrc && !avatarLoadError && (
+                      <img
+                        src={avatarSrc}
+                        alt={resolvedUser?.name || "User"}
+                        loading="eager"
+                        decoding="async"
+                        className="size-full object-cover"
+                        onError={() => setAvatarLoadError(true)}
+                      />
+                    )}
+                    {showAvatarFallback && (
+                      <AvatarFallback>
+                        {getInitials(resolvedUser?.name)}
+                      </AvatarFallback>
+                    )}
                   </Avatar>
                   {!isCollapsed && (
                     <>
                       <div className="grid flex-1 text-left text-sm leading-tight">
                         <span className="truncate font-medium">
-                          {session?.user?.name || "User"}
+                          {resolvedUser?.name || "User"}
                         </span>
                         <span className="truncate text-xs">
-                          {session?.user?.email}
+                          {resolvedUser?.email}
                         </span>
                       </div>
                       <RiArrowUpDownLine className="ml-auto size-4" />

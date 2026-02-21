@@ -17,9 +17,9 @@
 #   - No container_name (Railway manages names)
 #   - No bind mounts (no host filesystem on Railway)
 #
-# Railway-specific (set in dashboard or after import):
-#   - app: PORT=3000 (Railway proxy expects this)
-#   - Backend listens on Railway PORT (default 8080); use :8080 in BACKEND_URL
+# Railway-specific (baked into this compose):
+#   - app PORT is pinned to 3000 (Railway proxy expects this)
+#   - backend PORT is pinned to 8080 so app BACKEND_URL can reference backend.PORT
 #   - App runs as root on Railway so mounted upload volumes are writable on first boot
 #   - App startup command runs DB migrations before Next.js boot
 # ──────────────────────────────────────────────────────────────
@@ -52,13 +52,14 @@ services:
 
   # ── Backend API (FastAPI) ─────────────────────────────────
   backend:
-    # For deterministic installs, pin to a release tag (vX.Y.Z) or sha-<commit>.
+    # Template maintainers: replace :edge with a pinned release tag for production templates.
     image: ghcr.io/syllogic-ai/personal-finance-backend:edge
     environment:
-      DATABASE_URL: ${{shared.DATABASE_URL}}
-      REDIS_URL: ${{shared.REDIS_URL}}
-      FRONTEND_URL: ${{shared.APP_URL}}
-      CORS_ALLOW_ORIGINS: ${{shared.APP_URL}}
+      PORT: "8080"
+      DATABASE_URL: postgresql://financeuser:${{shared.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/finance_db
+      REDIS_URL: redis://${{redis.RAILWAY_PRIVATE_DOMAIN}}:6379/0
+      FRONTEND_URL: ${{app.RAILWAY_STATIC_URL}}
+      CORS_ALLOW_ORIGINS: ${{app.RAILWAY_STATIC_URL}}
       API_DOCS_ENABLED: "false"
       INTERNAL_AUTH_SECRET: ${{shared.INTERNAL_AUTH_SECRET}}
       OPENAI_API_KEY: ${{shared.OPENAI_API_KEY}}
@@ -69,7 +70,7 @@ services:
     image: ghcr.io/syllogic-ai/personal-finance-backend:edge
     command: uvicorn mcp_server:app --host 0.0.0.0 --port 8001
     environment:
-      DATABASE_URL: ${{shared.DATABASE_URL}}
+      DATABASE_URL: postgresql://financeuser:${{shared.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/finance_db
       OPENAI_API_KEY: ${{shared.OPENAI_API_KEY}}
     restart: always
 
@@ -78,10 +79,10 @@ services:
     image: ghcr.io/syllogic-ai/personal-finance-backend:edge
     command: celery -A celery_app worker --loglevel=info --concurrency=4
     environment:
-      DATABASE_URL: ${{shared.DATABASE_URL}}
-      REDIS_URL: ${{shared.REDIS_URL}}
-      FRONTEND_URL: ${{shared.APP_URL}}
-      CORS_ALLOW_ORIGINS: ${{shared.APP_URL}}
+      DATABASE_URL: postgresql://financeuser:${{shared.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/finance_db
+      REDIS_URL: redis://${{redis.RAILWAY_PRIVATE_DOMAIN}}:6379/0
+      FRONTEND_URL: ${{app.RAILWAY_STATIC_URL}}
+      CORS_ALLOW_ORIGINS: ${{app.RAILWAY_STATIC_URL}}
       API_DOCS_ENABLED: "false"
       OPENAI_API_KEY: ${{shared.OPENAI_API_KEY}}
     restart: always
@@ -91,10 +92,10 @@ services:
     image: ghcr.io/syllogic-ai/personal-finance-backend:edge
     command: celery -A celery_app beat --loglevel=info
     environment:
-      DATABASE_URL: ${{shared.DATABASE_URL}}
-      REDIS_URL: ${{shared.REDIS_URL}}
-      FRONTEND_URL: ${{shared.APP_URL}}
-      CORS_ALLOW_ORIGINS: ${{shared.APP_URL}}
+      DATABASE_URL: postgresql://financeuser:${{shared.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/finance_db
+      REDIS_URL: redis://${{redis.RAILWAY_PRIVATE_DOMAIN}}:6379/0
+      FRONTEND_URL: ${{app.RAILWAY_STATIC_URL}}
+      CORS_ALLOW_ORIGINS: ${{app.RAILWAY_STATIC_URL}}
       API_DOCS_ENABLED: "false"
       OPENAI_API_KEY: ${{shared.OPENAI_API_KEY}}
     restart: always
@@ -104,15 +105,12 @@ services:
   # Keep PORT=3000 so Railway proxy routes traffic correctly.
   app:
     image: ghcr.io/syllogic-ai/personal-finance-frontend:edge
-    command:
-      - /bin/sh
-      - -lc
-      - mkdir -p /app/public/uploads && node scripts/migrate.js && exec node_modules/.bin/next start -p 3000 -H 0.0.0.0
+    command: /bin/sh -lc "mkdir -p /app/public/uploads/profile /app/public/uploads/logos /app/public/uploads/imports && chmod -R u+rwX,g+rwX /app/public/uploads && node scripts/migrate.js && exec node_modules/.bin/next start -p 3000 -H 0.0.0.0"
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "node -e \"require('http').get('http://127.0.0.1:3000/', (r)=>process.exit(r.statusCode && r.statusCode < 500 ? 0 : 1)).on('error', ()=>process.exit(1))\"",
+          "test -w /app/public/uploads && node -e \"require('http').get('http://127.0.0.1:3000/', (r)=>process.exit(r.statusCode && r.statusCode < 500 ? 0 : 1)).on('error', ()=>process.exit(1))\"",
         ]
       interval: 15s
       timeout: 5s
@@ -121,13 +119,13 @@ services:
       NODE_ENV: production
       PORT: "3000"
       RAILWAY_RUN_UID: "0"
-      DATABASE_URL: ${{shared.DATABASE_URL}}
-      APP_URL: ${{shared.APP_URL}}
-      BETTER_AUTH_URL: ${{shared.APP_URL}}
-      NEXT_PUBLIC_BETTER_AUTH_URL: ${{shared.APP_URL}}
+      DATABASE_URL: postgresql://financeuser:${{shared.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/finance_db
+      APP_URL: ${{app.RAILWAY_STATIC_URL}}
+      BETTER_AUTH_URL: ${{app.RAILWAY_STATIC_URL}}
+      NEXT_PUBLIC_BETTER_AUTH_URL: ${{app.RAILWAY_STATIC_URL}}
       BETTER_AUTH_SECRET: ${{shared.BETTER_AUTH_SECRET}}
       INTERNAL_AUTH_SECRET: ${{shared.INTERNAL_AUTH_SECRET}}
-      BACKEND_URL: ${{shared.BACKEND_URL}}
+      BACKEND_URL: http://${{backend.RAILWAY_PRIVATE_DOMAIN}}:${{backend.PORT}}
       STORAGE_PROVIDER: local
       LOCAL_STORAGE_PATH: uploads
       OPENAI_API_KEY: ${{shared.OPENAI_API_KEY}}

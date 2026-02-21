@@ -5,14 +5,17 @@ Handles enqueueing imports and checking status.
 import logging
 from typing import List, Optional, Dict, Any
 from uuid import UUID
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from celery.result import AsyncResult
 
 from app.database import get_db
 from app.db_helpers import get_user_id
 from app.models import CsvImport, Account
+from celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +67,40 @@ class ImportStatusResponse(BaseModel):
     progress_count: Optional[int] = None
     error_message: Optional[str] = None
     celery_task_id: Optional[str] = None
+
+
+def _reconcile_import_status(db: Session, csv_import: CsvImport) -> None:
+    """
+    Reconcile imports stuck in "importing" with the actual Celery task state.
+    """
+    if csv_import.status != "importing" or not csv_import.celery_task_id:
+        return
+
+    try:
+        task_result = AsyncResult(csv_import.celery_task_id, app=celery_app)
+        task_state = task_result.state
+
+        if task_state == "SUCCESS":
+            result_payload = task_result.result if isinstance(task_result.result, dict) else {}
+            imported_count = result_payload.get("imported_count")
+
+            csv_import.status = "completed"
+            if isinstance(imported_count, int) and csv_import.imported_rows is None:
+                csv_import.imported_rows = imported_count
+            if csv_import.completed_at is None:
+                csv_import.completed_at = datetime.utcnow()
+            db.commit()
+            return
+
+        if task_state in {"FAILURE", "REVOKED"}:
+            csv_import.status = "failed"
+            error_message = task_result.result
+            csv_import.error_message = str(error_message)[:2000] if error_message else f"Background task {task_state.lower()}"
+            if csv_import.completed_at is None:
+                csv_import.completed_at = datetime.utcnow()
+            db.commit()
+    except Exception as e:
+        logger.warning("Failed to reconcile import %s from Celery task state: %s", csv_import.id, e)
 
 
 @router.post("/enqueue", response_model=EnqueueImportResponse)
@@ -193,6 +230,9 @@ def get_import_status(
 
         if not csv_import:
             raise HTTPException(status_code=404, detail="CSV import not found")
+
+        _reconcile_import_status(db, csv_import)
+        db.refresh(csv_import)
 
         return ImportStatusResponse(
             import_id=str(csv_import.id),

@@ -149,20 +149,23 @@ This template provisions 7 services: `postgres`, `redis`, `backend`, `worker`, `
 After deploy, set these **Shared Variables** in Railway (do not hardcode secrets in the template URL):
 
 - `POSTGRES_PASSWORD` (required)
-- `DATABASE_URL` (required)
-  - Recommended: `postgresql://financeuser:${{shared.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/finance_db`
-- `REDIS_URL` (required)
-  - Recommended: `redis://${{redis.RAILWAY_PRIVATE_DOMAIN}}:6379/0`
-- `APP_URL` (required)
-  - Recommended: `https://${{app.RAILWAY_PUBLIC_DOMAIN}}`
-- `BACKEND_URL` (required)
-  - Recommended: `http://${{backend.RAILWAY_PRIVATE_DOMAIN}}:8080`
 - `BETTER_AUTH_SECRET` (required)
 - `INTERNAL_AUTH_SECRET` (required)
 - `OPENAI_API_KEY` (optional, enables AI categorization)
 - `LOGO_DEV_API_KEY` (optional, enables company logo search)
 
+No per-service variable bootstrapping is required for first-time setup.
+The Railway compose template hardcodes service ports and uses internal references
+for service-to-service wiring.
+`DATABASE_URL`, `REDIS_URL`, `APP_URL`, and `BACKEND_URL` are derived directly in compose
+from service references; do not set them as shared variables.
+Uploads are persisted on a Railway volume mounted at `/app/public/uploads`, including
+profile photos (`/uploads/profile/...`) and cached logos (`/uploads/logos/...`).
+
 Template note: this button links to the Railway one-click deploy URL (no secrets in the URL).
+
+Image tag policy: prefer pinned release tags (`vX.Y.Z`) for published templates
+instead of `:edge`.
 
 ### Prerequisites
 

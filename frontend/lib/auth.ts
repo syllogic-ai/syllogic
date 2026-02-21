@@ -4,7 +4,35 @@ import { admin } from "better-auth/plugins";
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 
+const toValidOrigin = (value?: string | null): string | undefined => {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+
+  const candidate =
+    trimmed.startsWith("http://") || trimmed.startsWith("https://")
+      ? trimmed
+      : `https://${trimmed}`;
+
+  try {
+    return new URL(candidate).origin;
+  } catch {
+    return undefined;
+  }
+};
+
+const resolvedBaseURL = [
+  process.env.APP_URL,
+  process.env.BETTER_AUTH_URL,
+  process.env.NEXT_PUBLIC_BETTER_AUTH_URL,
+  process.env.RENDER_EXTERNAL_URL,
+  process.env.RAILWAY_STATIC_URL,
+  process.env.RAILWAY_PUBLIC_DOMAIN,
+]
+  .map((value) => toValidOrigin(value))
+  .find((value): value is string => Boolean(value));
+
 export const auth = betterAuth({
+  baseURL: resolvedBaseURL,
   database: drizzleAdapter(db, {
     provider: "pg",
     schema: {
@@ -28,20 +56,10 @@ export const auth = betterAuth({
     },
   },
   trustedOrigins: (() => {
-    const normalizeOrigin = (value: string): string => {
-      const trimmed = value.trim();
-      if (!trimmed) return "";
-      if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-        return trimmed.replace(/\/+$/, "");
-      }
-      // Railway-provided domains can be host-only; default to https for public origins.
-      return `https://${trimmed.replace(/\/+$/, "")}`;
-    };
-
     const csvOrigins = (process.env.BETTER_AUTH_TRUSTED_ORIGINS || "")
       .split(",")
-      .map(normalizeOrigin)
-      .filter(Boolean);
+      .map((value) => toValidOrigin(value))
+      .filter((value): value is string => Boolean(value));
 
     const baseOrigins = [
       process.env.APP_URL,
@@ -51,8 +69,8 @@ export const auth = betterAuth({
       process.env.RAILWAY_PUBLIC_DOMAIN,
       process.env.RAILWAY_STATIC_URL,
     ]
-      .filter((value): value is string => Boolean(value))
-      .map(normalizeOrigin);
+      .map((value) => toValidOrigin(value))
+      .filter((value): value is string => Boolean(value));
 
     if (process.env.NODE_ENV === "production") {
       return Array.from(new Set([...baseOrigins, ...csvOrigins]));
