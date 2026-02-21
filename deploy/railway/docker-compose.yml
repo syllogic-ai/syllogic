@@ -70,6 +70,8 @@ services:
     image: ghcr.io/syllogic-ai/personal-finance-backend:edge
     command: uvicorn mcp_server:app --host 0.0.0.0 --port 8001
     environment:
+      PROCESS_TYPE: mcp
+      PORT: "8001"
       DATABASE_URL: postgresql://financeuser:${{shared.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/finance_db
       OPENAI_API_KEY: ${{shared.OPENAI_API_KEY}}
     restart: always

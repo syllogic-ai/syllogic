@@ -89,6 +89,8 @@ services:
     container_name: syllogic-mcp
     command: uvicorn mcp_server:app --host 0.0.0.0 --port 8001
     environment:
+      PROCESS_TYPE: mcp
+      PORT: "8001"
       DATABASE_URL: ${DATABASE_URL}
       # Optional integrations / features
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
