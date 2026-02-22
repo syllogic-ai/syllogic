@@ -220,22 +220,6 @@ export const transactionColumns: ColumnDef<TransactionWithRelations>[] = [
     },
   },
   {
-    accessorKey: "transactionType",
-    header: () => <div className="text-center">Type</div>,
-    cell: ({ row }) => {
-      const type = row.original.transactionType;
-      const isCredit = type === "credit";
-      return (
-        <div className="flex justify-center">
-          <Badge variant={isCredit ? "default" : "secondary"}>
-            {isCredit ? "Income" : "Expense"}
-          </Badge>
-        </div>
-      );
-    },
-    size: 100,
-  },
-  {
     accessorKey: "amount",
     header: ({ column }) => {
       const sorted = column.getIsSorted();
