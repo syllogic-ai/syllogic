@@ -2,10 +2,9 @@
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { TransactionWithRelations } from "@/lib/actions/transactions";
-import { RiArrowUpDownLine, RiArrowUpLine, RiArrowDownLine, RiSubtractLine, RiCheckLine, RiLink } from "@remixicon/react";
+import { RiArrowUpLine, RiArrowDownLine, RiSubtractLine, RiCheckLine, RiLink } from "@remixicon/react";
 import {
   Tooltip,
   TooltipContent,
@@ -195,20 +194,6 @@ export const transactionColumns: ColumnDef<TransactionWithRelations>[] = [
       if (filterValue.includes("uncategorized") && !row.original.category) return true;
       return filterValue.includes(row.original.category?.id);
     },
-  },
-  {
-    accessorKey: "transactionType",
-    header: "Type",
-    cell: ({ row }) => {
-      const type = row.original.transactionType;
-      const isCredit = type === "credit";
-      return (
-        <Badge variant={isCredit ? "default" : "secondary"}>
-          {isCredit ? "Income" : "Expense"}
-        </Badge>
-      );
-    },
-    size: 100,
   },
   {
     accessorKey: "amount",
