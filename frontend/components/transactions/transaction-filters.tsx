@@ -59,8 +59,6 @@ interface TransactionFiltersProps {
   accounts: AccountForFilter[];
   recurringOptions: RecurringFilterOption[];
   action?: React.ReactNode;
-  totalCount: number;
-  currentPageCount: number;
   onFiltersChange: (
     patch: Partial<TransactionsQueryState>,
     options?: { resetPage?: boolean }
@@ -381,8 +379,6 @@ export function TransactionFilters({
   accounts,
   recurringOptions,
   action,
-  totalCount,
-  currentPageCount,
   onFiltersChange,
   onClearFilters,
 }: TransactionFiltersProps) {
@@ -422,8 +418,6 @@ export function TransactionFilters({
     filters.analytics.length +
     (filters.from ? 1 : 0) +
     (filters.minAmount || filters.maxAmount ? 1 : 0);
-  const hasTimeScope = Boolean(filters.from || filters.horizon);
-
   const categoryOptions: FilterOption[] = categories.map((category) => ({
     id: category.id,
     label: category.name,
@@ -734,12 +728,6 @@ export function TransactionFilters({
         </div>
       )}
 
-      {totalCount !== currentPageCount && (
-        <p className="text-xs text-muted-foreground">
-          Showing {currentPageCount} of {totalCount} transactions
-          {hasTimeScope ? " in current time window" : ""}
-        </p>
-      )}
     </div>
   );
 }

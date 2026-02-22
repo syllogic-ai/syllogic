@@ -247,8 +247,6 @@ export function TransactionTable({
             accounts={accounts}
             recurringOptions={recurringOptions}
             action={action}
-            totalCount={totalCount}
-            currentPageCount={transactions.length}
             onFiltersChange={updateQueryState}
             onClearFilters={() =>
               updateQueryState(
