@@ -2,18 +2,32 @@
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { TransactionWithRelations } from "@/lib/actions/transactions";
-import { RiArrowUpDownLine, RiArrowUpLine, RiArrowDownLine, RiSubtractLine, RiCheckLine, RiLink } from "@remixicon/react";
+import { RiArrowUpLine, RiArrowDownLine, RiSubtractLine, RiCheckLine, RiLink } from "@remixicon/react";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { format } from "date-fns";
+import { AccountLogo } from "@/components/ui/account-logo";
 
-function AccountCell({ accountId, accountName, maxWidth }: { accountId: string; accountName: string; maxWidth: number }) {
+function AccountCell({
+  accountId,
+  accountName,
+  logo,
+  maxWidth,
+}: {
+  accountId: string;
+  accountName: string;
+  logo: {
+    id: string;
+    logoUrl: string | null;
+    updatedAt?: Date | null;
+  } | null;
+  maxWidth: number;
+}) {
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     window.location.href = `/accounts/${accountId}`;
@@ -22,11 +36,17 @@ function AccountCell({ accountId, accountName, maxWidth }: { accountId: string; 
   return (
     <button
       onClick={handleClick}
-      className="block truncate text-muted-foreground hover:text-foreground hover:underline transition-colors text-left"
+      className="flex items-center gap-2 text-muted-foreground hover:text-foreground hover:underline transition-colors text-left"
       style={{ maxWidth: `${maxWidth}px` }}
       title={accountName}
     >
-      {accountName}
+      <AccountLogo
+        name={accountName}
+        logoUrl={logo?.logoUrl}
+        updatedAt={logo?.updatedAt}
+        size="sm"
+      />
+      <span className="truncate">{accountName}</span>
     </button>
   );
 }
@@ -261,6 +281,7 @@ export const transactionColumns: ColumnDef<TransactionWithRelations>[] = [
         <AccountCell
           accountId={account.id}
           accountName={account.name}
+          logo={account.logo}
           maxWidth={columnSize}
         />
       );

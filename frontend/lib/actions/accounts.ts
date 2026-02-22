@@ -7,6 +7,10 @@ import { accounts, accountBalances, transactions, type NewAccount } from "@/lib/
 import { requireAuth } from "@/lib/auth-helpers";
 import { getBackendBaseUrl } from "@/lib/backend-url";
 import { createInternalAuthHeaders } from "@/lib/internal-auth";
+import {
+  resolveMissingAccountLogo,
+  resolveMissingAccountLogos,
+} from "@/lib/actions/account-logos";
 
 export interface CreateAccountInput {
   name: string;
@@ -14,6 +18,10 @@ export interface CreateAccountInput {
   institution?: string;
   currency: string;
   startingBalance?: number;
+}
+
+export interface UpdateAccountInput extends Partial<CreateAccountInput> {
+  logoId?: string | null;
 }
 
 export async function createAccount(
@@ -52,7 +60,7 @@ export async function createAccount(
 
 export async function updateAccount(
   accountId: string,
-  input: Partial<CreateAccountInput>
+  input: UpdateAccountInput
 ): Promise<{ success: boolean; error?: string }> {
   const userId = await requireAuth();
 
@@ -69,18 +77,35 @@ export async function updateAccount(
       return { success: false, error: "Account not found" };
     }
 
-    await db
-      .update(accounts)
-      .set({
-        name: input.name,
-        accountType: input.accountType,
-        institution: input.institution,
-        currency: input.currency,
-        startingBalance: input.startingBalance?.toString(),
-        updatedAt: new Date(),
-      })
-      .where(eq(accounts.id, accountId));
+    const updateData: Partial<NewAccount> = {
+      updatedAt: new Date(),
+    };
 
+    if ("name" in input && input.name !== undefined) {
+      updateData.name = input.name;
+    }
+    if ("accountType" in input && input.accountType !== undefined) {
+      updateData.accountType = input.accountType;
+    }
+    if ("institution" in input) {
+      updateData.institution = input.institution ?? null;
+    }
+    if ("currency" in input && input.currency !== undefined) {
+      updateData.currency = input.currency;
+    }
+    if ("startingBalance" in input && input.startingBalance !== undefined) {
+      updateData.startingBalance = input.startingBalance.toString();
+    }
+    if ("logoId" in input) {
+      updateData.logoId = input.logoId ?? null;
+    }
+
+    await db.update(accounts).set(updateData).where(eq(accounts.id, accountId));
+
+    revalidatePath("/assets");
+    revalidatePath("/accounts");
+    revalidatePath(`/accounts/${accountId}`);
+    revalidatePath("/transactions");
     revalidatePath("/settings");
     revalidatePath("/");
     return { success: true };
@@ -194,10 +219,21 @@ export async function getAccounts() {
     return [];
   }
 
-  return db.query.accounts.findMany({
+  const accountRows = await db.query.accounts.findMany({
     where: and(eq(accounts.userId, userId), eq(accounts.isActive, true)),
     orderBy: (accounts, { asc }) => [asc(accounts.name)],
+    with: {
+      logo: {
+        columns: {
+          id: true,
+          logoUrl: true,
+          updatedAt: true,
+        },
+      },
+    },
   });
+
+  return resolveMissingAccountLogos(accountRows);
 }
 
 export async function recalculateStartingBalance(
@@ -287,9 +323,22 @@ export async function getAccountById(accountId: string) {
       eq(accounts.userId, userId),
       eq(accounts.isActive, true)
     ),
+    with: {
+      logo: {
+        columns: {
+          id: true,
+          logoUrl: true,
+          updatedAt: true,
+        },
+      },
+    },
   });
 
-  return account ?? null;
+  if (!account) {
+    return null;
+  }
+
+  return resolveMissingAccountLogo(account);
 }
 
 export interface BalanceHistoryPoint {

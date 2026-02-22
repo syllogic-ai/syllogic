@@ -1,19 +1,21 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useRegisterCommandPaletteCallbacks } from "@/components/command-palette-context";
 import {
   RiDeleteBinLine,
   RiEditLine,
-  RiBankLine,
   RiHome4Line,
   RiCarLine,
   RiMoreLine,
   RiScalesLine,
   RiCalculatorLine,
   RiEyeLine,
+  RiSearchLine,
+  RiCloseLine,
+  RiLoader4Line,
 } from "@remixicon/react";
 import {
   Card,
@@ -60,9 +62,11 @@ import { CURRENCIES } from "@/lib/constants/currencies";
 import { updateAccount, deleteAccount, recalculateAccountTimeseries } from "@/lib/actions/accounts";
 import { updateProperty, deleteProperty } from "@/lib/actions/properties";
 import { updateVehicle, deleteVehicle } from "@/lib/actions/vehicles";
+import { hasLogoApiKey, searchLogo } from "@/lib/actions/logos";
 import { AddAssetDialog } from "@/components/assets/add-asset-dialog";
 import { UpdateBalanceDialog } from "@/components/accounts/update-balance-dialog";
 import { PROPERTY_TYPES, VEHICLE_TYPES } from "@/components/assets/types";
+import { AccountLogo } from "@/components/ui/account-logo";
 import type { Account, Property, Vehicle } from "@/lib/db/schema";
 
 const ACCOUNT_TYPES = [
@@ -97,10 +101,18 @@ function formatCurrency(value: string | null, currency: string | null): string {
 }
 
 interface AssetManagementProps {
-  initialAccounts: Account[];
+  initialAccounts: AccountWithLogo[];
   initialProperties: Property[];
   initialVehicles: Vehicle[];
 }
+
+type AccountWithLogo = Account & {
+  logo?: {
+    id: string;
+    logoUrl: string | null;
+    updatedAt?: Date | null;
+  } | null;
+};
 
 export function AssetManagement({
   initialAccounts,
@@ -124,13 +136,13 @@ export function AssetManagement({
   );
 
   // Edit states
-  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+  const [editingAccount, setEditingAccount] = useState<AccountWithLogo | null>(null);
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
-  const [updateBalanceAccount, setUpdateBalanceAccount] = useState<Account | null>(null);
+  const [updateBalanceAccount, setUpdateBalanceAccount] = useState<AccountWithLogo | null>(null);
 
   // Delete states
-  const [deletingAccount, setDeletingAccount] = useState<Account | null>(null);
+  const [deletingAccount, setDeletingAccount] = useState<AccountWithLogo | null>(null);
   const [deletingProperty, setDeletingProperty] = useState<Property | null>(null);
   const [deletingVehicle, setDeletingVehicle] = useState<Vehicle | null>(null);
 
@@ -140,6 +152,12 @@ export function AssetManagement({
   const [editAccountInstitution, setEditAccountInstitution] = useState("");
   const [editAccountCurrency, setEditAccountCurrency] = useState("");
   const [editAccountBalance, setEditAccountBalance] = useState("");
+  const [editLogoId, setEditLogoId] = useState<string | null>(null);
+  const [editLogoUrl, setEditLogoUrl] = useState<string | null>(null);
+  const [editLogoUpdatedAt, setEditLogoUpdatedAt] = useState<Date | null>(null);
+  const [logoSearch, setLogoSearch] = useState("");
+  const [isSearchingLogo, setIsSearchingLogo] = useState(false);
+  const [logoApiEnabled, setLogoApiEnabled] = useState(false);
 
   // Property edit form state
   const [editPropertyName, setEditPropertyName] = useState("");
@@ -161,15 +179,56 @@ export function AssetManagement({
     router.refresh();
   };
 
+  useEffect(() => {
+    hasLogoApiKey().then(setLogoApiEnabled);
+  }, []);
+
   // Account handlers
-  const openEditAccountDialog = (account: Account) => {
+  const openEditAccountDialog = (account: AccountWithLogo) => {
     setEditingAccount(account);
     setEditAccountName(account.name);
     setEditAccountType(account.accountType);
     setEditAccountInstitution(account.institution || "");
     setEditAccountCurrency(account.currency || "EUR");
     setEditAccountBalance(account.functionalBalance || "0");
+    setEditLogoId(account.logo?.id || null);
+    setEditLogoUrl(account.logo?.logoUrl || null);
+    setEditLogoUpdatedAt(account.logo?.updatedAt || null);
+    setLogoSearch("");
   };
+
+  const handleAccountLogoSearch = useCallback(async (query: string) => {
+    if (!query.trim()) {
+      return;
+    }
+
+    setIsSearchingLogo(true);
+    try {
+      const result = await searchLogo(query.trim());
+
+      if (result.success && result.logo) {
+        setEditLogoId(result.logo.id);
+        setEditLogoUrl(result.logo.logoUrl || null);
+        setEditLogoUpdatedAt(result.logo.updatedAt || null);
+        toast.success("Logo found");
+      } else if (result.success) {
+        toast.info("No logo found for this institution");
+      } else {
+        toast.error(result.error || "Failed to search for logo");
+      }
+    } catch {
+      toast.error("Failed to search for logo");
+    } finally {
+      setIsSearchingLogo(false);
+    }
+  }, []);
+
+  const handleClearLogo = useCallback(() => {
+    setEditLogoId(null);
+    setEditLogoUrl(null);
+    setEditLogoUpdatedAt(null);
+    setLogoSearch("");
+  }, []);
 
   const handleEditAccount = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -184,6 +243,7 @@ export function AssetManagement({
         institution: editAccountInstitution.trim() || undefined,
         currency: editAccountCurrency,
         startingBalance: isNaN(balance) ? 0 : balance,
+        logoId: editLogoId,
       });
 
       if (result.success) {
@@ -219,7 +279,7 @@ export function AssetManagement({
     }
   };
 
-  const handleRecalculateBalance = async (account: Account) => {
+  const handleRecalculateBalance = async (account: AccountWithLogo) => {
     setIsLoading(true);
     toast.loading(`Recalculating balance for ${account.name}...`, { id: "recalculate" });
     try {
@@ -394,9 +454,12 @@ export function AssetManagement({
               {initialAccounts.map((account) => (
                 <div key={account.id} className="flex items-center justify-between py-4 first:pt-0 last:pb-0">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded bg-muted">
-                      <RiBankLine className="h-5 w-5 text-muted-foreground" />
-                    </div>
+                    <AccountLogo
+                      name={account.name}
+                      logoUrl={account.logo?.logoUrl}
+                      updatedAt={account.logo?.updatedAt}
+                      className="!size-10"
+                    />
                     <div>
                       <p className="font-medium">{account.name}</p>
                       <p className="text-sm text-muted-foreground">
@@ -590,6 +653,60 @@ export function AssetManagement({
                 <Label htmlFor="edit-account-institution">Institution (optional)</Label>
                 <Input id="edit-account-institution" value={editAccountInstitution} onChange={(e) => setEditAccountInstitution(e.target.value)} />
               </div>
+              {logoApiEnabled && (
+                <div className="space-y-2">
+                  <Label>Account Logo</Label>
+                  <div className="flex items-center gap-2">
+                    <AccountLogo
+                      name={editAccountName || "Account"}
+                      logoUrl={editLogoUrl}
+                      updatedAt={editLogoUpdatedAt}
+                      className="!size-9"
+                    />
+                    <div className="flex flex-1 items-center gap-2">
+                      <Input
+                        placeholder="Search by institution name"
+                        value={logoSearch}
+                        onChange={(e) => setLogoSearch(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleAccountLogoSearch(logoSearch || editAccountInstitution || editAccountName);
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() =>
+                          handleAccountLogoSearch(logoSearch || editAccountInstitution || editAccountName)
+                        }
+                        disabled={isSearchingLogo}
+                      >
+                        {isSearchingLogo ? (
+                          <RiLoader4Line className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <RiSearchLine className="h-4 w-4" />
+                        )}
+                      </Button>
+                      {editLogoId && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={handleClearLogo}
+                        >
+                          <RiCloseLine className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Search and assign a logo for this account. Your selection overrides any auto match.
+                  </p>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="edit-account-balance">Current Balance</Label>
                 <div className="flex gap-2">

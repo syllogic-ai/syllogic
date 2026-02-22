@@ -1,8 +1,9 @@
 "use client";
 
-import { RiBankLine, RiRefreshLine } from "@remixicon/react";
+import { RiRefreshLine } from "@remixicon/react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { AccountLogo } from "@/components/ui/account-logo";
 import { formatDistanceToNow } from "date-fns";
 import type { Account } from "@/lib/db/schema";
 
@@ -16,7 +17,13 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
 };
 
 interface AccountHeaderProps {
-  account: Account;
+  account: Account & {
+    logo?: {
+      id: string;
+      logoUrl: string | null;
+      updatedAt?: Date | null;
+    } | null;
+  };
   currency: string;
 }
 
@@ -37,9 +44,12 @@ export function AccountHeader({ account, currency }: AccountHeaderProps) {
     <Card>
       <CardContent className="flex items-center justify-between p-6">
         <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded bg-muted">
-            <RiBankLine className="h-6 w-6 text-muted-foreground" />
-          </div>
+          <AccountLogo
+            name={account.name}
+            logoUrl={account.logo?.logoUrl}
+            updatedAt={account.logo?.updatedAt}
+            className="!size-12"
+          />
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-semibold">{account.name}</h2>

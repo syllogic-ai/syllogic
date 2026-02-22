@@ -7,6 +7,7 @@ import { transactions, accounts, categories, accountBalances } from "@/lib/db/sc
 import { requireAuth } from "@/lib/auth-helpers";
 import { getBackendBaseUrl } from "@/lib/backend-url";
 import { createInternalAuthHeaders } from "@/lib/internal-auth";
+import { resolveMissingAccountLogos } from "@/lib/actions/account-logos";
 import type {
   TransactionSortField,
   TransactionSortOrder,
@@ -341,6 +342,11 @@ export interface TransactionWithRelations {
     name: string;
     institution: string | null;
     accountType: string;
+    logo: {
+      id: string;
+      logoUrl: string | null;
+      updatedAt?: Date | null;
+    } | null;
   } | null;
   description: string | null;
   merchant: string | null;
@@ -447,6 +453,12 @@ interface TransactionRowWithRelations {
     name: string;
     institution: string | null;
     accountType: string;
+    logoId: string | null;
+    logo: {
+      id: string;
+      logoUrl: string | null;
+      updatedAt: Date | null;
+    } | null;
   } | null;
   category: {
     id: string;
@@ -494,6 +506,13 @@ function mapTransactionRowsForUi(
           name: tx.account.name,
           institution: tx.account.institution,
           accountType: tx.account.accountType,
+          logo: tx.account.logo
+            ? {
+                id: tx.account.logo.id,
+                logoUrl: tx.account.logo.logoUrl,
+                updatedAt: tx.account.logo.updatedAt,
+              }
+            : null,
         },
         description: tx.description,
         merchant: tx.merchant,
@@ -538,6 +557,55 @@ function mapTransactionRowsForUi(
         includeInAnalytics: tx.includeInAnalytics,
       },
     ];
+  });
+}
+
+async function hydrateTransactionRowsWithResolvedAccountLogos(
+  rows: TransactionRowWithRelations[]
+): Promise<TransactionRowWithRelations[]> {
+  const uniqueAccounts = Array.from(
+    new Map(
+      rows
+        .filter((row) => row.account)
+        .map((row) => [
+          row.account!.id,
+          {
+            id: row.account!.id,
+            institution: row.account!.institution,
+            logoId: row.account!.logoId,
+            logo: row.account!.logo,
+          },
+        ])
+    ).values()
+  );
+
+  const resolvedAccounts = await resolveMissingAccountLogos(uniqueAccounts);
+  const resolvedById = new Map(resolvedAccounts.map((account) => [account.id, account]));
+
+  return rows.map((row) => {
+    if (!row.account) {
+      return row;
+    }
+
+    const resolved = resolvedById.get(row.account.id);
+    if (!resolved) {
+      return row;
+    }
+
+    return {
+      ...row,
+      account: {
+        ...row.account,
+        logoId: resolved.logoId,
+        logo: resolved.logo
+          ? {
+              id: resolved.logo.id,
+              logoUrl: resolved.logo.logoUrl,
+              updatedAt: resolved.logo.updatedAt ?? null,
+            }
+          : null,
+      },
+    };
   });
 }
 
@@ -722,7 +790,17 @@ export async function getTransactionsPage(
       limit: input.pageSize,
       offset: (input.page - 1) * input.pageSize,
       with: {
-        account: true,
+        account: {
+          with: {
+            logo: {
+              columns: {
+                id: true,
+                logoUrl: true,
+                updatedAt: true,
+              },
+            },
+          },
+        },
         category: true,
         categorySystem: true,
         recurringTransaction: true,
@@ -758,9 +836,10 @@ export async function getTransactionsPage(
         totalOut: Number.parseFloat(totalsRows[0]?.totalOut ?? "0"),
       }
     : null;
+  const hydratedRows = await hydrateTransactionRowsWithResolvedAccountLogos(rows);
 
   return {
-    rows: mapTransactionRowsForUi(rows, "getTransactionsPage"),
+    rows: mapTransactionRowsForUi(hydratedRows, "getTransactionsPage"),
     totalCount: countRows[0]?.count ?? 0,
     filteredTotals,
     page: input.page,
@@ -783,14 +862,25 @@ export async function getTransactions(): Promise<TransactionWithRelations[]> {
       where: eq(transactions.userId, userId),
       orderBy: [desc(transactions.bookedAt)],
       with: {
-        account: true,
+        account: {
+          with: {
+            logo: {
+              columns: {
+                id: true,
+                logoUrl: true,
+                updatedAt: true,
+              },
+            },
+          },
+        },
         category: true,
         categorySystem: true,
         recurringTransaction: true,
         transactionLink: true,
       },
     });
-    return mapTransactionRowsForUi(result, "getTransactions");
+    const hydratedRows = await hydrateTransactionRowsWithResolvedAccountLogos(result);
+    return mapTransactionRowsForUi(hydratedRows, "getTransactions");
   } catch (error: unknown) {
     const normalizedError =
       error instanceof Error
@@ -840,14 +930,25 @@ export async function getTransactionsForAccount(
       ),
       orderBy: [desc(transactions.bookedAt)],
       with: {
-        account: true,
+        account: {
+          with: {
+            logo: {
+              columns: {
+                id: true,
+                logoUrl: true,
+                updatedAt: true,
+              },
+            },
+          },
+        },
         category: true,
         categorySystem: true,
         recurringTransaction: true,
         transactionLink: true,
       },
     });
-    return mapTransactionRowsForUi(result, "getTransactionsForAccount");
+    const hydratedRows = await hydrateTransactionRowsWithResolvedAccountLogos(result);
+    return mapTransactionRowsForUi(hydratedRows, "getTransactionsForAccount");
   } catch (error: unknown) {
     const normalizedError =
       error instanceof Error

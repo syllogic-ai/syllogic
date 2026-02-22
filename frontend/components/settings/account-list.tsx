@@ -5,9 +5,7 @@ import { toast } from "sonner";
 import {
   RiDeleteBinLine,
   RiEditLine,
-  RiBankLine,
   RiMoreLine,
-  RiScalesLine,
   RiRefreshLine,
   RiEyeLine,
 } from "@remixicon/react";
@@ -55,6 +53,7 @@ import {
 import { CURRENCIES } from "@/lib/constants/currencies";
 import { updateAccount, deleteAccount, recalculateAccountTimeseries } from "@/lib/actions/accounts";
 import { UpdateBalanceDialog } from "@/components/accounts/update-balance-dialog";
+import { AccountLogo } from "@/components/ui/account-logo";
 import type { Account } from "@/lib/db/schema";
 
 const ACCOUNT_TYPES = [
@@ -71,15 +70,23 @@ function getAccountTypeLabel(value: string): string {
   return type?.label || value;
 }
 
+type AccountWithLogo = Account & {
+  logo?: {
+    id: string;
+    logoUrl: string | null;
+    updatedAt?: Date | null;
+  } | null;
+};
+
 interface AccountListProps {
-  accounts: Account[];
+  accounts: AccountWithLogo[];
   onAccountUpdated?: () => void;
 }
 
 export function AccountList({ accounts, onAccountUpdated }: AccountListProps) {
-  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
-  const [deletingAccount, setDeletingAccount] = useState<Account | null>(null);
-  const [updateBalanceAccount, setUpdateBalanceAccount] = useState<Account | null>(null);
+  const [editingAccount, setEditingAccount] = useState<AccountWithLogo | null>(null);
+  const [deletingAccount, setDeletingAccount] = useState<AccountWithLogo | null>(null);
+  const [updateBalanceAccount, setUpdateBalanceAccount] = useState<AccountWithLogo | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   // Edit form state
@@ -89,7 +96,7 @@ export function AccountList({ accounts, onAccountUpdated }: AccountListProps) {
   const [editCurrency, setEditCurrency] = useState("");
   const [editBalance, setEditBalance] = useState("");
 
-  const openEditDialog = (account: Account) => {
+  const openEditDialog = (account: AccountWithLogo) => {
     setEditingAccount(account);
     setEditName(account.name);
     setEditAccountType(account.accountType);
@@ -210,9 +217,12 @@ export function AccountList({ accounts, onAccountUpdated }: AccountListProps) {
                 className="flex items-center justify-between py-4 first:pt-0 last:pb-0"
               >
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded bg-muted">
-                    <RiBankLine className="h-5 w-5 text-muted-foreground" />
-                  </div>
+                  <AccountLogo
+                    name={account.name}
+                    logoUrl={account.logo?.logoUrl}
+                    updatedAt={account.logo?.updatedAt}
+                    className="!size-10"
+                  />
                   <div>
                     <p className="font-medium">{account.name}</p>
                     <p className="text-sm text-muted-foreground">

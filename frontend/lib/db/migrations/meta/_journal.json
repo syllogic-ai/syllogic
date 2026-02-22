@@ -36,6 +36,13 @@
       "when": 1771006303622,
       "tag": "0004_remove_bank_connections",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1771761600000,
+      "tag": "0005_accounts_logo_id",
+      "breakpoints": true
     }
   ]
 }

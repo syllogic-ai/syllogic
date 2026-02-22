@@ -16,7 +16,6 @@ import {
   RiUploadLine,
   RiRefreshLine,
   RiLoader4Line,
-  RiBankLine,
 } from "@remixicon/react";
 import {
   CommandDialog,
@@ -35,6 +34,7 @@ import {
   type CommandPaletteData,
 } from "@/lib/actions/command-palette";
 import { formatAmount, formatDate } from "@/lib/utils";
+import { AccountLogo } from "@/components/ui/account-logo";
 import { useCommandPaletteCallbacks } from "./command-palette-context";
 import {
   GLOBAL_FILTER_STORAGE_KEY,
@@ -402,7 +402,12 @@ export function CommandPalette() {
                           className="flex items-center justify-between"
                         >
                           <div className="flex items-center gap-2 min-w-0">
-                            <RiBankLine className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            <AccountLogo
+                              name={account.name}
+                              logoUrl={account.logo?.logoUrl}
+                              updatedAt={account.logo?.updatedAt}
+                              size="sm"
+                            />
                             <span className="truncate">{account.name}</span>
                             {account.institution && (
                               <>

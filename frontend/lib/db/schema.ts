@@ -113,6 +113,7 @@ export const accounts = pgTable(
     name: varchar("name", { length: 255 }).notNull(),
     accountType: varchar("account_type", { length: 50 }).notNull(), // checking, savings, credit
     institution: varchar("institution", { length: 255 }),
+    logoId: uuid("logo_id").references(() => companyLogos.id, { onDelete: "set null" }),
     currency: char("currency", { length: 3 }).default("EUR"),
     provider: varchar("provider", { length: 50 }), // ponto, gocardless, manual
     externalId: varchar("external_id", { length: 255 }), // Provider's account ID
@@ -475,6 +476,10 @@ export const accountsRelations = relations(accounts, ({ one, many }) => ({
     fields: [accounts.userId],
     references: [users.id],
   }),
+  logo: one(companyLogos, {
+    fields: [accounts.logoId],
+    references: [companyLogos.id],
+  }),
   transactions: many(transactions),
   csvImports: many(csvImports),
   balances: many(accountBalances),
@@ -605,6 +610,7 @@ export const transactionLinksRelations = relations(transactionLinks, ({ one }) =
 }));
 
 export const companyLogosRelations = relations(companyLogos, ({ many }) => ({
+  accounts: many(accounts),
   recurringTransactions: many(recurringTransactions),
 }));
 

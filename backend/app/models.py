@@ -36,6 +36,7 @@ class Account(Base):
     name = Column(String(255), nullable=False)
     account_type = Column(String(50), nullable=False)  # checking, savings, credit
     institution = Column(String(255))
+    logo_id = Column(UUID(as_uuid=True), ForeignKey("company_logos.id", ondelete="SET NULL"), nullable=True)
     currency = Column(String(3), default="EUR")
     provider = Column(String(50), nullable=True)  # gocardless, manual
     external_id = Column(String(255), nullable=True)  # Provider's account ID
@@ -49,6 +50,7 @@ class Account(Base):
 
     # Relationships
     user = relationship("User", back_populates="accounts")
+    logo = relationship("CompanyLogo", back_populates="accounts")
     transactions = relationship("Transaction", back_populates="account")
     csv_imports = relationship("CsvImport", back_populates="account")
     balances = relationship("AccountBalance", back_populates="account")
@@ -421,6 +423,7 @@ class CompanyLogo(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
+    accounts = relationship("Account", back_populates="logo")
     recurring_transactions = relationship("RecurringTransaction", back_populates="logo")
 
     # Indexes and constraints

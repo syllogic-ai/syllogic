@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { accounts, properties, vehicles, transactions } from "@/lib/db/schema";
 import { requireAuth } from "@/lib/auth-helpers";
 import { ASSET_CATEGORY_COLORS } from "@/components/assets/types";
+import { resolveMissingAccountLogos } from "@/lib/actions/account-logos";
 
 export interface CommandPaletteAccount {
   id: string;
@@ -13,6 +14,11 @@ export interface CommandPaletteAccount {
   balance: number;
   currency: string;
   accountType: string;
+  logo: {
+    id: string;
+    logoUrl: string | null;
+    updatedAt?: Date | null;
+  } | null;
 }
 
 export interface CommandPaletteAsset {
@@ -57,6 +63,15 @@ export async function getCommandPaletteData(): Promise<CommandPaletteData> {
     db.query.accounts.findMany({
       where: and(eq(accounts.userId, userId), eq(accounts.isActive, true)),
       orderBy: [desc(accounts.createdAt)],
+      with: {
+        logo: {
+          columns: {
+            id: true,
+            logoUrl: true,
+            updatedAt: true,
+          },
+        },
+      },
     }),
     db.query.properties.findMany({
       where: and(eq(properties.userId, userId), eq(properties.isActive, true)),
@@ -68,14 +83,23 @@ export async function getCommandPaletteData(): Promise<CommandPaletteData> {
     }),
   ]);
 
+  const resolvedAccounts = await resolveMissingAccountLogos(accountsData);
+
   // Transform accounts
-  const formattedAccounts: CommandPaletteAccount[] = accountsData.map((account) => ({
+  const formattedAccounts: CommandPaletteAccount[] = resolvedAccounts.map((account) => ({
     id: account.id,
     name: account.name,
     institution: account.institution,
     balance: parseFloat(account.functionalBalance || "0"),
     currency: account.currency || "EUR",
     accountType: account.accountType,
+    logo: account.logo
+      ? {
+          id: account.logo.id,
+          logoUrl: account.logo.logoUrl,
+          updatedAt: account.logo.updatedAt,
+        }
+      : null,
   }));
 
   // Transform assets (combine properties and vehicles)
