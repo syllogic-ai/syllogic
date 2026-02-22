@@ -17,6 +17,8 @@ import { requireAuth } from "@/lib/auth-helpers";
 
 export interface SubscriptionSuggestionWithMeta extends SubscriptionSuggestion {
   matchCount: number;
+  accountName?: string | null;
+  suggestedCategoryName?: string | null;
 }
 
 // ============================================================================
@@ -39,6 +41,18 @@ export async function getPendingSuggestions(): Promise<SubscriptionSuggestionWit
         eq(subscriptionSuggestions.userId, userId),
         eq(subscriptionSuggestions.status, "pending")
       ),
+      with: {
+        account: {
+          columns: {
+            name: true,
+          },
+        },
+        suggestedCategory: {
+          columns: {
+            name: true,
+          },
+        },
+      },
       orderBy: [desc(subscriptionSuggestions.confidence)],
     });
 
@@ -54,6 +68,8 @@ export async function getPendingSuggestions(): Promise<SubscriptionSuggestionWit
       return {
         ...suggestion,
         matchCount,
+        accountName: suggestion.account?.name ?? null,
+        suggestedCategoryName: suggestion.suggestedCategory?.name ?? null,
       };
     });
   } catch (error) {
@@ -117,6 +133,7 @@ export async function verifySuggestion(
     logo?: unknown;
   };
   linkedCount?: number;
+  skippedCountDifferentAccount?: number;
   error?: string;
 }> {
   const userId = await requireAuth();
@@ -217,8 +234,16 @@ export async function verifySuggestion(
     const inheritedCategoryId = inherited.categoryId;
     const inheritedAccountId = inherited.accountId;
 
-    const finalCategoryId = overrides?.categoryId ?? inheritedCategoryId ?? null;
-    const finalAccountId = overrides?.accountId ?? inheritedAccountId ?? null;
+    const finalCategoryId =
+      overrides?.categoryId ??
+      suggestion.suggestedCategoryId ??
+      inheritedCategoryId ??
+      null;
+    const finalAccountId =
+      overrides?.accountId ??
+      suggestion.accountId ??
+      inheritedAccountId ??
+      null;
 
     if (!finalAccountId) {
       return { success: false, error: "Could not determine account for this suggestion" };
@@ -261,6 +286,7 @@ export async function verifySuggestion(
 
     // Link matched transactions to the new subscription
     let linkedCount = 0;
+    let skippedCountDifferentAccount = 0;
     if (transactionIds.length > 0) {
       // Verify transactions belong to user
       const userTransactions = await db.query.transactions.findMany({
@@ -268,10 +294,20 @@ export async function verifySuggestion(
           inArray(transactions.id, transactionIds),
           eq(transactions.userId, userId)
         ),
-        columns: { id: true },
+        columns: {
+          id: true,
+          accountId: true,
+        },
       });
 
-      const validIds = userTransactions.map((t) => t.id);
+      const validIds: string[] = [];
+      for (const tx of userTransactions) {
+        if (tx.accountId === finalAccountId) {
+          validIds.push(tx.id);
+        } else {
+          skippedCountDifferentAccount += 1;
+        }
+      }
 
       if (validIds.length > 0) {
         await db
@@ -312,6 +348,7 @@ export async function verifySuggestion(
       success: true,
       subscription: subscriptionWithCategory || created,
       linkedCount,
+      skippedCountDifferentAccount,
     };
   } catch (error) {
     console.error("Failed to verify suggestion:", error);

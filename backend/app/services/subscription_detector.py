@@ -852,6 +852,10 @@ class SubscriptionDetector:
         ).all()
 
         for suggestion in pending:
+            suggestion_account_id = str(suggestion.account_id) if suggestion.account_id else None
+            if suggestion_account_id != pattern.account_id:
+                continue
+
             # Check amount similarity
             sug_amount = abs(float(suggestion.suggested_amount))
             pat_amount = abs(float(pattern.suggested_amount))
@@ -1044,6 +1048,8 @@ class SubscriptionDetector:
                 currency=pattern.currency,
                 detected_frequency=pattern.detected_frequency,
                 confidence=pattern.confidence,
+                account_id=self._to_uuid(pattern.account_id),
+                suggested_category_id=self._to_uuid(pattern.category_id),
                 matched_transaction_ids=json.dumps(pattern.matched_transaction_ids),
                 status="pending"
             )

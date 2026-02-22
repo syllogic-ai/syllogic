@@ -55,6 +55,7 @@ class Account(Base):
     csv_imports = relationship("CsvImport", back_populates="account")
     balances = relationship("AccountBalance", back_populates="account")
     recurring_transactions = relationship("RecurringTransaction", back_populates="account")
+    subscription_suggestions = relationship("SubscriptionSuggestion", back_populates="account")
 
     # Indexes and constraints
     __table_args__ = (
@@ -89,6 +90,7 @@ class Category(Base):
     transactions = relationship("Transaction", back_populates="category", foreign_keys="Transaction.category_id")
     system_transactions = relationship("Transaction", back_populates="category_system", foreign_keys="Transaction.category_system_id")
     categorization_rules = relationship("CategorizationRule", back_populates="category")
+    subscription_suggestions = relationship("SubscriptionSuggestion", back_populates="suggested_category")
 
     # Indexes and constraints
     __table_args__ = (
@@ -363,6 +365,8 @@ class SubscriptionSuggestion(Base):
     currency = Column(String(3), default="EUR", nullable=False)
     detected_frequency = Column(String(20), nullable=False)  # weekly, biweekly, monthly, quarterly, yearly
     confidence = Column(Integer, nullable=False)  # 0-100
+    account_id = Column(UUID(as_uuid=True), ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True, index=True)
+    suggested_category_id = Column(UUID(as_uuid=True), ForeignKey("categories.id", ondelete="SET NULL"), nullable=True, index=True)
 
     # Linked transactions (stored as JSON array of IDs)
     matched_transaction_ids = Column(Text, nullable=False)  # JSON array
@@ -376,11 +380,15 @@ class SubscriptionSuggestion(Base):
 
     # Relationships
     user = relationship("User", back_populates="subscription_suggestions")
+    account = relationship("Account", back_populates="subscription_suggestions")
+    suggested_category = relationship("Category", back_populates="subscription_suggestions")
 
     # Indexes
     __table_args__ = (
         Index("idx_subscription_suggestions_user", "user_id"),
         Index("idx_subscription_suggestions_status", "status"),
+        Index("idx_subscription_suggestions_account", "account_id"),
+        Index("idx_subscription_suggestions_category", "suggested_category_id"),
     )
 
 

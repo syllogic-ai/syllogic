@@ -354,6 +354,8 @@ export const subscriptionSuggestions = pgTable(
     currency: char("currency", { length: 3 }).default("EUR").notNull(),
     detectedFrequency: varchar("detected_frequency", { length: 20 }).notNull(), // weekly, biweekly, monthly, quarterly, yearly
     confidence: integer("confidence").notNull(), // 0-100
+    accountId: uuid("account_id").references(() => accounts.id, { onDelete: "set null" }),
+    suggestedCategoryId: uuid("suggested_category_id").references(() => categories.id, { onDelete: "set null" }),
 
     // Linked transactions (stored as JSON array of IDs)
     matchedTransactionIds: text("matched_transaction_ids").notNull(), // JSON array
@@ -368,6 +370,8 @@ export const subscriptionSuggestions = pgTable(
   (table) => [
     index("idx_subscription_suggestions_user").on(table.userId),
     index("idx_subscription_suggestions_status").on(table.status),
+    index("idx_subscription_suggestions_account").on(table.accountId),
+    index("idx_subscription_suggestions_category").on(table.suggestedCategoryId),
   ]
 );
 
@@ -602,6 +606,14 @@ export const subscriptionSuggestionsRelations = relations(subscriptionSuggestion
   user: one(users, {
     fields: [subscriptionSuggestions.userId],
     references: [users.id],
+  }),
+  account: one(accounts, {
+    fields: [subscriptionSuggestions.accountId],
+    references: [accounts.id],
+  }),
+  suggestedCategory: one(categories, {
+    fields: [subscriptionSuggestions.suggestedCategoryId],
+    references: [categories.id],
   }),
 }));
 

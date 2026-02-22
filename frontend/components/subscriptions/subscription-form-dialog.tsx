@@ -123,11 +123,11 @@ export function SubscriptionFormDialog({
         setLogoSearchAttempted(false);
       } else if (suggestion) {
         // Verify mode - populate with suggestion data
-        setAccountId(accounts[0]?.id ?? "");
+        setAccountId(suggestion.accountId || accounts[0]?.id || "");
         setName(suggestion.suggestedName);
         setMerchant(suggestion.suggestedMerchant || "");
         setAmount(suggestion.suggestedAmount);
-        setCategoryId("");
+        setCategoryId(suggestion.suggestedCategoryId || "");
         setImportance(2);
         setFrequency(suggestion.detectedFrequency as SubscriptionFrequency);
         setDescription("");
@@ -288,9 +288,12 @@ export function SubscriptionFormDialog({
         });
 
         if (result.success) {
-          toast.success(
-            `Subscription created and ${result.linkedCount || 0} transaction(s) linked`
-          );
+          const skipped = result.skippedCountDifferentAccount || 0;
+          const message =
+            skipped > 0
+              ? `Subscription created. Linked ${result.linkedCount || 0} transaction(s), skipped ${skipped} from other account(s).`
+              : `Subscription created and ${result.linkedCount || 0} transaction(s) linked`;
+          toast.success(message);
           onOpenChange(false);
           onSuccess?.(suggestion.id, result.subscription as RecurringTransaction);
         } else {
@@ -334,7 +337,7 @@ export function SubscriptionFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>
             {isEditMode
@@ -352,8 +355,8 @@ export function SubscriptionFormDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit}>
-          <div className="grid gap-4 py-4">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto overflow-x-hidden py-4 pr-1">
             {/* Name */}
             <div className="grid gap-2">
               <Label htmlFor="name">
@@ -457,22 +460,30 @@ export function SubscriptionFormDialog({
               <Label htmlFor="account">
                 Account <span className="text-destructive">*</span>
               </Label>
-              <Select value={accountId} onValueChange={(value) => setAccountId(value ?? "")}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select an account">
-                    {accountId
-                      ? accounts.find((account) => account.id === accountId)?.name || "Select an account"
-                      : "Select an account"}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {accounts.map((account) => (
-                    <SelectItem key={account.id} value={account.id}>
-                      {account.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {isVerifyMode && suggestion?.accountId ? (
+                <div className="flex h-10 items-center rounded-md border border-border px-3 text-sm">
+                  {accounts.find((account) => account.id === accountId)?.name ||
+                    suggestion.accountName ||
+                    "Detected account"}
+                </div>
+              ) : (
+                <Select value={accountId} onValueChange={(value) => setAccountId(value ?? "")}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select an account">
+                      {accountId
+                        ? accounts.find((account) => account.id === accountId)?.name || "Select an account"
+                        : "Select an account"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             {/* Category */}
@@ -557,7 +568,7 @@ export function SubscriptionFormDialog({
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="mt-4">
             <Button
               type="button"
               variant="outline"
