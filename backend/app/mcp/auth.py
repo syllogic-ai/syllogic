@@ -10,7 +10,7 @@ from typing import Optional
 
 try:
     from fastmcp.server.auth import AuthProvider, AccessToken
-except Exception:  # pragma: no cover - fallback for environments without FastMCP
+except ImportError:  # pragma: no cover - fallback for environments without FastMCP
     class AuthProvider:  # type: ignore[override]
         pass
 

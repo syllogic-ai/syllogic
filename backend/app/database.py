@@ -29,7 +29,12 @@ def _is_production_environment() -> bool:
 
 def _database_url_requires_ssl(database_url: str) -> bool:
     lowered = database_url.lower()
-    return "sslmode=require" in lowered or "ssl=true" in lowered
+    return (
+        "ssl=true" in lowered
+        or "sslmode=require" in lowered
+        or "sslmode=verify-ca" in lowered
+        or "sslmode=verify-full" in lowered
+    )
 
 
 def _should_enforce_database_ssl(database_url: str) -> bool:
@@ -74,7 +79,7 @@ if db_url.startswith("sqlite"):
 if _is_production_environment() and _should_enforce_database_ssl(db_url) and not _database_url_requires_ssl(db_url):
     raise ValueError(
         "Production DATABASE_URL must require TLS. "
-        "Append '?sslmode=require' to the connection string."
+        "Use one of: '?sslmode=require', '?sslmode=verify-ca', '?sslmode=verify-full', or '?ssl=true'."
     )
 
 # Create engine with PostgreSQL-specific settings

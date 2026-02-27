@@ -150,7 +150,11 @@ export function decryptWithFallback(
   plaintextFallback: string | null
 ): string | null {
   if (ciphertext) {
-    return decryptValue(ciphertext);
+    try {
+      return decryptValue(ciphertext);
+    } catch {
+      return plaintextFallback;
+    }
   }
   return plaintextFallback;
 }

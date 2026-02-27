@@ -16,6 +16,7 @@ from sqlalchemy import (
     Index,
     UniqueConstraint,
     JSON,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
@@ -63,7 +64,14 @@ class Account(Base):
     __table_args__ = (
         Index("idx_accounts_user", "user_id"),
         UniqueConstraint("user_id", "provider", "external_id", name="accounts_user_provider_external_id"),
-        UniqueConstraint("user_id", "provider", "external_id_hash", name="accounts_user_provider_external_id_hash"),
+        Index(
+            "accounts_user_provider_external_id_hash_uq",
+            "user_id",
+            "provider",
+            "external_id_hash",
+            unique=True,
+            postgresql_where=text("external_id_hash IS NOT NULL"),
+        ),
     )
 
 

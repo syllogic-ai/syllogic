@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 try:
     from mcp.server.auth.middleware.auth_context import get_access_token
-except Exception:  # pragma: no cover - fallback when MCP SDK is unavailable
+except ImportError:  # pragma: no cover - fallback when MCP SDK is unavailable
     def get_access_token():  # type: ignore[no-redef]
         return None
 

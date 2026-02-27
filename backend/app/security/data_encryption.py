@@ -151,7 +151,10 @@ def decrypt_value(ciphertext: Optional[str]) -> Optional[str]:
 
 def decrypt_with_fallback(ciphertext: Optional[str], plaintext_fallback: Optional[str]) -> Optional[str]:
     if ciphertext:
-        return decrypt_value(ciphertext)
+        try:
+            return decrypt_value(ciphertext)
+        except Exception:
+            return plaintext_fallback
     return plaintext_fallback
 
 

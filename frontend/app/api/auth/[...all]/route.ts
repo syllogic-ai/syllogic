@@ -8,12 +8,21 @@ async function resolveHandlers() {
   return toNextJsHandler(auth);
 }
 
+let handlersPromise: ReturnType<typeof resolveHandlers> | null = null;
+
+async function getHandlers() {
+  if (!handlersPromise) {
+    handlersPromise = resolveHandlers();
+  }
+  return handlersPromise;
+}
+
 export async function GET(req: NextRequest) {
-  const handlers = await resolveHandlers();
+  const handlers = await getHandlers();
   return handlers.GET(req);
 }
 
 export async function POST(req: NextRequest) {
-  const handlers = await resolveHandlers();
+  const handlers = await getHandlers();
   return handlers.POST(req);
 }

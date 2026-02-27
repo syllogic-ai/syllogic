@@ -15,7 +15,10 @@ export function isProductionEnvironment(): boolean {
 }
 
 export function databaseUrlRequiresTls(connectionString: string): boolean {
-  return /sslmode=require/i.test(connectionString) || /ssl=true/i.test(connectionString);
+  return (
+    /sslmode=(require|verify-ca|verify-full)/i.test(connectionString) ||
+    /ssl=true/i.test(connectionString)
+  );
 }
 
 export function shouldEnforceDatabaseTls(connectionString: string): boolean {
@@ -35,7 +38,7 @@ export function assertProductionDatabaseTls(connectionString: string, context: s
     !databaseUrlRequiresTls(connectionString)
   ) {
     throw new Error(
-      `[${context}] Production DATABASE_URL must enforce TLS. Append '?sslmode=require' to the connection string.`
+      `[${context}] Production DATABASE_URL must enforce TLS. Use '?sslmode=require', '?sslmode=verify-ca', '?sslmode=verify-full', or '?ssl=true'.`
     );
   }
 }

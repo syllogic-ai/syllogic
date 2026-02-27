@@ -51,7 +51,10 @@ function isProductionEnvironment() {
 }
 
 function databaseUrlRequiresTls(databaseUrl) {
-  return /sslmode=require/i.test(databaseUrl) || /ssl=true/i.test(databaseUrl);
+  return (
+    /sslmode=(require|verify-ca|verify-full)/i.test(databaseUrl) ||
+    /ssl=true/i.test(databaseUrl)
+  );
 }
 
 function shouldEnforceDatabaseTls(databaseUrl) {
@@ -139,7 +142,7 @@ async function main() {
     !databaseUrlRequiresTls(databaseUrl)
   ) {
     console.error(
-      "[migrate] Production DATABASE_URL must enforce TLS. Append '?sslmode=require' to the connection string."
+      "[migrate] Production DATABASE_URL must enforce TLS. Use '?sslmode=require', '?sslmode=verify-ca', '?sslmode=verify-full', or '?ssl=true'."
     );
     process.exit(1);
   }
