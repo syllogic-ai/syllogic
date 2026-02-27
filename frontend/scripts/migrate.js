@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 /**
  * Production-safe DB migration runner for Drizzle SQL migrations.
  *
@@ -114,7 +112,6 @@ async function baselineExistingSchema(sql, migrationsFolder) {
   // If we marked *all* migrations as applied, we'd skip newer ALTER/patch
   // migrations and drift the schema. After baselining the first entry, the
   // migrator can run the remaining migrations normally.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { readMigrationFiles } = require("drizzle-orm/migrator");
   const migrations = readMigrationFiles({ migrationsFolder });
 
