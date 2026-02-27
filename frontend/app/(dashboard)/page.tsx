@@ -63,7 +63,7 @@ export default async function HomePage({ searchParams }: PageProps) {
       <Header title="Dashboard" />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         {/* Filters Row */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between" data-walkthrough="walkthrough-filters">
           <Suspense fallback={null}>
             <DashboardFilters accounts={accounts} />
           </Suspense>
@@ -71,13 +71,16 @@ export default async function HomePage({ searchParams }: PageProps) {
         </div>
         {/* Row 1: KPI Cards */}
         <div className="grid gap-4 md:grid-cols-4">
-          <KpiSparkCard
-            title="Total Balance"
+          <div data-walkthrough="walkthrough-balance">
+            <KpiSparkCard
+              title="Total Balance"
             value={data.balance.total}
             currency={data.balance.currency}
             subtitle={accountSubtitle}
             sparkData={data.balanceHistory}
           />
+          </div>
+          <div data-walkthrough="walkthrough-spending">
           <KpiSparkCard
             title={`${data.periodLabel.title} Spending`}
             value={data.periodSpending.total}
@@ -85,6 +88,8 @@ export default async function HomePage({ searchParams }: PageProps) {
             subtitle={data.periodLabel.subtitle}
             sparkData={data.spendingHistory}
           />
+          </div>
+          <div data-walkthrough="walkthrough-income">
           <KpiSparkCard
             title={`${data.periodLabel.title} Income`}
             value={data.periodIncome.total}
@@ -92,6 +97,8 @@ export default async function HomePage({ searchParams }: PageProps) {
             subtitle={data.periodLabel.subtitle}
             sparkData={data.incomeHistory}
           />
+          </div>
+          <div data-walkthrough="walkthrough-savings">
           <KpiSparkCard
             title="Savings Rate"
             value={data.savingsRate.amount}
@@ -108,14 +115,18 @@ export default async function HomePage({ searchParams }: PageProps) {
                 : undefined
             }
           />
+          </div>
         </div>
 
         {/* Row 2: Charts */}
         <div className="grid gap-4 md:grid-cols-5">
+          <div data-walkthrough="walkthrough-profit-loss" className="col-span-3">
           <ProfitLossChart
             data={data.incomeExpense}
             currency={data.balance.currency}
           />
+          </div>
+          <div data-walkthrough="walkthrough-category" className="col-span-2">
           <SpendingByCategoryChart
             data={data.spendingByCategory.categories}
             total={data.spendingByCategory.total}
@@ -126,10 +137,12 @@ export default async function HomePage({ searchParams }: PageProps) {
             dateTo={dateToParam}
             horizon={effectiveHorizon}
           />
+          </div>
         </div>
 
         {/* Row 3: Cash Flow Sankey */}
         <div className="grid gap-4">
+          <div data-walkthrough="walkthrough-cash-flow">
           <SankeyFlowChart
             data={data.sankeyData}
             currency={data.balance.currency}
@@ -139,6 +152,7 @@ export default async function HomePage({ searchParams }: PageProps) {
             dateTo={dateToParam}
             horizon={effectiveHorizon}
           />
+          </div>
         </div>
 
         {/* Row 4: Assets Overview */}

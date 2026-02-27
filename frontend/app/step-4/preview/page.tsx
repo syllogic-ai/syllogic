@@ -394,7 +394,7 @@ function PreviewPageContent() {
             <Button
               onClick={() => {
                 setShowSuccessModal(false);
-                router.push("/");
+                router.push("/?tour=1");
               }}
             >
               Get Started

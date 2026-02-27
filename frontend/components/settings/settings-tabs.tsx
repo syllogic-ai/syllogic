@@ -24,15 +24,15 @@ export function SettingsTabs({ user, categories, apiKeys }: SettingsTabsProps) {
   return (
     <Tabs defaultValue="profile" className="flex-1">
       <TabsList variant="line" className="mb-6">
-        <TabsTrigger value="profile">
+        <TabsTrigger value="profile" data-walkthrough="walkthrough-profile">
           <RiUserLine className="mr-1.5 h-4 w-4" />
           Profile
         </TabsTrigger>
-        <TabsTrigger value="categories">
+        <TabsTrigger value="categories" data-walkthrough="walkthrough-categories">
           <RiFolderLine className="mr-1.5 h-4 w-4" />
           Categories
         </TabsTrigger>
-        <TabsTrigger value="api-keys">
+        <TabsTrigger value="api-keys" data-walkthrough="walkthrough-api-keys">
           <RiKeyLine className="mr-1.5 h-4 w-4" />
           API Keys
         </TabsTrigger>
