@@ -380,9 +380,6 @@ def process_csv_import(
             affected_account_ids = list(set([str(txn.account_id) for txn in all_inserted_transactions]))
             inserted_ids = [str(txn.id) for txn in all_inserted_transactions]
 
-            # Match subscriptions
-            _match_subscriptions(db, user_id, all_inserted_transactions)
-
             # Sync exchange rates
             _sync_exchange_rates(db, user_id, transactions_data)
 
@@ -423,9 +420,6 @@ def process_csv_import(
                 skip_dates=skip_dates_by_account if skip_dates_by_account else None
             )
 
-        # Detect subscription patterns on every import run using full history.
-        _detect_subscriptions(db, user_id, inserted_ids)
-
         # Update CSV import record
         csv_import.status = "completed"
         csv_import.imported_rows = total_inserted
@@ -438,6 +432,13 @@ def process_csv_import(
             imported_count=total_inserted,
             skipped_count=total_skipped,
             categorization_summary=aggregated_categorization_summary,
+        )
+
+        # Chain to subscription processing task (runs after import completes)
+        process_subscriptions.delay(
+            csv_import_id=csv_import_id,
+            user_id=user_id,
+            transaction_ids=inserted_ids,
         )
 
         logger.info(
@@ -476,8 +477,101 @@ def process_csv_import(
         clear_request_user_id(request_token)
 
 
-def _match_subscriptions(db, user_id: str, transactions: List[Transaction]) -> None:
-    """Match transactions to existing subscriptions."""
+@celery_app.task(bind=True, max_retries=3)
+def process_subscriptions(
+    self,
+    csv_import_id: str,
+    user_id: str,
+    transaction_ids: List[str],
+):
+    """
+    Process subscription matching and detection as a separate background task.
+
+    This task runs after the main CSV import completes, allowing the import
+    to finish faster while subscription processing continues in the background.
+
+    Args:
+        csv_import_id: UUID of the CsvImport record (for event channel)
+        user_id: User ID
+        transaction_ids: List of transaction IDs to process for subscriptions
+    """
+    logger.info(
+        f"[SUBSCRIPTION_TASK] Starting subscription processing for import {csv_import_id}"
+    )
+
+    request_token = set_request_user_id(user_id)
+    db = SessionLocal()
+    publisher = EventPublisher()
+
+    try:
+        # Publish started event
+        publisher.publish_subscriptions_started(user_id, csv_import_id)
+
+        matched_count = 0
+        detected_count = 0
+
+        if transaction_ids:
+            # Load transactions for matching
+            transactions = db.query(Transaction).filter(
+                Transaction.id.in_(transaction_ids),
+                Transaction.user_id == user_id
+            ).all()
+
+            # Extract unique account IDs from imported transactions
+            account_ids = list(set(str(txn.account_id) for txn in transactions))
+
+            # Match to existing subscriptions
+            matched_count = _match_subscriptions(db, user_id, transactions)
+
+            # Detect new subscription patterns (scoped to imported accounts only)
+            detected_count = _detect_subscriptions(
+                db, user_id, transaction_ids, account_ids=account_ids
+            )
+
+        # Publish completed event
+        publisher.publish_subscriptions_completed(
+            user_id=user_id,
+            import_id=csv_import_id,
+            matched_count=matched_count,
+            detected_count=detected_count,
+        )
+
+        logger.info(
+            f"[SUBSCRIPTION_TASK] Completed for import {csv_import_id}: "
+            f"{matched_count} matched, {detected_count} detected"
+        )
+
+        return {
+            "success": True,
+            "import_id": csv_import_id,
+            "matched_count": matched_count,
+            "detected_count": detected_count,
+        }
+
+    except Exception as e:
+        logger.error(f"[SUBSCRIPTION_TASK] Failed for import {csv_import_id}: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+
+        # Still publish completed with zero counts on error
+        # to ensure frontend closes SSE connection
+        publisher.publish_subscriptions_completed(
+            user_id=user_id,
+            import_id=csv_import_id,
+            matched_count=0,
+            detected_count=0,
+        )
+
+        raise self.retry(exc=e, countdown=60)
+
+    finally:
+        db.close()
+        publisher.close()
+        clear_request_user_id(request_token)
+
+
+def _match_subscriptions(db, user_id: str, transactions: List[Transaction]) -> int:
+    """Match transactions to existing subscriptions. Returns matched count."""
     try:
         subscription_matcher = SubscriptionMatcher(db, user_id=user_id)
         matched_count = 0
@@ -500,25 +594,39 @@ def _match_subscriptions(db, user_id: str, transactions: List[Transaction]) -> N
         if matched_count > 0:
             db.commit()
             logger.info(f"Matched {matched_count} transactions to subscriptions")
+        return matched_count
     except Exception as e:
         logger.error(f"Error matching subscriptions: {e}")
+        return 0
 
 
-def _detect_subscriptions(db, user_id: str, transaction_ids: List[str]) -> None:
-    """Detect new subscription patterns."""
+def _detect_subscriptions(
+    db, user_id: str, transaction_ids: List[str], account_ids: Optional[List[str]] = None
+) -> int:
+    """Detect new subscription patterns. Returns detected count.
+
+    Args:
+        db: Database session
+        user_id: User ID
+        transaction_ids: List of transaction IDs to link
+        account_ids: Optional list of account IDs to scope detection to
+    """
     try:
         detector = SubscriptionDetector(db, user_id=user_id)
-        detection = detector.detect_and_apply(transaction_ids)
-        if detection.get("detected_count", 0) > 0:
+        detection = detector.detect_and_apply(transaction_ids, account_ids=account_ids)
+        detected_count = detection.get("detected_count", 0)
+        if detected_count > 0:
             logger.info(
                 "Auto-detected %s monthly subscriptions (created=%s, updated=%s, linked=%s)",
-                detection.get("detected_count", 0),
+                detected_count,
                 detection.get("created_count", 0),
                 detection.get("updated_count", 0),
                 detection.get("linked_count", 0),
             )
+        return detected_count
     except Exception as e:
         logger.error(f"Error detecting subscriptions: {e}")
+        return 0
 
 
 def _sync_exchange_rates(db, user_id: str, transactions_data: List[Dict]) -> None:

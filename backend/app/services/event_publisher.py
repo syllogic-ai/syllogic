@@ -47,9 +47,13 @@ class EventPublisher:
         """Generate the Redis channel name for an import."""
         return f"csv_import:{user_id}:{import_id}"
 
+    def _state_key(self, user_id: str, import_id: str) -> str:
+        """Generate the Redis key for storing import state."""
+        return f"csv_import_state:{user_id}:{import_id}"
+
     def _publish(self, user_id: str, import_id: str, event_data: dict) -> None:
         """
-        Publish an event to the import channel.
+        Publish an event to the import channel and store it for late subscribers.
 
         Args:
             user_id: The user ID
@@ -58,9 +62,18 @@ class EventPublisher:
         """
         try:
             channel = self._channel(user_id, import_id)
+            state_key = self._state_key(user_id, import_id)
             message = json.dumps(event_data)
+
+            # Publish to channel for active subscribers
             self.redis.publish(channel, message)
-            logger.debug(f"Published event to {channel}: {event_data.get('type')}")
+
+            # Store the event for late subscribers (TTL: 5 minutes)
+            event_type = event_data.get("type", "")
+            self.redis.hset(state_key, event_type, message)
+            self.redis.expire(state_key, 300)  # 5 minute TTL
+
+            logger.debug(f"Published event to {channel}: {event_type}")
         except Exception as e:
             logger.error(f"Failed to publish event: {e}")
 
@@ -162,6 +175,53 @@ class EventPublisher:
             "timestamp": datetime.utcnow().isoformat()
         })
         logger.error(f"Import failed: {import_id} - {error}")
+
+    def publish_subscriptions_started(
+        self,
+        user_id: str,
+        import_id: str
+    ) -> None:
+        """
+        Publish a subscriptions_started event.
+
+        Args:
+            user_id: The user ID
+            import_id: The CSV import ID
+        """
+        self._publish(user_id, import_id, {
+            "type": "subscriptions_started",
+            "import_id": import_id,
+            "timestamp": datetime.utcnow().isoformat()
+        })
+        logger.info(f"Subscription processing started for import: {import_id}")
+
+    def publish_subscriptions_completed(
+        self,
+        user_id: str,
+        import_id: str,
+        matched_count: int,
+        detected_count: int
+    ) -> None:
+        """
+        Publish a subscriptions_completed event.
+
+        Args:
+            user_id: The user ID
+            import_id: The CSV import ID
+            matched_count: Number of transactions matched to existing subscriptions
+            detected_count: Number of new subscriptions detected
+        """
+        self._publish(user_id, import_id, {
+            "type": "subscriptions_completed",
+            "import_id": import_id,
+            "matched_count": matched_count,
+            "detected_count": detected_count,
+            "timestamp": datetime.utcnow().isoformat()
+        })
+        logger.info(
+            f"Subscription processing completed for import: {import_id} - "
+            f"{matched_count} matched, {detected_count} detected"
+        )
 
     def close(self) -> None:
         """Close the Redis connection."""

@@ -20,7 +20,7 @@ CREATE INDEX IF NOT EXISTS "idx_recurring_transactions_account" ON "recurring_tr
 WITH single_account_subscriptions AS (
 	SELECT
 		t.recurring_transaction_id AS recurring_id,
-		MIN(t.account_id) AS account_id
+		(array_agg(t.account_id))[1] AS account_id
 	FROM "transactions" t
 	WHERE t.recurring_transaction_id IS NOT NULL
 	GROUP BY t.recurring_transaction_id

@@ -882,6 +882,7 @@ class SubscriptionDetector:
         transaction_ids: Optional[List[str]] = None,
         lookback_days: Optional[int] = None,
         exclude_existing: bool = True,
+        account_ids: Optional[List[str]] = None,
     ) -> List[DetectedPattern]:
         """
         Analyze transactions to find recurring patterns.
@@ -891,12 +892,19 @@ class SubscriptionDetector:
         2. Group by description fingerprint (rough grouping) per account
         3. Within each account, analyze similar transactions for monthly patterns
         4. Score patterns with strong recency weighting
+
+        Args:
+            transaction_ids: Optional list of transaction IDs (currently unused for filtering)
+            lookback_days: Optional number of days to look back
+            exclude_existing: Whether to exclude patterns matching existing subscriptions
+            account_ids: Optional list of account IDs to scope detection to
         """
         if not ENABLE_SUBSCRIPTION_SUGGESTIONS:
             return []
 
         logger.info(
             f"[SUBSCRIPTION_DETECTOR] Starting pattern detection for user {self.user_id}"
+            + (f" (scoped to {len(account_ids)} accounts)" if account_ids else " (all accounts)")
         )
 
         # Full-history scan by default (lookback is optional).
@@ -904,6 +912,10 @@ class SubscriptionDetector:
             Transaction.user_id == self.user_id,
             Transaction.amount < 0,  # Only expenses
         )
+
+        # Scope to specific accounts if provided
+        if account_ids:
+            query = query.filter(Transaction.account_id.in_(account_ids))
 
         if lookback_days is not None:
             lookback_date = datetime.utcnow() - timedelta(days=lookback_days)
@@ -1330,18 +1342,24 @@ class SubscriptionDetector:
 
     def detect_and_apply(
         self,
-        transaction_ids: Optional[List[str]] = None
+        transaction_ids: Optional[List[str]] = None,
+        account_ids: Optional[List[str]] = None,
     ) -> Dict[str, int]:
         """
         Detect monthly subscriptions and apply them automatically.
 
         This creates/updates account-scoped subscriptions, pre-fills category,
         auto-links matched transactions, and refreshes active status by recency.
+
+        Args:
+            transaction_ids: Optional list of transaction IDs (for linking)
+            account_ids: Optional list of account IDs to scope detection to
         """
         patterns = self.detect_patterns(
             transaction_ids=transaction_ids,
             lookback_days=None,
             exclude_existing=False,
+            account_ids=account_ids,
         )
 
         created_count = 0
