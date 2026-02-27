@@ -8,6 +8,9 @@ This directory contains integration tests for the backend API endpoints.
 1. PostgreSQL and Redis must be running
 2. Backend server must be running on `http://localhost:8000`
 3. `INTERNAL_AUTH_SECRET` must be set (tests generate signed internal auth headers)
+4. Python `3.11+` is the supported runtime for full backend + MCP dependencies
+
+Note: On Python `3.9`, MCP-specific dependencies may be skipped, but non-MCP backend tests (including data encryption tests) can still run.
 
 ### Setup
 ```bash
@@ -27,6 +30,8 @@ export INTERNAL_AUTH_SECRET=test-internal-auth-secret
 python tests/test_transaction_import.py
 python tests/test_categorizer.py
 python tests/test_subscription_identifier.py
+python tests/test_data_encryption.py
+python tests/test_account_sync_encryption.py
 ```
 
 ## Test Files
@@ -34,6 +39,8 @@ python tests/test_subscription_identifier.py
 - `test_transaction_import.py` - Tests the transaction import API endpoint
 - `test_categorizer.py` - Tests the categorization API (single and batch)
 - `test_subscription_identifier.py` - Tests subscription detection functionality
+- `test_data_encryption.py` - Tests AES-GCM encryption, key rotation fallback, and blind index generation
+- `test_account_sync_encryption.py` - Validates account sync dedupe still works with encrypted `external_id`
 
 ## CI/CD
 

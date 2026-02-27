@@ -64,6 +64,13 @@
       "when": 1771820400000,
       "tag": "0008_subscription_suggestions_account_category",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1772308800000,
+      "tag": "0009_data_encryption_columns",
+      "breakpoints": true
     }
   ]
 }

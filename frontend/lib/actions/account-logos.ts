@@ -5,7 +5,12 @@ import { db } from "@/lib/db";
 import { accounts } from "@/lib/db/schema";
 import { searchLogo } from "@/lib/actions/logos";
 
-const LOGO_DEV_API_KEY = process.env.LOGO_DEV_API_KEY;
+function hasLogoDevApiKey(): boolean {
+  // Use bracket access to avoid build-time env inlining in Next.js server bundles.
+  return !!process.env["LOGO_DEV_API_KEY"];
+}
+
+type LogoSearchResult = Awaited<ReturnType<typeof searchLogo>>;
 
 export interface AccountLogoData {
   id: string;
@@ -59,7 +64,8 @@ async function getPersistedAccountLogo(accountId: string): Promise<{
 }
 
 async function resolveSingleAccountLogo<T extends AccountLogoCandidate>(
-  account: T
+  account: T,
+  logoSearches?: Map<string, Promise<LogoSearchResult>>
 ): Promise<T & { logoId: string | null; logo: AccountLogoData | null }> {
   if (account.logoId) {
     return {
@@ -69,7 +75,7 @@ async function resolveSingleAccountLogo<T extends AccountLogoCandidate>(
     };
   }
 
-  if (!LOGO_DEV_API_KEY || !account.institution?.trim()) {
+  if (!hasLogoDevApiKey() || !account.institution?.trim()) {
     return {
       ...account,
       logoId: null,
@@ -77,7 +83,15 @@ async function resolveSingleAccountLogo<T extends AccountLogoCandidate>(
     };
   }
 
-  const result = await searchLogo(account.institution.trim());
+  const normalizedInstitution = account.institution.trim().toLowerCase();
+  let searchPromise = logoSearches?.get(normalizedInstitution);
+
+  if (!searchPromise) {
+    searchPromise = searchLogo(account.institution.trim());
+    logoSearches?.set(normalizedInstitution, searchPromise);
+  }
+
+  const result = await searchPromise;
   if (!result.success || !result.logo) {
     return {
       ...account,
@@ -121,7 +135,10 @@ async function resolveSingleAccountLogo<T extends AccountLogoCandidate>(
 export async function resolveMissingAccountLogos<T extends AccountLogoCandidate>(
   accountsToResolve: T[]
 ): Promise<Array<T & { logoId: string | null; logo: AccountLogoData | null }>> {
-  return Promise.all(accountsToResolve.map((account) => resolveSingleAccountLogo(account)));
+  const logoSearches = new Map<string, Promise<LogoSearchResult>>();
+  return Promise.all(
+    accountsToResolve.map((account) => resolveSingleAccountLogo(account, logoSearches))
+  );
 }
 
 export async function resolveMissingAccountLogo<T extends AccountLogoCandidate>(

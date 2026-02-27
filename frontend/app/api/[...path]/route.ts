@@ -1,6 +1,5 @@
 import type { NextRequest } from "next/server";
 import { getBackendBaseUrl } from "@/lib/backend-url";
-import { auth } from "@/lib/auth";
 import {
   createInternalAuthHeaders,
   INTERNAL_AUTH_SIGNATURE_HEADER,
@@ -12,6 +11,12 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const UNPROTECTED_API_PATHS = new Set(["/api/health"]);
+
+type ProxySession = {
+  user?: {
+    id?: string;
+  } | null;
+} | null;
 
 function buildUpstreamUrl(req: NextRequest, pathSegments: string[]): URL {
   const backendBase = getBackendBaseUrl().replace(/\/+$/, "");
@@ -37,7 +42,24 @@ async function proxy(req: NextRequest, pathSegments: string[]) {
   const method = req.method.toUpperCase();
   const isProtectedPath = !UNPROTECTED_API_PATHS.has(upstreamUrl.pathname);
 
-  const session = await auth.api.getSession({ headers: req.headers });
+  let session: ProxySession = null;
+  if (isProtectedPath) {
+    try {
+      const { auth } = await import("@/lib/auth");
+      session = await auth.api.getSession({ headers: req.headers });
+    } catch (error) {
+      return Response.json(
+        {
+          detail:
+            error instanceof Error
+              ? error.message
+              : "Authentication subsystem is not available",
+        },
+        { status: 500 }
+      );
+    }
+  }
+
   if (isProtectedPath && !session?.user?.id) {
     return Response.json({ detail: "Not authenticated" }, { status: 401 });
   }

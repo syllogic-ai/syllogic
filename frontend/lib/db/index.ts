@@ -1,6 +1,10 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
+import {
+  assertProductionDatabaseTls,
+  databaseUrlRequiresTls,
+} from "@/lib/security/runtime";
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -8,7 +12,9 @@ if (!connectionString) {
   throw new Error("DATABASE_URL environment variable is not set");
 }
 
-const sslRequired = /sslmode=require/i.test(connectionString) || /ssl=true/i.test(connectionString);
+assertProductionDatabaseTls(connectionString, "db");
+
+const sslRequired = databaseUrlRequiresTls(connectionString);
 
 // Configure connection pooling to prevent "too many clients" errors
 // In Next.js serverless functions, we need to limit connections and reuse them

@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 /**
  * Production-safe DB migration runner for Drizzle SQL migrations.
  *
@@ -34,6 +32,37 @@ function isPgDuplicateTypeErrorForMigrationsTable(err) {
   if (code !== "23505") return false;
   const constraint = err?.cause?.constraint_name || err?.constraint_name;
   return constraint === "pg_type_typname_nsp_index";
+}
+
+function isProductionEnvironment() {
+  const productionMarkers = new Set(["production", "prod", "1", "true", "yes"]);
+  const candidates = [
+    process.env.NODE_ENV,
+    process.env.ENVIRONMENT,
+    process.env.APP_ENV,
+    process.env.RAILWAY_ENVIRONMENT,
+    process.env.RAILWAY_ENVIRONMENT_NAME,
+  ];
+  return candidates.some((value) =>
+    value ? productionMarkers.has(String(value).trim().toLowerCase()) : false
+  );
+}
+
+function databaseUrlRequiresTls(databaseUrl) {
+  return (
+    /sslmode=(require|verify-ca|verify-full)/i.test(databaseUrl) ||
+    /ssl=true/i.test(databaseUrl)
+  );
+}
+
+function shouldEnforceDatabaseTls(databaseUrl) {
+  const localHosts = new Set(["localhost", "127.0.0.1", "postgres", "db"]);
+  try {
+    const parsed = new URL(databaseUrl);
+    return !localHosts.has(parsed.hostname.toLowerCase());
+  } catch {
+    return true;
+  }
 }
 
 async function ensureDrizzleMigrationsTracking(sql) {
@@ -83,7 +112,6 @@ async function baselineExistingSchema(sql, migrationsFolder) {
   // If we marked *all* migrations as applied, we'd skip newer ALTER/patch
   // migrations and drift the schema. After baselining the first entry, the
   // migrator can run the remaining migrations normally.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { readMigrationFiles } = require("drizzle-orm/migrator");
   const migrations = readMigrationFiles({ migrationsFolder });
 
@@ -103,6 +131,16 @@ async function main() {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
     console.error("[migrate] DATABASE_URL is required");
+    process.exit(1);
+  }
+  if (
+    isProductionEnvironment() &&
+    shouldEnforceDatabaseTls(databaseUrl) &&
+    !databaseUrlRequiresTls(databaseUrl)
+  ) {
+    console.error(
+      "[migrate] Production DATABASE_URL must enforce TLS. Use '?sslmode=require', '?sslmode=verify-ca', '?sslmode=verify-full', or '?ssl=true'."
+    );
     process.exit(1);
   }
 
@@ -128,7 +166,7 @@ async function main() {
   const migratorMod = await import("drizzle-orm/postgres-js/migrator");
   const { migrate } = migratorMod;
 
-  const sslRequired = /sslmode=require/i.test(databaseUrl);
+  const sslRequired = databaseUrlRequiresTls(databaseUrl);
 
   const sql = postgres(databaseUrl, {
     max: 1, // keep it minimal; this runs as a one-shot job

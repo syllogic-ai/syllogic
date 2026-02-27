@@ -16,6 +16,7 @@ This directory contains the production-grade Docker Compose bundle:
    - Generate secrets:
      - `BETTER_AUTH_SECRET`: `openssl rand -hex 32`
      - `INTERNAL_AUTH_SECRET`: `openssl rand -hex 32`
+     - `DATA_ENCRYPTION_KEY_CURRENT` (optional, recommended): `openssl rand -base64 32`
    - `APP_URL` defaults to `http://localhost:8080`.
    - `HTTP_PORT` defaults to `8080` in the example env for a conflict-free local default.
    - For a real domain, set `APP_URL`, `CADDY_ADDRESS`, and `ACME_EMAIL`.
@@ -66,6 +67,7 @@ docker compose \
 
 - **Only web ports are exposed** by default: `HTTP_PORT` (80) and `HTTPS_PORT` (443).
 - DB migrations run automatically via the `migrate` service. They are idempotent.
+- In production-like external DB setups, use `DATABASE_URL` with `?sslmode=require`.
 - File uploads and CSV imports are stored in `public/uploads` and persisted via the `uploads_data` Docker volume.
 - This bundle defaults to **Postgres 16**. If you have an existing local Docker volume created by **Postgres 15**, you must dump/restore to upgrade (or temporarily set `POSTGRES_IMAGE=postgres:15-alpine` to keep running on 15).
 - We set explicit `container_name` values to avoid the `*-1` suffix. This makes container names stable, but it also means you **cannot** scale services with `--scale`, and you shouldn't run multiple Syllogic stacks on the same Docker host without changing names.

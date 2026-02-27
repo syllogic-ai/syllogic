@@ -9,7 +9,12 @@ import time
 from typing import Mapping, Optional
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
-from mcp.server.auth.middleware.auth_context import get_access_token
+
+try:
+    from mcp.server.auth.middleware.auth_context import get_access_token
+except ImportError:  # pragma: no cover - fallback when MCP SDK is unavailable
+    def get_access_token():  # type: ignore[no-redef]
+        return None
 
 from app.models import User
 from app.mcp.auth import validate_api_key

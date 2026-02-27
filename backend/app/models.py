@@ -16,6 +16,7 @@ from sqlalchemy import (
     Index,
     UniqueConstraint,
     JSON,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
@@ -40,6 +41,8 @@ class Account(Base):
     currency = Column(String(3), default="EUR")
     provider = Column(String(50), nullable=True)  # gocardless, manual
     external_id = Column(String(255), nullable=True)  # Provider's account ID
+    external_id_ciphertext = Column(Text, nullable=True)
+    external_id_hash = Column(String(64), nullable=True, index=True)
     balance_available = Column(Numeric(15, 2), nullable=True)
     starting_balance = Column(Numeric(15, 2), default=Decimal("0"))  # Starting balance for calculation
     functional_balance = Column(Numeric(15, 2), nullable=True)  # Calculated balance (sum of transactions + starting_balance)
@@ -61,6 +64,14 @@ class Account(Base):
     __table_args__ = (
         Index("idx_accounts_user", "user_id"),
         UniqueConstraint("user_id", "provider", "external_id", name="accounts_user_provider_external_id"),
+        Index(
+            "accounts_user_provider_external_id_hash_uq",
+            "user_id",
+            "provider",
+            "external_id_hash",
+            unique=True,
+            postgresql_where=text("external_id_hash IS NOT NULL"),
+        ),
     )
 
 
@@ -218,6 +229,7 @@ class CsvImport(Base):
     account_id = Column(UUID(as_uuid=True), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
     file_name = Column(String(255), nullable=False)
     file_path = Column(Text, nullable=True)
+    file_path_ciphertext = Column(Text, nullable=True)
     status = Column(String(20), default="pending")  # pending, mapping, previewing, importing, completed, failed
     column_mapping = Column(JSONB, nullable=True)
     total_rows = Column(Integer, nullable=True)

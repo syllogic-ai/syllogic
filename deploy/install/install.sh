@@ -57,6 +57,7 @@ POSTGRES_USER="financeuser"
 POSTGRES_DB="finance_db"
 POSTGRES_PASSWORD="$(openssl rand -hex 24)"
 BETTER_AUTH_SECRET="$(openssl rand -hex 32)"
+DATA_ENCRYPTION_KEY_CURRENT="$(openssl rand -base64 32)"
 
 read -r -p "Domain (e.g. finance.example.com) or leave blank for HTTP-only: " DOMAIN || true
 DOMAIN="${DOMAIN:-}"
@@ -99,6 +100,8 @@ API_DOCS_ENABLED=false
 
 STORAGE_PROVIDER=local
 LOCAL_STORAGE_PATH=uploads
+DATA_ENCRYPTION_KEY_CURRENT=${DATA_ENCRYPTION_KEY_CURRENT}
+DATA_ENCRYPTION_KEY_ID=k1
 EOF
 
 echo "[install] Starting services..."

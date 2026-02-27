@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from typing import List, Optional
 from uuid import UUID
 
@@ -7,8 +8,24 @@ from app.database import get_db
 from app.models import Account
 from app.db_helpers import get_user_id
 from app.schemas import AccountCreate, AccountResponse, AccountUpdate
+from app.security.data_encryption import blind_index_candidates, decrypt_with_fallback
 
 router = APIRouter()
+
+
+def _serialize_account(account: Account) -> AccountResponse:
+    return AccountResponse(
+        id=account.id,
+        name=account.name,
+        account_type=account.account_type,
+        institution=account.institution,
+        currency=account.currency,
+        is_active=account.is_active,
+        provider=account.provider,
+        external_id=decrypt_with_fallback(account.external_id_ciphertext, account.external_id),
+        created_at=account.created_at,
+        updated_at=account.updated_at,
+    )
 
 
 @router.get("/", response_model=List[AccountResponse])
@@ -31,19 +48,28 @@ def list_accounts(
         # Only show active accounts if explicitly requested
         query = query.filter(Account.is_active == True)
     
-    # Always exclude "revolut_default" accounts (they should be deleted, not just hidden)
-    # Also exclude accounts with external_id == 'default' (old format)
-    # Use or_() to handle NULL values correctly - NULL != 'value' evaluates to NULL in SQL
-    from sqlalchemy import or_
+    excluded_external_ids = ["revolut_default", "default"]
+    excluded_hashes: list[str] = []
+    for external_id in excluded_external_ids:
+        excluded_hashes.extend(blind_index_candidates(external_id))
+    excluded_hashes = list(dict.fromkeys(excluded_hashes))
+
     query = query.filter(
         or_(
-            Account.external_id.is_(None),  # Include accounts with no external_id
-            Account.external_id.notin_(['revolut_default', 'default'])  # Exclude these specific values
+            Account.external_id.is_(None),
+            Account.external_id.notin_(excluded_external_ids),
         )
     )
-    
+    if excluded_hashes:
+        query = query.filter(
+            or_(
+                Account.external_id_hash.is_(None),
+                Account.external_id_hash.notin_(excluded_hashes),
+            )
+        )
+
     accounts = query.order_by(Account.created_at.desc()).all()
-    return accounts
+    return [_serialize_account(account) for account in accounts]
 
 
 @router.get("/{account_id}", response_model=AccountResponse)
@@ -60,7 +86,7 @@ def get_account(
     ).first()
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
-    return account
+    return _serialize_account(account)
 
 
 @router.post("/", response_model=AccountResponse, status_code=201)
@@ -77,7 +103,7 @@ def create_account(
     db.add(db_account)
     db.commit()
     db.refresh(db_account)
-    return db_account
+    return _serialize_account(db_account)
 
 
 @router.patch("/{account_id}", response_model=AccountResponse)
@@ -102,7 +128,7 @@ def update_account(
 
     db.commit()
     db.refresh(account)
-    return account
+    return _serialize_account(account)
 
 
 @router.delete("/{account_id}", status_code=204)
@@ -140,7 +166,10 @@ def delete_revolut_default_accounts(
     # Find all revolut_default accounts for this user
     default_accounts = db.query(Account).filter(
         Account.user_id == user_id,
-        Account.external_id == 'revolut_default'
+        or_(
+            Account.external_id == "revolut_default",
+            Account.external_id_hash.in_(blind_index_candidates("revolut_default")),
+        )
     ).all()
     
     deleted_count = 0

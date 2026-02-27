@@ -13,6 +13,12 @@ This directory contains database administration and migration tools for PostgreS
   - ⚠️ **WARNING**: This will delete all existing data!
   - Useful for development when you need to recreate tables with updated schema
 
+- **`backfill_encrypted_fields.py`** - Backfills encrypted columns for sensitive fields
+  - Run with: `python postgres_migration/backfill_encrypted_fields.py --batch-size 500`
+  - Requires `DATA_ENCRYPTION_KEY_CURRENT` and `DATA_ENCRYPTION_KEY_ID`
+  - Encrypts `accounts.external_id` and `csv_imports.file_path`
+  - Optional plaintext cutover: add `--clear-plaintext`
+
 ## Usage
 
 All scripts should be run from the `backend` directory:
@@ -25,6 +31,12 @@ streamlit run postgres_migration/monitor_db.py
 
 # Reset database (WARNING: deletes all data!)
 python postgres_migration/reset_database.py
+
+# Backfill encrypted field columns
+python postgres_migration/backfill_encrypted_fields.py --batch-size 500
+
+# Optional cutover step (clear plaintext columns after validation)
+python postgres_migration/backfill_encrypted_fields.py --batch-size 500 --clear-plaintext
 ```
 
 ## Note
