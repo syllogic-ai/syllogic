@@ -133,6 +133,20 @@ jobs:
       run: |
         python tests/test_subscription_identifier.py
 
+    - name: Test Data Encryption Helpers
+      working-directory: ./backend
+      env:
+        DATABASE_URL: postgresql+psycopg://financeuser:financepass@localhost:5432/finance_db
+      run: |
+        python tests/test_data_encryption.py
+
+    - name: Test Encrypted Account Sync Dedupe
+      working-directory: ./backend
+      env:
+        DATABASE_URL: postgresql+psycopg://financeuser:financepass@localhost:5432/finance_db
+      run: |
+        python tests/test_account_sync_encryption.py
+
     - name: Test Summary
       if: always()
       run: |
@@ -142,6 +156,8 @@ jobs:
         echo "- ✅ Transaction Import API: Tested" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ Categorizer API: Tested" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ Subscription Identifier: Tested" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Data encryption helpers: Tested" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Encrypted account sync dedupe: Tested" >> $GITHUB_STEP_SUMMARY
 
     - name: Stop backend server
       if: always()

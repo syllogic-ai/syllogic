@@ -6,9 +6,39 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from pydantic_settings import BaseSettings
 import os
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def _is_production_environment() -> bool:
+    production_markers = {"production", "prod", "1", "true", "yes"}
+    for env_var in (
+        "NODE_ENV",
+        "ENVIRONMENT",
+        "APP_ENV",
+        "RAILWAY_ENVIRONMENT",
+        "RAILWAY_ENVIRONMENT_NAME",
+    ):
+        value = os.getenv(env_var, "").strip().lower()
+        if value in production_markers:
+            return True
+    return False
+
+
+def _database_url_requires_ssl(database_url: str) -> bool:
+    lowered = database_url.lower()
+    return "sslmode=require" in lowered or "ssl=true" in lowered
+
+
+def _should_enforce_database_ssl(database_url: str) -> bool:
+    # For local single-host Docker deployments, the database is often reachable only
+    # on a private bridge network without TLS enabled.
+    # Enforce TLS for all non-local hosts.
+    local_hosts = {"localhost", "127.0.0.1", "postgres", "db"}
+    hostname = (urlparse(database_url).hostname or "").lower()
+    return hostname not in local_hosts
 
 
 class Settings(BaseSettings):
@@ -39,6 +69,12 @@ if db_url.startswith("sqlite"):
         "SQLite is no longer supported. Please use PostgreSQL. "
         "Set DATABASE_URL to a PostgreSQL connection string, e.g.: "
         "postgresql+psycopg://user:password@localhost:5432/finance_db"
+    )
+
+if _is_production_environment() and _should_enforce_database_ssl(db_url) and not _database_url_requires_ssl(db_url):
+    raise ValueError(
+        "Production DATABASE_URL must require TLS. "
+        "Append '?sslmode=require' to the connection string."
     )
 
 # Create engine with PostgreSQL-specific settings

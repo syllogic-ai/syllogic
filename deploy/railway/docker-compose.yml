@@ -55,13 +55,17 @@ services:
     # Template maintainers: replace :edge with a pinned release tag for production templates.
     image: ghcr.io/syllogic-ai/personal-finance-backend:edge
     environment:
+      NODE_ENV: production
       PORT: "8080"
-      DATABASE_URL: postgresql://financeuser:${{shared.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/finance_db
+      DATABASE_URL: postgresql://financeuser:${{shared.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/finance_db?sslmode=require
       REDIS_URL: redis://${{redis.RAILWAY_PRIVATE_DOMAIN}}:6379/0
       FRONTEND_URL: ${{app.RAILWAY_STATIC_URL}}
       CORS_ALLOW_ORIGINS: ${{app.RAILWAY_STATIC_URL}}
       API_DOCS_ENABLED: "false"
       INTERNAL_AUTH_SECRET: ${{shared.INTERNAL_AUTH_SECRET}}
+      DATA_ENCRYPTION_KEY_CURRENT: ${{shared.DATA_ENCRYPTION_KEY_CURRENT}}
+      DATA_ENCRYPTION_KEY_PREVIOUS: ${{shared.DATA_ENCRYPTION_KEY_PREVIOUS}}
+      DATA_ENCRYPTION_KEY_ID: ${{shared.DATA_ENCRYPTION_KEY_ID}}
       OPENAI_API_KEY: ${{shared.OPENAI_API_KEY}}
     restart: always
 
@@ -70,9 +74,13 @@ services:
     image: ghcr.io/syllogic-ai/personal-finance-backend:edge
     command: uvicorn mcp_server:app --host 0.0.0.0 --port 8001
     environment:
+      NODE_ENV: production
       PROCESS_TYPE: mcp
       PORT: "8001"
-      DATABASE_URL: postgresql://financeuser:${{shared.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/finance_db
+      DATABASE_URL: postgresql://financeuser:${{shared.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/finance_db?sslmode=require
+      DATA_ENCRYPTION_KEY_CURRENT: ${{shared.DATA_ENCRYPTION_KEY_CURRENT}}
+      DATA_ENCRYPTION_KEY_PREVIOUS: ${{shared.DATA_ENCRYPTION_KEY_PREVIOUS}}
+      DATA_ENCRYPTION_KEY_ID: ${{shared.DATA_ENCRYPTION_KEY_ID}}
       OPENAI_API_KEY: ${{shared.OPENAI_API_KEY}}
     restart: always
 
@@ -81,11 +89,15 @@ services:
     image: ghcr.io/syllogic-ai/personal-finance-backend:edge
     command: celery -A celery_app worker --loglevel=info --concurrency=4
     environment:
-      DATABASE_URL: postgresql://financeuser:${{shared.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/finance_db
+      NODE_ENV: production
+      DATABASE_URL: postgresql://financeuser:${{shared.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/finance_db?sslmode=require
       REDIS_URL: redis://${{redis.RAILWAY_PRIVATE_DOMAIN}}:6379/0
       FRONTEND_URL: ${{app.RAILWAY_STATIC_URL}}
       CORS_ALLOW_ORIGINS: ${{app.RAILWAY_STATIC_URL}}
       API_DOCS_ENABLED: "false"
+      DATA_ENCRYPTION_KEY_CURRENT: ${{shared.DATA_ENCRYPTION_KEY_CURRENT}}
+      DATA_ENCRYPTION_KEY_PREVIOUS: ${{shared.DATA_ENCRYPTION_KEY_PREVIOUS}}
+      DATA_ENCRYPTION_KEY_ID: ${{shared.DATA_ENCRYPTION_KEY_ID}}
       OPENAI_API_KEY: ${{shared.OPENAI_API_KEY}}
     restart: always
 
@@ -94,11 +106,15 @@ services:
     image: ghcr.io/syllogic-ai/personal-finance-backend:edge
     command: celery -A celery_app beat --loglevel=info
     environment:
-      DATABASE_URL: postgresql://financeuser:${{shared.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/finance_db
+      NODE_ENV: production
+      DATABASE_URL: postgresql://financeuser:${{shared.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/finance_db?sslmode=require
       REDIS_URL: redis://${{redis.RAILWAY_PRIVATE_DOMAIN}}:6379/0
       FRONTEND_URL: ${{app.RAILWAY_STATIC_URL}}
       CORS_ALLOW_ORIGINS: ${{app.RAILWAY_STATIC_URL}}
       API_DOCS_ENABLED: "false"
+      DATA_ENCRYPTION_KEY_CURRENT: ${{shared.DATA_ENCRYPTION_KEY_CURRENT}}
+      DATA_ENCRYPTION_KEY_PREVIOUS: ${{shared.DATA_ENCRYPTION_KEY_PREVIOUS}}
+      DATA_ENCRYPTION_KEY_ID: ${{shared.DATA_ENCRYPTION_KEY_ID}}
       OPENAI_API_KEY: ${{shared.OPENAI_API_KEY}}
     restart: always
 
@@ -121,12 +137,15 @@ services:
       NODE_ENV: production
       PORT: "3000"
       RAILWAY_RUN_UID: "0"
-      DATABASE_URL: postgresql://financeuser:${{shared.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/finance_db
+      DATABASE_URL: postgresql://financeuser:${{shared.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/finance_db?sslmode=require
       APP_URL: ${{app.RAILWAY_STATIC_URL}}
       BETTER_AUTH_URL: ${{app.RAILWAY_STATIC_URL}}
       NEXT_PUBLIC_BETTER_AUTH_URL: ${{app.RAILWAY_STATIC_URL}}
       BETTER_AUTH_SECRET: ${{shared.BETTER_AUTH_SECRET}}
       INTERNAL_AUTH_SECRET: ${{shared.INTERNAL_AUTH_SECRET}}
+      DATA_ENCRYPTION_KEY_CURRENT: ${{shared.DATA_ENCRYPTION_KEY_CURRENT}}
+      DATA_ENCRYPTION_KEY_PREVIOUS: ${{shared.DATA_ENCRYPTION_KEY_PREVIOUS}}
+      DATA_ENCRYPTION_KEY_ID: ${{shared.DATA_ENCRYPTION_KEY_ID}}
       BACKEND_URL: http://${{backend.RAILWAY_PRIVATE_DOMAIN}}:${{backend.PORT}}
       STORAGE_PROVIDER: local
       LOCAL_STORAGE_PATH: uploads

@@ -5,6 +5,7 @@ from typing import Optional
 
 from app.mcp.dependencies import get_db, validate_uuid, validate_date
 from app.models import Account, AccountBalance
+from app.security.data_encryption import decrypt_with_fallback
 
 
 def list_accounts(user_id: str, include_inactive: bool = False) -> list[dict]:
@@ -76,7 +77,7 @@ def get_account(user_id: str, account_id: str) -> dict | None:
             "institution": account.institution,
             "currency": account.currency,
             "provider": account.provider,
-            "external_id": account.external_id,
+            "external_id": decrypt_with_fallback(account.external_id_ciphertext, account.external_id),
             "balance_available": float(account.balance_available) if account.balance_available else None,
             "starting_balance": float(account.starting_balance) if account.starting_balance else 0,
             "functional_balance": float(account.functional_balance) if account.functional_balance else None,

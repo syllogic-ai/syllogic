@@ -349,6 +349,9 @@ pnpm db:studio
 | `APP_URL` | Canonical public app URL | Yes |
 | `BETTER_AUTH_SECRET` | Secret key for authentication | Yes |
 | `INTERNAL_AUTH_SECRET` | Shared secret used by app->backend signed internal auth | Yes |
+| `DATA_ENCRYPTION_KEY_CURRENT` | 32-byte base64/hex key for app-level field encryption | No (recommended in production) |
+| `DATA_ENCRYPTION_KEY_PREVIOUS` | Previous encryption key for rotation fallback | No |
+| `DATA_ENCRYPTION_KEY_ID` | Identifier embedded in encrypted payloads (example: `k1`) | No |
 | `BACKEND_URL` | Backend base URL used by Next.js API proxy | Yes |
 
 #### Backend (.env)
@@ -357,11 +360,16 @@ pnpm db:studio
 | `DATABASE_URL` | PostgreSQL connection string | Yes |
 | `REDIS_URL` | Redis connection string | Yes |
 | `INTERNAL_AUTH_SECRET` | Shared secret used to verify signed internal app requests | Yes |
+| `DATA_ENCRYPTION_KEY_CURRENT` | 32-byte base64/hex key for app-level field encryption | No (recommended in production) |
+| `DATA_ENCRYPTION_KEY_PREVIOUS` | Previous encryption key for rotation fallback | No |
+| `DATA_ENCRYPTION_KEY_ID` | Identifier embedded in encrypted payloads (example: `k1`) | No |
 | `PLAID_CLIENT_ID` | Plaid client ID | No |
 | `PLAID_SECRET` | Plaid secret | No |
 | `PLAID_ENVIRONMENT` | Plaid environment (`sandbox`, `development`, `production`) | No |
 | `OPENAI_API_KEY` | OpenAI API key | No |
 | `LOGO_DEV_API_KEY` | Logo.dev API key | No |
+
+In production, append `?sslmode=require` to `DATABASE_URL` so DB connections fail closed without TLS.
 
 ### Docker Compose Configuration
 

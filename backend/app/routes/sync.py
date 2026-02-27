@@ -12,6 +12,7 @@ from app.models import Account
 from app.db_helpers import get_user_id
 from app.integrations.revolut_csv import RevolutCSVAdapter
 from app.services.sync_service import SyncService
+from app.security.data_encryption import decrypt_with_fallback
 import os
 
 router = APIRouter()
@@ -202,7 +203,7 @@ def get_sync_status(
         "account_id": str(account.id),
         "name": account.name,
         "provider": account.provider,
-        "external_id": account.external_id,
+        "external_id": decrypt_with_fallback(account.external_id_ciphertext, account.external_id),
         "last_synced": account.updated_at.isoformat() if account.updated_at else None,
         "transaction_count": transaction_count,
     }

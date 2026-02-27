@@ -117,6 +117,8 @@ export const accounts = pgTable(
     currency: char("currency", { length: 3 }).default("EUR"),
     provider: varchar("provider", { length: 50 }), // ponto, gocardless, manual
     externalId: varchar("external_id", { length: 255 }), // Provider's account ID
+    externalIdCiphertext: text("external_id_ciphertext"),
+    externalIdHash: varchar("external_id_hash", { length: 64 }),
     balanceAvailable: decimal("balance_available", { precision: 15, scale: 2 }),
     startingBalance: decimal("starting_balance", { precision: 15, scale: 2 }).default("0"), // Starting balance for calculation
     functionalBalance: decimal("functional_balance", { precision: 15, scale: 2 }), // Calculated balance (sum of transactions + starting_balance)
@@ -131,6 +133,11 @@ export const accounts = pgTable(
       table.userId,
       table.provider,
       table.externalId
+    ),
+    unique("accounts_user_provider_external_id_hash").on(
+      table.userId,
+      table.provider,
+      table.externalIdHash
     ),
   ]
 );
@@ -257,6 +264,7 @@ export const csvImports = pgTable(
       .notNull(),
     fileName: varchar("file_name", { length: 255 }).notNull(),
     filePath: text("file_path"),
+    filePathCiphertext: text("file_path_ciphertext"),
     status: varchar("status", { length: 20 }).default("pending"), // pending, mapping, previewing, importing, completed, failed
     columnMapping: jsonb("column_mapping"),
     totalRows: integer("total_rows"),

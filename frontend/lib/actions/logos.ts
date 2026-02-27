@@ -16,6 +16,39 @@ function getLogoDevApiKey(): string | undefined {
   return process.env["LOGO_DEV_API_KEY"];
 }
 
+async function upsertLogoByDomain(
+  logoData: NewCompanyLogo
+): Promise<CompanyLogo | null> {
+  if (!logoData.domain) {
+    return null;
+  }
+
+  const [upserted] = await db
+    .insert(companyLogos)
+    .values(logoData)
+    .onConflictDoUpdate({
+      target: companyLogos.domain,
+      set: {
+        companyName: logoData.companyName ?? null,
+        logoUrl: logoData.logoUrl ?? null,
+        status: logoData.status ?? "found",
+        lastCheckedAt: logoData.lastCheckedAt ?? new Date(),
+        updatedAt: logoData.updatedAt ?? new Date(),
+      },
+    })
+    .returning();
+
+  if (upserted) {
+    return upserted;
+  }
+
+  return (
+    (await db.query.companyLogos.findFirst({
+      where: eq(companyLogos.domain, logoData.domain),
+    })) || null
+  );
+}
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -199,26 +232,8 @@ export async function searchLogo(
         lastCheckedAt: new Date(),
         updatedAt: new Date(),
       };
-
-      if (existingLogo) {
-        await db
-          .update(companyLogos)
-          .set(logoData)
-          .where(eq(companyLogos.id, existingLogo.id));
-
-        const updated = await db.query.companyLogos.findFirst({
-          where: eq(companyLogos.id, existingLogo.id),
-        });
-
-        return { success: true, logo: updated || undefined };
-      } else {
-        const [created] = await db
-          .insert(companyLogos)
-          .values(logoData)
-          .returning();
-
-        return { success: true, logo: created };
-      }
+      const upserted = await upsertLogoByDomain(logoData);
+      return { success: true, logo: upserted || undefined };
     } else {
       // Mark as not_found
       const logoData: NewCompanyLogo = {
@@ -229,15 +244,7 @@ export async function searchLogo(
         lastCheckedAt: new Date(),
         updatedAt: new Date(),
       };
-
-      if (existingLogo) {
-        await db
-          .update(companyLogos)
-          .set(logoData)
-          .where(eq(companyLogos.id, existingLogo.id));
-      } else {
-        await db.insert(companyLogos).values(logoData);
-      }
+      await upsertLogoByDomain(logoData);
 
       return { success: true, logo: undefined };
     }

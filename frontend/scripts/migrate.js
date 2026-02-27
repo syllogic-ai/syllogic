@@ -36,6 +36,34 @@ function isPgDuplicateTypeErrorForMigrationsTable(err) {
   return constraint === "pg_type_typname_nsp_index";
 }
 
+function isProductionEnvironment() {
+  const productionMarkers = new Set(["production", "prod", "1", "true", "yes"]);
+  const candidates = [
+    process.env.NODE_ENV,
+    process.env.ENVIRONMENT,
+    process.env.APP_ENV,
+    process.env.RAILWAY_ENVIRONMENT,
+    process.env.RAILWAY_ENVIRONMENT_NAME,
+  ];
+  return candidates.some((value) =>
+    value ? productionMarkers.has(String(value).trim().toLowerCase()) : false
+  );
+}
+
+function databaseUrlRequiresTls(databaseUrl) {
+  return /sslmode=require/i.test(databaseUrl) || /ssl=true/i.test(databaseUrl);
+}
+
+function shouldEnforceDatabaseTls(databaseUrl) {
+  const localHosts = new Set(["localhost", "127.0.0.1", "postgres", "db"]);
+  try {
+    const parsed = new URL(databaseUrl);
+    return !localHosts.has(parsed.hostname.toLowerCase());
+  } catch {
+    return true;
+  }
+}
+
 async function ensureDrizzleMigrationsTracking(sql) {
   // Drizzle uses schema "drizzle" and table "__drizzle_migrations" by default.
   try {
@@ -105,6 +133,16 @@ async function main() {
     console.error("[migrate] DATABASE_URL is required");
     process.exit(1);
   }
+  if (
+    isProductionEnvironment() &&
+    shouldEnforceDatabaseTls(databaseUrl) &&
+    !databaseUrlRequiresTls(databaseUrl)
+  ) {
+    console.error(
+      "[migrate] Production DATABASE_URL must enforce TLS. Append '?sslmode=require' to the connection string."
+    );
+    process.exit(1);
+  }
 
   const migrationsFolder = path.join(
     process.cwd(),
@@ -128,7 +166,7 @@ async function main() {
   const migratorMod = await import("drizzle-orm/postgres-js/migrator");
   const { migrate } = migratorMod;
 
-  const sslRequired = /sslmode=require/i.test(databaseUrl);
+  const sslRequired = databaseUrlRequiresTls(databaseUrl);
 
   const sql = postgres(databaseUrl, {
     max: 1, // keep it minimal; this runs as a one-shot job

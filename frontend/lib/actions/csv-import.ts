@@ -9,11 +9,19 @@ import { storage } from "@/lib/storage";
 import { getBackendBaseUrl } from "@/lib/backend-url";
 import { createInternalAuthHeaders } from "@/lib/internal-auth";
 import { detectDuplicates, markDuplicates } from "@/lib/utils/duplicate-detection";
+import { decryptWithFallback, encryptValue } from "@/lib/security/data-encryption";
 import OpenAI from "openai";
 
 // Helper function to create date at midnight UTC to avoid timezone shifts
 function createUTCDate(year: number, month: number, day: number): Date {
   return new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+}
+
+function resolveImportFilePath(importSession: {
+  filePath: string | null;
+  filePathCiphertext: string | null;
+}): string | null {
+  return decryptWithFallback(importSession.filePathCiphertext, importSession.filePath);
 }
 
 // Column mapping types
@@ -96,6 +104,7 @@ export async function initializeCsvImport(
 
     // Save the CSV file
     const filePath = `csv-imports/${session.user.id}/${Date.now()}-${fileName}`;
+    const encryptedFilePath = encryptValue(filePath);
     await storage.upload(filePath, Buffer.from(fileContent), {
       contentType: "text/csv",
     });
@@ -112,6 +121,7 @@ export async function initializeCsvImport(
         accountId,
         fileName,
         filePath,
+        filePathCiphertext: encryptedFilePath,
         status: "pending",
         totalRows,
       })
@@ -142,12 +152,17 @@ export async function parseCsvHeaders(
       ),
     });
 
-    if (!importSession || !importSession.filePath) {
+    if (!importSession) {
       return { success: false, error: "Import session not found" };
     }
 
+    const filePath = resolveImportFilePath(importSession);
+    if (!filePath) {
+      return { success: false, error: "Import file path is unavailable" };
+    }
+
     // Read the CSV file
-    const fileBuffer = await storage.download(importSession.filePath);
+    const fileBuffer = await storage.download(filePath);
     const fileContent = fileBuffer.toString("utf-8");
 
     // Parse CSV
@@ -366,14 +381,19 @@ export async function previewImportedTransactions(
       ),
     });
 
-    if (!importSession || !importSession.filePath || !importSession.columnMapping) {
+    if (!importSession || !importSession.columnMapping) {
       return { success: false, error: "Import session not found or mapping incomplete" };
+    }
+
+    const filePath = resolveImportFilePath(importSession);
+    if (!filePath) {
+      return { success: false, error: "Import file path is unavailable" };
     }
 
     const mapping = importSession.columnMapping as ColumnMapping;
 
     // Read and parse the CSV file
-    const fileBuffer = await storage.download(importSession.filePath);
+    const fileBuffer = await storage.download(filePath);
     const fileContent = fileBuffer.toString("utf-8");
 
     const parseCSVLine = (line: string): string[] => {
@@ -1412,7 +1432,7 @@ export async function getCsvImportSession(
 // Direct Import with Auto-Categorization (for Revolut CSV format)
 // ============================================================================
 
-import { categories, type NewCategory } from "@/lib/db/schema";
+import { categories } from "@/lib/db/schema";
 import * as fs from "fs/promises";
 
 // Category definitions with matching patterns

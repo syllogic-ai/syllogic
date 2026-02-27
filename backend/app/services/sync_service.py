@@ -4,7 +4,7 @@ Service for syncing bank data (accounts and transactions).
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from sqlalchemy.orm import Session
-from sqlalchemy import and_
+from sqlalchemy import or_
 from decimal import Decimal
 
 from app.models import Account, Transaction
@@ -14,6 +14,12 @@ from app.services.subscription_matcher import SubscriptionMatcher
 from app.services.subscription_detector import SubscriptionDetector
 from app.services.merchant_extractor import extract_merchant
 from app.db_helpers import get_user_id
+from app.security.data_encryption import (
+    blind_index,
+    blind_index_candidates,
+    decrypt_with_fallback,
+    encrypt_value,
+)
 
 
 class SyncService:
@@ -25,6 +31,37 @@ class SyncService:
         self.category_matcher = CategoryMatcher(db, user_id=self.user_id)
         self.subscription_matcher = SubscriptionMatcher(db, user_id=self.user_id)
         self.use_llm_categorization = use_llm_categorization
+
+    @staticmethod
+    def _resolve_account_external_id(account: Account) -> Optional[str]:
+        return decrypt_with_fallback(account.external_id_ciphertext, account.external_id)
+
+    @staticmethod
+    def _set_account_external_id_fields(account: Account, external_id: Optional[str]) -> None:
+        encrypted = encrypt_value(external_id)
+        hashed = blind_index(external_id)
+        account.external_id_hash = hashed
+        if encrypted:
+            account.external_id_ciphertext = encrypted
+            account.external_id = external_id
+        else:
+            account.external_id_ciphertext = None
+            account.external_id = external_id
+
+    def _find_existing_account(self, provider: str, external_id: Optional[str]) -> Optional[Account]:
+        query = self.db.query(Account).filter(
+            Account.user_id == self.user_id,
+            Account.provider == provider,
+        )
+        hashed_candidates = blind_index_candidates(external_id)
+        if hashed_candidates:
+            return query.filter(
+                or_(
+                    Account.external_id_hash.in_(hashed_candidates),
+                    Account.external_id == external_id,
+                )
+            ).first()
+        return query.filter(Account.external_id == external_id).first()
     
     def sync_accounts(self, adapter: BankAdapter, provider: str) -> List[Account]:
         """
@@ -42,11 +79,7 @@ class SyncService:
         
         for account_data in account_data_list:
             # Check if account already exists
-            existing_account = self.db.query(Account).filter(
-                Account.user_id == self.user_id,
-                Account.provider == provider,
-                Account.external_id == account_data.external_id
-            ).first()
+            existing_account = self._find_existing_account(provider, account_data.external_id)
             
             if existing_account:
                 # Update existing account
@@ -57,6 +90,7 @@ class SyncService:
                 # Only update balance if provided from CSV (not None), otherwise keep existing or calculate later
                 # balance_current removed - use functional_balance instead
                 existing_account.balance_available = account_data.balance_available
+                self._set_account_external_id_fields(existing_account, account_data.external_id)
                 existing_account.is_active = True
                 synced_accounts.append(existing_account)
             else:
@@ -69,9 +103,9 @@ class SyncService:
                     institution=account_data.institution,
                     currency=account_data.currency,
                     provider=provider,
-                    external_id=account_data.external_id,
                     balance_available=account_data.balance_available,
                 )
+                self._set_account_external_id_fields(new_account, account_data.external_id)
                 self.db.add(new_account)
                 synced_accounts.append(new_account)
         
@@ -102,8 +136,12 @@ class SyncService:
         Returns:
             Tuple of (created_count, updated_count, created_transaction_ids)
         """
+        resolved_account_external_id = self._resolve_account_external_id(account)
+        if not resolved_account_external_id:
+            raise ValueError(f"Account {account.id} is missing provider external_id.")
+
         transaction_data_list = adapter.fetch_transactions(
-            account.external_id,
+            resolved_account_external_id,
             start_date=start_date,
             end_date=end_date,
         )
@@ -215,7 +253,10 @@ class SyncService:
             old_default_accounts = self.db.query(Account).filter(
                 Account.user_id == self.user_id,
                 Account.provider == 'revolut',
-                Account.external_id == 'revolut_default'
+                or_(
+                    Account.external_id == 'revolut_default',
+                    Account.external_id_hash.in_(blind_index_candidates("revolut_default")),
+                )
             ).all()
             for old_account in old_default_accounts:
                 # Delete associated transactions first

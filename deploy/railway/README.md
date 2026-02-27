@@ -26,6 +26,9 @@ remove them to avoid overriding compose-derived values.
 | `POSTGRES_PASSWORD` | (generate) | `openssl rand -hex 16` |
 | `BETTER_AUTH_SECRET` | (generate) | `openssl rand -hex 32` |
 | `INTERNAL_AUTH_SECRET` | (generate) | `openssl rand -hex 32` |
+| `DATA_ENCRYPTION_KEY_CURRENT` | (generate) | 32-byte base64 or hex key for app-level field encryption |
+| `DATA_ENCRYPTION_KEY_PREVIOUS` | (optional) | previous key for decryption during key rotation |
+| `DATA_ENCRYPTION_KEY_ID` | `k1` | key identifier embedded in encrypted payloads |
 | `OPENAI_API_KEY` | (optional) | Your OpenAI key |
 | `LOGO_DEV_API_KEY` | (optional) | Your Logo.dev key |
 
@@ -116,7 +119,7 @@ Railway can leave an extra Postgres service on the canvas (for example, `postgre
 
 1. Keep only one Postgres service for the environment (recommended name: `postgres`).
 2. Ensure the compose still derives `DATABASE_URL` from:
-   - `postgresql://financeuser:${{shared.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/finance_db`
+   - `postgresql://financeuser:${{shared.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/finance_db?sslmode=require`
 3. Redeploy `app`, `backend`, `worker`, `beat`, and `mcp` after reference cleanup.
 
 ### Reset Postgres completely

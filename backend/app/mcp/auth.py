@@ -5,9 +5,22 @@ Validates API keys and resolves them to user IDs.
 import hashlib
 import bcrypt
 from datetime import datetime
+from dataclasses import dataclass
 from typing import Optional
 
-from fastmcp.server.auth import AuthProvider, AccessToken
+try:
+    from fastmcp.server.auth import AuthProvider, AccessToken
+except Exception:  # pragma: no cover - fallback for environments without FastMCP
+    class AuthProvider:  # type: ignore[override]
+        pass
+
+    @dataclass
+    class AccessToken:  # type: ignore[override]
+        token: str
+        client_id: str
+        scopes: list[str]
+        expires_at: Optional[datetime]
+        claims: dict[str, str]
 
 from app.database import SessionLocal
 from app.models import ApiKey
