@@ -70,8 +70,10 @@ class EventPublisher:
 
             # Store the event for late subscribers (TTL: 5 minutes)
             event_type = event_data.get("type", "")
-            self.redis.hset(state_key, event_type, message)
-            self.redis.expire(state_key, 300)  # 5 minute TTL
+            pipe = self.redis.pipeline()
+            pipe.hset(state_key, event_type, message)
+            pipe.expire(state_key, 300)  # 5 minute TTL
+            pipe.execute()
 
             logger.debug(f"Published event to {channel}: {event_type}")
         except Exception as e:

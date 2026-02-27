@@ -30,7 +30,7 @@ docker compose --env-file deploy/compose/.env -f deploy/compose/docker-compose.y
 4. Verify all services are running:
 
 ```bash
-docker compose -f deploy/compose/docker-compose.yml ps
+docker compose --env-file deploy/compose/.env -f deploy/compose/docker-compose.yml ps
 ```
 
 All containers should show `Up` status. The `migrate` container will exit after completing database migrations (this is expected).
@@ -40,7 +40,7 @@ All containers should show `Up` status. The `migrate` container will exit after 
 Once all containers are running:
 
 - **Web UI**: Open your browser and navigate to `http://localhost:8080` (or whatever `HTTP_PORT` you configured in `.env`)
-- **Backend API**: Available at `http://localhost:8000` (internal to containers, proxied through Caddy)
+- **Backend API**: Internal only at `http://backend:8000` within the Docker network; proxied through Caddy for external access
 - **MCP Server**: Available at `http://localhost:8001` (if enabled)
 
 **First Time Setup**:

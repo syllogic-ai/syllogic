@@ -553,14 +553,16 @@ def process_subscriptions(
         import traceback
         logger.error(traceback.format_exc())
 
-        # Still publish completed with zero counts on error
-        # to ensure frontend closes SSE connection
-        publisher.publish_subscriptions_completed(
-            user_id=user_id,
-            import_id=csv_import_id,
-            matched_count=0,
-            detected_count=0,
-        )
+        # Only publish completed with zero counts when retries are exhausted.
+        # Publishing before retry would close the frontend SSE connection;
+        # if the retry succeeds, the real results would be lost.
+        if self.request.retries >= self.max_retries:
+            publisher.publish_subscriptions_completed(
+                user_id=user_id,
+                import_id=csv_import_id,
+                matched_count=0,
+                detected_count=0,
+            )
 
         raise self.retry(exc=e, countdown=60)
 
