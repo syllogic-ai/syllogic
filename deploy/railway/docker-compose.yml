@@ -9,6 +9,11 @@
 # Set the required shared values once in Railway and services
 # will resolve them automatically via ${{shared.VAR}} references.
 #
+# Release channel policy:
+# - `edge` is for development/testing.
+# - Published production templates should pin `vX.Y.Z` image tags.
+# This v1 file keeps `edge` for backward compatibility; maintainers should pin tags before production use.
+#
 # What's different from the self-hosted compose:
 #   - No Caddy (Railway provides reverse proxy + TLS)
 #   - No uploads-init (Railway volumes are writable)

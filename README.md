@@ -139,12 +139,20 @@ For CasaOS installs, see `/Users/gianniskotsas/Documents/WebDev/personal-finance
 - Railway (recommended): use the Railway Template for a one-click install.
 - DigitalOcean App Platform: good managed alternative if you want team-friendly app specs and predictable managed services.
 - Self-hosted Docker Compose remains the most complete/supported path in this repository.
+- Cross-environment contract: see `/Users/gianniskotsas/.codex/worktrees/67f5/personal-finance-app/docs/deployment-matrix.md`.
 
-### Deploy To Railway (One-Click)
+### Deploy To Railway (Templates)
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/N98lwA?referralCode=25KFsK&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
-This template provisions 7 services: `postgres`, `redis`, `backend`, `worker`, `beat`, `mcp`, `app`.
+Template channels:
+
+- **V1 (current button)**: image-based compose template.
+- **V2 (recommended target)**: GitHub-source services (`app/backend/worker/beat/mcp`) + Railway Postgres/Redis plugins.
+
+Migration guide: `/Users/gianniskotsas/.codex/worktrees/67f5/personal-finance-app/deploy/railway/V1_TO_V2_MIGRATION.md`.
+
+This V1 template provisions 7 services: `postgres`, `redis`, `backend`, `worker`, `beat`, `mcp`, `app`.
 
 After deploy, set these **Shared Variables** in Railway (do not hardcode secrets in the template URL):
 
@@ -167,8 +175,10 @@ profile photos (`/uploads/profile/...`) and cached logos (`/uploads/logos/...`).
 
 Template note: this button links to the Railway one-click deploy URL (no secrets in the URL).
 
-Image tag policy: prefer pinned release tags (`vX.Y.Z`) for published templates
-instead of `:edge`.
+Image/channel policy:
+
+- `edge` is for development/testing only.
+- `vX.Y.Z` is for production, self-hosted, and published templates.
 
 ### Existing-Install Encryption Upgrade
 
@@ -197,6 +207,8 @@ python postgres_migration/run_encryption_upgrade.py --batch-size 500 --clear-pla
 3. Run `python postgres_migration/run_encryption_upgrade.py --batch-size 500` for upgraded environments.
 4. Confirm MCP health at `/health` returns `200` with `{"status":"healthy","service":"mcp"}`.
 5. Confirm no decrypt errors in backend logs during smoke tests.
+6. Run `/Users/gianniskotsas/.codex/worktrees/67f5/personal-finance-app/scripts/verify-deploy-contract.sh` before publishing deployment-related changes.
+7. Confirm rollback plan is tested (previous tag/service config can be restored quickly).
 
 ### Prerequisites
 
@@ -295,6 +307,7 @@ python seed_data.py
 **One-click helpers:**
 - `scripts/dev-up.sh` (starts local DB/Redis infra + migrations; use `--prebuilt` for full container stack)
 - `scripts/prod-up.sh` (pulls/runs prebuilt GHCR images, including MCP)
+- `scripts/local-smoke.sh` (source-compose smoke: health + migration table + encryption roundtrip)
 
 MCP is included by default in self-hosted compose deployments (external port defaults to `8001`, configurable via `MCP_PORT`).
 

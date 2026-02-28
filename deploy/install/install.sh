@@ -60,14 +60,25 @@ BETTER_AUTH_SECRET="$(openssl rand -hex 32)"
 INTERNAL_AUTH_SECRET="$(openssl rand -hex 32)"
 DATA_ENCRYPTION_KEY_CURRENT="$(openssl rand -base64 32)"
 
-read -r -p "Domain (e.g. finance.example.com) or leave blank for HTTP-only: " DOMAIN || true
-DOMAIN="${DOMAIN:-}"
+read -r -p "Deployment mode [public/lan] (default: public): " DEPLOY_MODE || true
+DEPLOY_MODE="${DEPLOY_MODE:-public}"
+if [[ "$DEPLOY_MODE" != "public" && "$DEPLOY_MODE" != "lan" ]]; then
+  echo "[install] Invalid mode '$DEPLOY_MODE'. Use 'public' or 'lan'."
+  exit 1
+fi
 
 APP_URL=""
 CADDY_ADDRESS=""
 ACME_EMAIL=""
 
-if [[ -n "$DOMAIN" ]]; then
+if [[ "$DEPLOY_MODE" == "public" ]]; then
+  read -r -p "Domain (required, e.g. finance.example.com): " DOMAIN || true
+  DOMAIN="${DOMAIN:-}"
+  if [[ -z "$DOMAIN" ]]; then
+    echo "[install] Public mode requires a domain so TLS can be enabled."
+    exit 1
+  fi
+
   read -r -p "ACME email (for Let's Encrypt): " ACME_EMAIL || true
   ACME_EMAIL="${ACME_EMAIL:-}"
   APP_URL="https://${DOMAIN}"
@@ -75,10 +86,11 @@ if [[ -n "$DOMAIN" ]]; then
   PORT_LINES="HTTP_PORT=8080
 HTTPS_PORT=443"
 else
-  # HTTP-only mode (no TLS)
+  # HTTP-only mode for LAN/dev only.
   APP_URL="http://localhost:8080"
   CADDY_ADDRESS=":80"
   PORT_LINES="HTTP_PORT=8080"
+  echo "[install] LAN mode selected. This is HTTP-only and not suitable for public internet exposure."
 fi
 
 cat > "$INSTALL_DIR/.env" <<EOF
@@ -125,11 +137,12 @@ echo
 echo "[install] Done."
 echo "- Config: $INSTALL_DIR/.env"
 echo "- Stack:  docker compose --env-file .env -f docker-compose.yml ps"
+echo "- Verify: $INSTALL_DIR/deploy/install/post-install-check.sh $INSTALL_DIR"
 echo
-if [[ -n "$DOMAIN" ]]; then
+if [[ "$DEPLOY_MODE" == "public" ]]; then
   echo "Open: https://${DOMAIN}"
 else
-  echo "HTTP-only mode enabled. Consider setting a domain + TLS later by editing .env:"
+  echo "LAN mode (HTTP-only) enabled. For public deployment, switch to domain + TLS by editing .env:"
   echo "  APP_URL=https://finance.example.com"
   echo "  CADDY_ADDRESS=finance.example.com"
   echo "  ACME_EMAIL=you@example.com"
