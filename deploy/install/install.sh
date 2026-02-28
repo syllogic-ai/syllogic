@@ -3,7 +3,8 @@ set -euo pipefail
 
 REPO="syllogic-ai/syllogic"
 
-if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
+# Root is required on Linux for Docker/apt. On macOS, Docker Desktop runs as user.
+if [[ "${EUID:-$(id -u)}" -ne 0 ]] && [[ "$(uname -s)" != "Darwin" ]]; then
   echo "Please run as root (e.g. sudo ./install.sh)"
   exit 1
 fi
@@ -21,7 +22,11 @@ if [[ -z "$VERSION" ]]; then
   echo "[install] Latest release: $VERSION"
 fi
 
-INSTALL_DIR="/opt/syllogic"
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  INSTALL_DIR="${HOME}/.syllogic"
+else
+  INSTALL_DIR="/opt/syllogic"
+fi
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
