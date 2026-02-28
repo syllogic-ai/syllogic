@@ -1,0 +1,8 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "celery -A celery_app worker --loglevel=info --concurrency=4"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

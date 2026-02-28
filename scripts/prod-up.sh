@@ -27,6 +27,12 @@ if [ ! -f "$ENV_FILE" ]; then
   exit 1
 fi
 
+APP_VERSION_VALUE="$(grep -E '^APP_VERSION=' "$ENV_FILE" | tail -n1 | cut -d'=' -f2- || true)"
+if [ "${APP_VERSION_VALUE:-edge}" = "edge" ]; then
+  echo "WARNING: APP_VERSION=edge is intended for development/testing."
+  echo "For production, pin APP_VERSION to a release tag (for example vX.Y.Z)."
+fi
+
 echo "Pulling prebuilt images (GHCR)..."
 docker compose --env-file "$ENV_FILE" -f "$ROOT_DIR/deploy/compose/docker-compose.yml" pull
 

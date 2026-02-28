@@ -87,6 +87,9 @@ services:
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-${APP_URL:-http://localhost:8080}}
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
       INTERNAL_AUTH_SECRET: ${INTERNAL_AUTH_SECRET:-change-me}
+      DATA_ENCRYPTION_KEY_CURRENT: ${DATA_ENCRYPTION_KEY_CURRENT:-}
+      DATA_ENCRYPTION_KEY_PREVIOUS: ${DATA_ENCRYPTION_KEY_PREVIOUS:-}
+      DATA_ENCRYPTION_KEY_ID: ${DATA_ENCRYPTION_KEY_ID:-k1}
       # Optional integrations / features
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       KRAKEN_API_KEY: ${KRAKEN_API_KEY:-}
@@ -110,6 +113,15 @@ services:
         - container: INTERNAL_AUTH_SECRET
           description:
             en_US: Shared secret used for internal signed API requests.
+        - container: DATA_ENCRYPTION_KEY_CURRENT
+          description:
+            en_US: Current encryption key (recommended in production).
+        - container: DATA_ENCRYPTION_KEY_PREVIOUS
+          description:
+            en_US: Previous encryption key for rotation fallback (optional).
+        - container: DATA_ENCRYPTION_KEY_ID
+          description:
+            en_US: Encryption key identifier (for example k1).
         - container: OPENAI_API_KEY
           description:
             en_US: OpenAI API key (optional).
@@ -124,6 +136,9 @@ services:
       PGID: ${PGID:-1000}
       TZ: ${TZ:-UTC}
       DATABASE_URL: postgresql://${POSTGRES_USER:-financeuser}:${POSTGRES_PASSWORD:-financepass}@postgres:5432/${POSTGRES_DB:-finance_db}
+      DATA_ENCRYPTION_KEY_CURRENT: ${DATA_ENCRYPTION_KEY_CURRENT:-}
+      DATA_ENCRYPTION_KEY_PREVIOUS: ${DATA_ENCRYPTION_KEY_PREVIOUS:-}
+      DATA_ENCRYPTION_KEY_ID: ${DATA_ENCRYPTION_KEY_ID:-k1}
       # Optional integrations / features
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       KRAKEN_API_KEY: ${KRAKEN_API_KEY:-}
@@ -151,6 +166,9 @@ services:
       TZ: ${TZ:-UTC}
       DATABASE_URL: postgresql://${POSTGRES_USER:-financeuser}:${POSTGRES_PASSWORD:-financepass}@postgres:5432/${POSTGRES_DB:-finance_db}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      DATA_ENCRYPTION_KEY_CURRENT: ${DATA_ENCRYPTION_KEY_CURRENT:-}
+      DATA_ENCRYPTION_KEY_PREVIOUS: ${DATA_ENCRYPTION_KEY_PREVIOUS:-}
+      DATA_ENCRYPTION_KEY_ID: ${DATA_ENCRYPTION_KEY_ID:-k1}
       # Optional integrations / features
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       KRAKEN_API_KEY: ${KRAKEN_API_KEY:-}
@@ -170,6 +188,9 @@ services:
       TZ: ${TZ:-UTC}
       DATABASE_URL: postgresql://${POSTGRES_USER:-financeuser}:${POSTGRES_PASSWORD:-financepass}@postgres:5432/${POSTGRES_DB:-finance_db}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      DATA_ENCRYPTION_KEY_CURRENT: ${DATA_ENCRYPTION_KEY_CURRENT:-}
+      DATA_ENCRYPTION_KEY_PREVIOUS: ${DATA_ENCRYPTION_KEY_PREVIOUS:-}
+      DATA_ENCRYPTION_KEY_ID: ${DATA_ENCRYPTION_KEY_ID:-k1}
       # Optional integrations / features
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       KRAKEN_API_KEY: ${KRAKEN_API_KEY:-}
@@ -193,6 +214,9 @@ services:
       NEXT_PUBLIC_BETTER_AUTH_URL: ${APP_URL:-http://localhost:8080}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-change-me}
       INTERNAL_AUTH_SECRET: ${INTERNAL_AUTH_SECRET:-change-me}
+      DATA_ENCRYPTION_KEY_CURRENT: ${DATA_ENCRYPTION_KEY_CURRENT:-}
+      DATA_ENCRYPTION_KEY_PREVIOUS: ${DATA_ENCRYPTION_KEY_PREVIOUS:-}
+      DATA_ENCRYPTION_KEY_ID: ${DATA_ENCRYPTION_KEY_ID:-k1}
       BACKEND_URL: ${BACKEND_URL:-http://backend:8000}
       STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
       LOCAL_STORAGE_PATH: ${LOCAL_STORAGE_PATH:-uploads}
@@ -221,6 +245,15 @@ services:
         - container: INTERNAL_AUTH_SECRET
           description:
             en_US: Shared secret used for internal signed API requests.
+        - container: DATA_ENCRYPTION_KEY_CURRENT
+          description:
+            en_US: Current encryption key (recommended in production).
+        - container: DATA_ENCRYPTION_KEY_PREVIOUS
+          description:
+            en_US: Previous encryption key for rotation fallback (optional).
+        - container: DATA_ENCRYPTION_KEY_ID
+          description:
+            en_US: Encryption key identifier (for example k1).
         - container: STORAGE_PROVIDER
           description:
             en_US: Storage provider (local).
