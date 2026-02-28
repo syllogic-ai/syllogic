@@ -2,7 +2,7 @@
 
 > Open-source personal finance platform with AI-powered categorization and bank sync.
 
-[![License: LGPL-3.0-or-later](https://img.shields.io/badge/License-LGPL--3.0--or--later-blue.svg)](LICENSE)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/Docker-GHCR-blue?logo=docker)](https://github.com/orgs/syllogic-ai/packages)
 [![Deploy on Railway](https://img.shields.io/badge/Deploy-Railway-blueviolet?logo=railway)](https://railway.com/deploy/N98lwA?referralCode=25KFsK&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
@@ -139,4 +139,4 @@ Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup inst
 
 ## License
 
-Licensed under the [GNU Lesser General Public License v3.0 or later](LICENSE) (LGPL-3.0-or-later).
+Licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
