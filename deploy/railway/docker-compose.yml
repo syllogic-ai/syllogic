@@ -73,6 +73,15 @@ services:
   mcp:
     image: ghcr.io/syllogic-ai/personal-finance-backend:edge
     command: uvicorn mcp_server:app --host 0.0.0.0 --port 8001
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8001/health'); sys.exit(0 if r.status==200 else 1)\"",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
     environment:
       NODE_ENV: production
       PROCESS_TYPE: mcp

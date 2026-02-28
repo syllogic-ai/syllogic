@@ -140,6 +140,18 @@ jobs:
       run: |
         python tests/test_data_encryption.py
 
+    - name: Test Encryption Upgrade Orchestrator
+      working-directory: ./backend
+      run: |
+        python tests/test_encryption_upgrade.py
+
+    - name: Test MCP Health/Auth
+      working-directory: ./backend
+      env:
+        DATABASE_URL: postgresql+psycopg://financeuser:financepass@localhost:5432/finance_db
+      run: |
+        python tests/test_mcp_server_health.py
+
     - name: Test Encrypted Account Sync Dedupe
       working-directory: ./backend
       env:
@@ -157,6 +169,8 @@ jobs:
         echo "- ✅ Categorizer API: Tested" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ Subscription Identifier: Tested" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ Data encryption helpers: Tested" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Encryption upgrade orchestrator: Tested" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ MCP health/auth behavior: Tested" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ Encrypted account sync dedupe: Tested" >> $GITHUB_STEP_SUMMARY
 
     - name: Stop backend server
@@ -217,6 +231,7 @@ jobs:
         run: |
           timeout 120 bash -c 'until curl -fsS http://localhost:8080/api/health >/dev/null; do sleep 2; done'
           timeout 120 bash -c 'until curl -fsS http://localhost:8080/ >/dev/null; do sleep 2; done'
+          timeout 120 bash -c 'until curl -fsS http://localhost:8001/health >/dev/null; do sleep 2; done'
 
       - name: Print container status
         if: always()

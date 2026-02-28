@@ -88,6 +88,7 @@ MCP port contract:
 - Internal container port is fixed at `8001`.
 - External host port defaults to `8001`.
 - Override external port with `MCP_PORT` (example: `MCP_PORT=9001` maps `9001 -> 8001`).
+- Health endpoint is exposed at `http://localhost:${MCP_PORT:-8001}/health`.
 
 Security note: the MCP service is currently best treated as **single-user** and should only be exposed to trusted networks (LAN/VPN), or protected by an auth layer.
 
@@ -105,6 +106,26 @@ For truly one-click installs, the GHCR packages must be public:
 ```bash
 docker compose --env-file deploy/compose/.env -f deploy/compose/docker-compose.yml pull
 docker compose --env-file deploy/compose/.env -f deploy/compose/docker-compose.yml up -d
+```
+
+## Encryption Upgrade for Existing Data
+
+If you're upgrading an existing install to the encrypted-field rollout, run from the backend container or backend working directory:
+
+```bash
+python postgres_migration/run_encryption_upgrade.py --batch-size 500
+```
+
+This command validates encryption keys, runs the backfill, prints coverage counters, and exits non-zero if coverage is incomplete.
+
+Optional:
+
+```bash
+# Check coverage without writing changes
+python postgres_migration/run_encryption_upgrade.py --batch-size 500 --dry-run
+
+# Clear plaintext columns after your validation window
+python postgres_migration/run_encryption_upgrade.py --batch-size 500 --clear-plaintext
 ```
 
 ## One-Command Helpers
