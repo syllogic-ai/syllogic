@@ -46,7 +46,7 @@ Syllogic is an open-source wealth management platform that gives you a complete 
 **One-liner** (requires root, Docker, and Docker Compose):
 
 ```bash
-curl -fsSL https://github.com/syllogic-ai/syllogic/releases/download/v1.0.0/install.sh | sudo bash -s -- v1.0.0
+curl -fsSL https://raw.githubusercontent.com/syllogic-ai/syllogic/main/deploy/install/install.sh | sudo bash
 ```
 
 **Or manually:**

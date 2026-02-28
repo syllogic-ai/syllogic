@@ -4,15 +4,21 @@ set -euo pipefail
 REPO="syllogic-ai/syllogic"
 
 if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
-  echo "Please run as root (e.g. sudo ./install.sh vX.Y.Z)"
+  echo "Please run as root (e.g. sudo ./install.sh)"
   exit 1
 fi
 
 VERSION="${1:-}"
 if [[ -z "$VERSION" ]]; then
-  echo "Usage: ./install.sh vX.Y.Z"
-  echo "Example: ./install.sh v1.2.3"
-  exit 1
+  echo "[install] No version specified — detecting latest release..."
+  VERSION="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
+    | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')"
+  if [[ -z "$VERSION" ]]; then
+    echo "[install] Could not detect latest release. Specify a version manually:"
+    echo "  ./install.sh v1.0.0"
+    exit 1
+  fi
+  echo "[install] Latest release: $VERSION"
 fi
 
 INSTALL_DIR="/opt/syllogic"
