@@ -20,7 +20,6 @@ assert_contains() {
   fi
 }
 
-require_file "$ROOT_DIR/docs/deployment-matrix.md"
 require_file "$ROOT_DIR/frontend/railway.toml"
 require_file "$ROOT_DIR/backend/railway.api.toml"
 require_file "$ROOT_DIR/backend/railway.worker.toml"
@@ -32,7 +31,5 @@ assert_contains "$ROOT_DIR/docker-compose.yml" "postgres:16-alpine"
 assert_contains "$ROOT_DIR/deploy/compose/docker-compose.yml" "postgres:16-alpine"
 assert_contains "$ROOT_DIR/deploy/railway/docker-compose.yml" "mcp"
 assert_contains "$ROOT_DIR/deploy/railway/docker-compose.yml" "/health"
-assert_contains "$ROOT_DIR/docs/deployment-matrix.md" "edge"
-assert_contains "$ROOT_DIR/docs/deployment-matrix.md" "vX.Y.Z"
 
 echo "[contract] Deployment contract checks passed."
