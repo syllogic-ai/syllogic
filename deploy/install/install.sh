@@ -57,6 +57,7 @@ POSTGRES_USER="financeuser"
 POSTGRES_DB="finance_db"
 POSTGRES_PASSWORD="$(openssl rand -hex 24)"
 BETTER_AUTH_SECRET="$(openssl rand -hex 32)"
+INTERNAL_AUTH_SECRET="$(openssl rand -hex 32)"
 
 read -r -p "Domain (e.g. finance.example.com) or leave blank for HTTP-only: " DOMAIN || true
 DOMAIN="${DOMAIN:-}"
@@ -70,20 +71,23 @@ if [[ -n "$DOMAIN" ]]; then
   ACME_EMAIL="${ACME_EMAIL:-}"
   APP_URL="https://${DOMAIN}"
   CADDY_ADDRESS="${DOMAIN}"
+  PORT_LINES="HTTP_PORT=8080
+HTTPS_PORT=443"
 else
   # HTTP-only mode (no TLS)
   APP_URL="http://localhost:8080"
   CADDY_ADDRESS=":80"
+  PORT_LINES="HTTP_PORT=8080"
 fi
 
 cat > "$INSTALL_DIR/.env" <<EOF
 APP_VERSION=${VERSION}
 APP_URL=${APP_URL}
 BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+INTERNAL_AUTH_SECRET=${INTERNAL_AUTH_SECRET}
 CADDY_ADDRESS=${CADDY_ADDRESS}
 ACME_EMAIL=${ACME_EMAIL}
-HTTP_PORT=8080
-HTTPS_PORT=443
+${PORT_LINES}
 MCP_PORT=8001
 
 POSTGRES_USER=${POSTGRES_USER}
@@ -99,6 +103,18 @@ API_DOCS_ENABLED=false
 
 STORAGE_PROVIDER=local
 LOCAL_STORAGE_PATH=uploads
+
+# --- Optional features ---
+
+# AI-powered transaction categorization (OpenAI)
+# OPENAI_API_KEY=sk-...
+
+# Company logo lookup (logo.dev)
+# LOGO_DEV_API_KEY=pk_...
+
+# Application-layer encryption for sensitive stored data
+# Generate with: openssl rand -base64 32
+# TOKEN_ENCRYPTION_KEY=
 EOF
 
 echo "[install] Starting services..."
