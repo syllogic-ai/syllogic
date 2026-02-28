@@ -5,7 +5,7 @@ This folder contains the CasaOS-ready compose bundle for Syllogic.
 ## Quick Start
 
 1. Open CasaOS App Store custom install (or use `docker compose` manually).
-2. Copy `/Users/gianniskotsas/Documents/WebDev/personal-finance-app/deploy/casaos/.env.example` to `.env`.
+2. Copy `.env.example` to `.env`.
 3. Set required values:
    - `POSTGRES_PASSWORD`
    - `BETTER_AUTH_SECRET`
@@ -18,7 +18,7 @@ This folder contains the CasaOS-ready compose bundle for Syllogic.
 If you start manually:
 
 ```bash
-cd /Users/gianniskotsas/Documents/WebDev/personal-finance-app/deploy/casaos
+cd deploy/casaos
 docker compose up -d
 ```
 
