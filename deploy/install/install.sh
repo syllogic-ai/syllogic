@@ -66,7 +66,8 @@ BETTER_AUTH_SECRET="$(openssl rand -hex 32)"
 INTERNAL_AUTH_SECRET="$(openssl rand -hex 32)"
 DATA_ENCRYPTION_KEY_CURRENT="$(openssl rand -base64 32)"
 
-read -r -p "Deployment mode [public/lan] (default: public): " DEPLOY_MODE || true
+printf "Deployment mode [public/lan] (default: public): "
+read -r DEPLOY_MODE </dev/tty || true
 DEPLOY_MODE="${DEPLOY_MODE:-public}"
 if [[ "$DEPLOY_MODE" != "public" && "$DEPLOY_MODE" != "lan" ]]; then
   echo "[install] Invalid mode '$DEPLOY_MODE'. Use 'public' or 'lan'."
@@ -78,14 +79,16 @@ CADDY_ADDRESS=""
 ACME_EMAIL=""
 
 if [[ "$DEPLOY_MODE" == "public" ]]; then
-  read -r -p "Domain (required, e.g. finance.example.com): " DOMAIN || true
+  printf "Domain (required, e.g. finance.example.com): "
+  read -r DOMAIN </dev/tty || true
   DOMAIN="${DOMAIN:-}"
   if [[ -z "$DOMAIN" ]]; then
     echo "[install] Public mode requires a domain so TLS can be enabled."
     exit 1
   fi
 
-  read -r -p "ACME email (for Let's Encrypt): " ACME_EMAIL || true
+  printf "ACME email (for Let's Encrypt): "
+  read -r ACME_EMAIL </dev/tty || true
   ACME_EMAIL="${ACME_EMAIL:-}"
   APP_URL="https://${DOMAIN}"
   CADDY_ADDRESS="${DOMAIN}"
