@@ -77,9 +77,6 @@ frontend/AGENTS.md
 backend/claude_desktop_config.json
 backend/fastmcp.json
 
-# Vendored tarballs
-*.tgz
-
 # Internal docs (kept locally, not published)
 docs/
 deploy/railway/V1_TO_V2_MIGRATION.md
