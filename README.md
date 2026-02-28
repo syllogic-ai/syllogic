@@ -3,9 +3,7 @@
 <p align="center">
   <h1 align="center"><b>Syllogic</b></h1>
   <p align="center">
-    Simple, beautiful wealth management.
-    <br />
-    Open-source. Self-hosted.
+    An open-source, minimal, wealth management app
     <br />
     <br />
     <a href="https://github.com/syllogic-ai/personal-finance-app">GitHub</a>
@@ -36,12 +34,10 @@ Syllogic is an open-source wealth management platform that gives you a complete 
 
 **Financial Dashboard** — real-time balances, spending patterns, and financial health overview.<br/>
 **AI Categorization** — automatic transaction categorization and merchant enrichment via OpenAI.<br/>
-**Bank Sync** — connect your bank accounts for automated transaction import.<br/>
 **Subscription Tracking** — monitor recurring payments with company logo integration.<br/>
 **Category Analytics** — interactive charts and spending breakdowns.<br/>
 **Transaction Linking** — link transactions with reimbursements for bill splitting.<br/>
 **CSV Import/Export** — bulk import and export transaction data.<br/>
-**Dark Mode** — full dark mode support.
 
 ## Quick Start
 
