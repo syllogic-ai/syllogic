@@ -61,6 +61,8 @@ After deploy, set these **Shared Variables** in Railway:
 - `POSTGRES_PASSWORD` (required)
 - `BETTER_AUTH_SECRET` (required)
 - `INTERNAL_AUTH_SECRET` (required)
+- `DATA_ENCRYPTION_KEY_CURRENT` (recommended — field-level encryption)
+- `DATA_ENCRYPTION_KEY_ID` (recommended — e.g. `k1`)
 - `OPENAI_API_KEY` (optional — enables AI categorization)
 - `LOGO_DEV_API_KEY` (optional — enables company logos)
 
