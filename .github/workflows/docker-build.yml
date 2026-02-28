@@ -71,9 +71,14 @@ jobs:
         run: |
           tar -czf compose-bundle.tar.gz -C deploy/compose .
 
+      - name: Copy install script
+        run: cp deploy/install/install.sh install.sh
+
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          files: compose-bundle.tar.gz
+          files: |
+            compose-bundle.tar.gz
+            install.sh
           generate_release_notes: true

@@ -70,7 +70,16 @@ postgres_data/
 # User uploads (frontend)
 frontend/public/uploads/
 
-# Claude / MCP local configs
+# Claude / MCP / AI agent configs
+CLAUDE.md
+frontend/AGENTS.md
 .claude/settings.local.json
 backend/claude_desktop_config.json
 backend/fastmcp.json
+
+# Vendored tarballs
+*.tgz
+
+# Internal docs (kept locally, not published)
+docs/
+deploy/railway/V1_TO_V2_MIGRATION.md

@@ -13,10 +13,6 @@ Keep secrets in Railway Shared Variables, not in the URL.
 
 Use v1 for compatibility while v2 is rolled out in parallel.
 
-Reference docs:
-- `docs/deployment-matrix.md`
-- `deploy/railway/V1_TO_V2_MIGRATION.md`
-
 ## 1. Import (V1 Image Template)
 
 Drag `docker-compose.yml` (this directory) onto your Railway project canvas.
