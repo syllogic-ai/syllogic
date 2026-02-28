@@ -374,7 +374,7 @@ export function SubscriptionsGroupedList({
             </span>
           )}
         </div>
-        <Button onClick={onAdd}>
+        <Button onClick={onAdd} data-walkthrough="walkthrough-add">
           <RiAddLine className="mr-2 h-4 w-4" />
           Add Subscription
         </Button>
@@ -383,7 +383,7 @@ export function SubscriptionsGroupedList({
       <SubscriptionsKpiGrid kpis={kpis} />
 
       {activeGroups.length > 0 ? (
-        <div className="space-y-6">
+        <div className="space-y-6" data-walkthrough="walkthrough-list">
           {activeGroups.map((group) => (
             <div
               key={group.key}
@@ -403,7 +403,7 @@ export function SubscriptionsGroupedList({
       )}
 
       {suggestionRows.length > 0 && (
-        <div className="border border-border rounded-sm overflow-hidden">
+        <div className="border border-border rounded-sm overflow-hidden" data-walkthrough="walkthrough-suggestions">
           <div className="bg-muted/40 px-4 py-2 text-xs font-semibold uppercase text-muted-foreground">
             Suggestions
           </div>

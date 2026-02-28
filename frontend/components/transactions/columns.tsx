@@ -191,7 +191,7 @@ export const transactionColumns: ColumnDef<TransactionWithRelations>[] = [
   },
   {
     accessorKey: "category",
-    header: () => <div className="text-center">Category</div>,
+    header: () => <div className="text-center" data-walkthrough="walkthrough-category-badge">Category</div>,
     cell: ({ row, column }) => {
       const category = row.original.category;
       const columnSize = column.getSize();

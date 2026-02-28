@@ -307,6 +307,9 @@ export function TransactionTable({
         }}
         wrapperClassName="flex min-h-0 flex-1 flex-col"
         tableContainerClassName="min-h-0 flex-1 overflow-y-auto"
+        tableContainerProps={
+          { "data-walkthrough": "walkthrough-table" } as React.HTMLAttributes<HTMLDivElement>
+        }
         footer={
           resolvedFilteredTotals ? (
             <div className="-mt-px flex items-center justify-end gap-8 border-x border-b bg-muted/25 px-4 py-2">

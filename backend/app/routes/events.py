@@ -33,6 +33,7 @@ async def import_status_generator(user_id: str, import_id: str) -> AsyncGenerato
     redis_client = await aioredis.from_url(redis_url, decode_responses=True)
     pubsub = redis_client.pubsub()
     channel = f"csv_import:{user_id}:{import_id}"
+    state_key = f"csv_import_state:{user_id}:{import_id}"
 
     try:
         await pubsub.subscribe(channel)
@@ -40,6 +41,24 @@ async def import_status_generator(user_id: str, import_id: str) -> AsyncGenerato
 
         # Send initial connection event
         yield f"event: connected\ndata: {json.dumps({'channel': channel})}\n\n"
+
+        # Check for any stored events (for late subscribers)
+        stored_events = await redis_client.hgetall(state_key)
+        if stored_events:
+            logger.info(f"Sending {len(stored_events)} stored events to late subscriber")
+            # Send stored events in order
+            event_order = [
+                "import_started", "import_progress", "import_completed",
+                "subscriptions_started", "subscriptions_completed", "import_failed"
+            ]
+            for event_type in event_order:
+                if event_type in stored_events:
+                    data = stored_events[event_type]
+                    yield f"event: {event_type}\ndata: {data}\n\n"
+                    # If terminal event, close connection
+                    if event_type in ("subscriptions_completed", "import_failed"):
+                        logger.info(f"Stored terminal event sent, closing SSE: {event_type}")
+                        return
 
         # Keep-alive counter for periodic heartbeats
         heartbeat_interval = 15  # seconds
@@ -61,7 +80,9 @@ async def import_status_generator(user_id: str, import_id: str) -> AsyncGenerato
                         yield f"event: {event_type}\ndata: {data}\n\n"
 
                         # Close connection on terminal events
-                        if event_type in ("import_completed", "import_failed"):
+                        # - subscriptions_completed: full flow complete (import + subscriptions)
+                        # - import_failed: import failed, no subscriptions will run
+                        if event_type in ("subscriptions_completed", "import_failed"):
                             logger.info(f"Terminal event received, closing SSE: {event_type}")
                             break
                     except json.JSONDecodeError:
@@ -106,9 +127,11 @@ async def stream_import_status(import_id: str, request: Request):
     - import_progress: Progress update with percentage
     - import_completed: Import finished successfully
     - import_failed: Import failed with error message
+    - subscriptions_started: Subscription detection has begun
+    - subscriptions_completed: Subscription detection finished
     - heartbeat: Keep-alive ping (every 15 seconds)
 
-    The connection automatically closes after receiving import_completed
+    The connection automatically closes after receiving subscriptions_completed
     or import_failed events.
 
     Args:
