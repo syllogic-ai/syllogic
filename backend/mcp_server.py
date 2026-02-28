@@ -12,9 +12,17 @@ Usage:
         fastmcp run mcp_server.py
 """
 from app.mcp.server import mcp
+from starlette.responses import JSONResponse
 
 # HTTP app for uvicorn deployment
 app = mcp.http_app()
+
+
+async def health(_request):
+    return JSONResponse({"status": "healthy", "service": "mcp"})
+
+
+app.add_route("/health", health, methods=["GET"])
 
 if __name__ == "__main__":
     # Run in stdio mode for Claude Desktop

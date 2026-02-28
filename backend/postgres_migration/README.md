@@ -19,6 +19,14 @@ This directory contains database administration and migration tools for PostgreS
   - Encrypts `accounts.external_id` and `csv_imports.file_path`
   - Optional plaintext cutover: add `--clear-plaintext`
 
+- **`run_encryption_upgrade.py`** - One-command migration/backfill orchestrator
+  - Run with: `python postgres_migration/run_encryption_upgrade.py --batch-size 500`
+  - Validates encryption key configuration
+  - Runs backfill using `backfill_encrypted_fields.py`
+  - Prints coverage counters for `accounts` and `csv_imports`
+  - Exits non-zero when coverage is incomplete
+  - Supports `--dry-run` and `--clear-plaintext`
+
 ## Usage
 
 All scripts should be run from the `backend` directory:
@@ -37,6 +45,15 @@ python postgres_migration/backfill_encrypted_fields.py --batch-size 500
 
 # Optional cutover step (clear plaintext columns after validation)
 python postgres_migration/backfill_encrypted_fields.py --batch-size 500 --clear-plaintext
+
+# One-command upgrade for existing installs (recommended)
+python postgres_migration/run_encryption_upgrade.py --batch-size 500
+
+# Dry-run coverage check
+python postgres_migration/run_encryption_upgrade.py --batch-size 500 --dry-run
+
+# Optional cutover: clear plaintext after validation window
+python postgres_migration/run_encryption_upgrade.py --batch-size 500 --clear-plaintext
 ```
 
 ## Note

@@ -151,6 +151,9 @@ After deploy, set these **Shared Variables** in Railway (do not hardcode secrets
 - `POSTGRES_PASSWORD` (required)
 - `BETTER_AUTH_SECRET` (required)
 - `INTERNAL_AUTH_SECRET` (required)
+- `DATA_ENCRYPTION_KEY_CURRENT` (recommended in production)
+- `DATA_ENCRYPTION_KEY_PREVIOUS` (optional, for key rotation fallback)
+- `DATA_ENCRYPTION_KEY_ID` (recommended, for example `k1`)
 - `OPENAI_API_KEY` (optional, enables AI categorization)
 - `LOGO_DEV_API_KEY` (optional, enables company logo search)
 
@@ -166,6 +169,34 @@ Template note: this button links to the Railway one-click deploy URL (no secrets
 
 Image tag policy: prefer pinned release tags (`vX.Y.Z`) for published templates
 instead of `:edge`.
+
+### Existing-Install Encryption Upgrade
+
+For existing environments with legacy plaintext rows, run this once from the backend service shell:
+
+```bash
+python postgres_migration/run_encryption_upgrade.py --batch-size 500
+```
+
+This validates encryption configuration, runs backfill, prints coverage counters, and exits non-zero if coverage is incomplete.
+
+Optional:
+
+```bash
+# Check coverage without writing changes
+python postgres_migration/run_encryption_upgrade.py --batch-size 500 --dry-run
+
+# Clear plaintext after your validation window
+python postgres_migration/run_encryption_upgrade.py --batch-size 500 --clear-plaintext
+```
+
+### Production Release Checklist
+
+1. Confirm target image tag/digest on each Railway service (prefer pinned `vX.Y.Z`).
+2. Confirm app deploy logs show successful `node scripts/migrate.js`.
+3. Run `python postgres_migration/run_encryption_upgrade.py --batch-size 500` for upgraded environments.
+4. Confirm MCP health at `/health` returns `200` with `{"status":"healthy","service":"mcp"}`.
+5. Confirm no decrypt errors in backend logs during smoke tests.
 
 ### Prerequisites
 

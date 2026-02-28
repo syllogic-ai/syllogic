@@ -31,6 +31,8 @@ python tests/test_transaction_import.py
 python tests/test_categorizer.py
 python tests/test_subscription_identifier.py
 python tests/test_data_encryption.py
+python tests/test_encryption_upgrade.py
+python tests/test_mcp_server_health.py
 python tests/test_account_sync_encryption.py
 ```
 
@@ -40,6 +42,8 @@ python tests/test_account_sync_encryption.py
 - `test_categorizer.py` - Tests the categorization API (single and batch)
 - `test_subscription_identifier.py` - Tests subscription detection functionality
 - `test_data_encryption.py` - Tests AES-GCM encryption, key rotation fallback, and blind index generation
+- `test_encryption_upgrade.py` - Tests encryption upgrade script coverage + exit-code behavior
+- `test_mcp_server_health.py` - Verifies MCP `/health` is public while transport stays auth-protected
 - `test_account_sync_encryption.py` - Validates account sync dedupe still works with encrypted `external_id`
 
 ## CI/CD

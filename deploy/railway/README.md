@@ -81,6 +81,7 @@ Railway can use the healthcheck from the compose file, but you can also set it i
 
 - **app**: `/`
 - **backend**: `/health`
+- **mcp**: `/health`
 
 ## 3. Alternative: Use Railway Plugins for Postgres & Redis
 
@@ -164,7 +165,49 @@ Recommended process:
 
 Railway's `${{shared.VAR}}` syntax is only supported in environment variables, not in `image` fields.
 
-## 9. Template Guarantees
+## 9. Existing-Install Encryption Upgrade
+
+For environments that already contain plaintext `accounts.external_id` or `csv_imports.file_path` values, run a one-command upgrade from the **backend** service shell:
+
+```bash
+python postgres_migration/run_encryption_upgrade.py --batch-size 500
+```
+
+What it does:
+- validates `DATA_ENCRYPTION_KEY_CURRENT` and `DATA_ENCRYPTION_KEY_ID`
+- runs the encrypted field backfill
+- prints coverage counters for accounts/csv imports
+- exits non-zero if coverage is incomplete
+
+Optional:
+
+```bash
+# Coverage check without writing
+python postgres_migration/run_encryption_upgrade.py --batch-size 500 --dry-run
+
+# Clear plaintext columns after validation window
+python postgres_migration/run_encryption_upgrade.py --batch-size 500 --clear-plaintext
+```
+
+## 10. Release Operator Checklist
+
+Use this gate before and after a production deploy:
+
+1. Confirm target artifact
+   - Railway services point to the intended image tag/digest (prefer pinned `vX.Y.Z`).
+2. Confirm migration success
+   - `app` deploy logs include successful `node scripts/migrate.js` completion.
+3. Confirm encryption coverage (for upgraded environments)
+   - Run `python postgres_migration/run_encryption_upgrade.py --batch-size 500`.
+   - Command exits `0` with zero missing-encryption counters.
+4. Confirm MCP health
+   - `mcp` healthcheck path is `/health`.
+   - `GET /health` returns `200` with `{"status":"healthy","service":"mcp"}`.
+5. Confirm runtime stability
+   - app/account sync and assets pages load.
+   - no decryption errors in backend logs.
+
+## 11. Template Guarantees
 
 This Railway template guarantees:
 
@@ -177,7 +220,7 @@ This Railway template guarantees:
   - `app` -> `/app/public/uploads`
 - No Docker Compose-only orchestration assumptions (`depends_on`, `container_name`).
 
-## 10. Compliance Checklist (Railway Best Practices)
+## 12. Compliance Checklist (Railway Best Practices)
 
 Use this checklist before publishing template changes:
 
@@ -201,7 +244,7 @@ Use this checklist before publishing template changes:
    - Published template images pinned to release tags.
    - Docs updated when variable contract or service wiring changes.
 
-## 11. Validation Procedure
+## 13. Validation Procedure
 
 ### Static validation
 
@@ -225,6 +268,7 @@ Use this checklist before publishing template changes:
    - `beat` logs show Celery beat boot
    - `app` logs show migrations then Next.js boot
    - `backend` logs show API process listening on expected internal port
+   - `mcp` health endpoint returns `200` on `/health`
    - `app` healthcheck passes and confirms write access to `/app/public/uploads`
 4. Connectivity
    - `app` reaches backend via private networking URL
