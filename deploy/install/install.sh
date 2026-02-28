@@ -66,9 +66,40 @@ BETTER_AUTH_SECRET="$(openssl rand -hex 32)"
 INTERNAL_AUTH_SECRET="$(openssl rand -hex 32)"
 DATA_ENCRYPTION_KEY_CURRENT="$(openssl rand -base64 32)"
 
-printf "Deployment mode [public/lan] (default: public): "
-read -r DEPLOY_MODE </dev/tty || true
-DEPLOY_MODE="${DEPLOY_MODE:-public}"
+# ── Configuration ──────────────────────────────────────────────
+# Accept config via env vars for non-interactive (curl | bash) use.
+# For interactive use, the script prompts when values are missing.
+#
+#   DEPLOY_MODE   — "public" (default) or "lan"
+#   DOMAIN        — required for public mode (e.g. finance.example.com)
+#   ACME_EMAIL    — optional, for Let's Encrypt
+#
+# Examples:
+#   # Non-interactive public:
+#   DOMAIN=finance.example.com curl ... | sudo bash
+#
+#   # Non-interactive LAN:
+#   DEPLOY_MODE=lan curl ... | sudo bash
+# ───────────────────────────────────────────────────────────────
+
+prompt() {
+  local var_name="$1" prompt_text="$2" default="${3:-}"
+  # If already set via env, use that value
+  if [[ -n "${!var_name:-}" ]]; then
+    return
+  fi
+  # Try interactive prompt via /dev/tty
+  if [[ -t 0 ]] || [[ -e /dev/tty ]]; then
+    printf "%s" "$prompt_text" >/dev/tty 2>/dev/null || true
+    read -r "$var_name" </dev/tty 2>/dev/null || true
+  fi
+  # Apply default if still empty
+  if [[ -z "${!var_name:-}" ]]; then
+    eval "$var_name=\"$default\""
+  fi
+}
+
+prompt DEPLOY_MODE "Deployment mode [public/lan] (default: lan): " "lan"
 if [[ "$DEPLOY_MODE" != "public" && "$DEPLOY_MODE" != "lan" ]]; then
   echo "[install] Invalid mode '$DEPLOY_MODE'. Use 'public' or 'lan'."
   exit 1
@@ -76,33 +107,36 @@ fi
 
 APP_URL=""
 CADDY_ADDRESS=""
-ACME_EMAIL=""
+ACME_EMAIL="${ACME_EMAIL:-}"
 
 if [[ "$DEPLOY_MODE" == "public" ]]; then
-  printf "Domain (required, e.g. finance.example.com): "
-  read -r DOMAIN </dev/tty || true
-  DOMAIN="${DOMAIN:-}"
-  if [[ -z "$DOMAIN" ]]; then
-    echo "[install] Public mode requires a domain so TLS can be enabled."
+  prompt DOMAIN "Domain (required, e.g. finance.example.com): " ""
+  if [[ -z "${DOMAIN:-}" ]]; then
+    echo "[install] Public mode requires a domain. Set DOMAIN env var or use 'lan' mode:"
+    echo "  DOMAIN=finance.example.com curl -fsSL ... | sudo bash"
+    echo "  DEPLOY_MODE=lan curl -fsSL ... | sudo bash"
     exit 1
   fi
 
-  printf "ACME email (for Let's Encrypt): "
-  read -r ACME_EMAIL </dev/tty || true
-  ACME_EMAIL="${ACME_EMAIL:-}"
+  prompt ACME_EMAIL "ACME email (for Let's Encrypt): " ""
   APP_URL="https://${DOMAIN}"
   CADDY_ADDRESS="${DOMAIN}"
   PORT_LINES="HTTP_PORT=8080
 HTTPS_PORT=443"
 else
-  # HTTP-only mode for LAN/dev only.
   APP_URL="http://localhost:8080"
   CADDY_ADDRESS=":80"
   PORT_LINES="HTTP_PORT=8080"
-  echo "[install] LAN mode selected. This is HTTP-only and not suitable for public internet exposure."
+  echo "[install] LAN mode selected. HTTP-only — not suitable for public internet exposure."
 fi
 
-cat > "$INSTALL_DIR/.env" <<EOF
+# Only write .env if one doesn't already exist (preserve config on upgrades)
+if [[ -f "$INSTALL_DIR/.env" ]]; then
+  echo "[install] Existing .env found — preserving. Updating APP_VERSION only."
+  sed -i.bak "s/^APP_VERSION=.*/APP_VERSION=${VERSION}/" "$INSTALL_DIR/.env"
+  rm -f "$INSTALL_DIR/.env.bak"
+else
+  cat > "$INSTALL_DIR/.env" <<EOF
 APP_VERSION=${VERSION}
 APP_URL=${APP_URL}
 BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
@@ -136,6 +170,7 @@ DATA_ENCRYPTION_KEY_ID=k1
 # Company logo lookup (logo.dev)
 # LOGO_DEV_API_KEY=pk-...
 EOF
+fi
 
 echo "[install] Starting services..."
 cd "$INSTALL_DIR"
@@ -145,13 +180,14 @@ docker compose --env-file .env -f docker-compose.yml up -d
 echo
 echo "[install] Done."
 echo "- Config: $INSTALL_DIR/.env"
-echo "- Stack:  docker compose --env-file .env -f docker-compose.yml ps"
-echo "- Verify: $INSTALL_DIR/deploy/install/post-install-check.sh $INSTALL_DIR"
+echo "- Stack:  cd $INSTALL_DIR && docker compose --env-file .env -f docker-compose.yml ps"
 echo
 if [[ "$DEPLOY_MODE" == "public" ]]; then
   echo "Open: https://${DOMAIN}"
 else
-  echo "LAN mode (HTTP-only) enabled. For public deployment, switch to domain + TLS by editing .env:"
+  echo "Open: http://<your-ip>:8080"
+  echo
+  echo "To switch to public mode with TLS, edit $INSTALL_DIR/.env:"
   echo "  APP_URL=https://finance.example.com"
   echo "  CADDY_ADDRESS=finance.example.com"
   echo "  ACME_EMAIL=you@example.com"
