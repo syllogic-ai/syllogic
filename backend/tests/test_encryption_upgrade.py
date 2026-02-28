@@ -85,6 +85,12 @@ def test_main_exit_codes() -> None:
     ):
         assert main(["--batch-size", "100", "--dry-run"]) == 0
 
+    with patch(
+        "postgres_migration.run_encryption_upgrade.run_upgrade",
+        return_value=(backfill_result, _coverage(accounts_missing_encryption=2)),
+    ):
+        assert main(["--batch-size", "100", "--dry-run"]) == 0
+
     print("✓ main exit code checks")
 
 

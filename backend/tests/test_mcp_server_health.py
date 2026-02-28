@@ -54,8 +54,7 @@ def test_mcp_transport_rejects_unauthenticated_requests() -> None:
     mcp_path = _resolve_mcp_route_path()
     response = client.get(mcp_path)
 
-    assert response.status_code != 200
-    assert response.status_code != 404
+    assert response.status_code in {401, 403}
     print("✓ MCP transport rejects unauthenticated requests")
 
 

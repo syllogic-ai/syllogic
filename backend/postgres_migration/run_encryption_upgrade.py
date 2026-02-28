@@ -186,6 +186,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     _print_summary(backfill_result, coverage)
 
+    if args.dry_run:
+        print(
+            "Dry-run completed. Coverage reflects the pre-upgrade state because all "
+            "writes were rolled back."
+        )
+        return 0
+
     if not coverage_is_complete(coverage, require_plaintext_cleared=args.clear_plaintext):
         print(
             "Encryption upgrade is incomplete. "
@@ -194,10 +201,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    if args.dry_run:
-        print("Dry-run completed with full coverage.")
-    else:
-        print("Encryption upgrade completed successfully.")
+    print("Encryption upgrade completed successfully.")
     return 0
 
 
