@@ -1,27 +1,47 @@
-# Syllogic
+![Syllogic](https://pub-9a7afb92aeda47c8a8856a83903f29d1.r2.dev/syllogic/syllogic/syllogic-finance-banner.png)
 
-> Open-source personal finance platform with AI-powered categorization and bank sync.
+<p align="center">
+  <h1 align="center"><b>Syllogic</b></h1>
+  <p align="center">
+    Simple, beautiful wealth management.
+    <br />
+    Open-source. Self-hosted.
+    <br />
+    <br />
+    <a href="https://github.com/syllogic-ai/personal-finance-app">GitHub</a>
+    ·
+    <a href="https://github.com/syllogic-ai/personal-finance-app/issues">Issues</a>
+    ·
+    <a href="#railway-one-click">Deploy</a>
+  </p>
+</p>
 
-[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
-[![Docker](https://img.shields.io/badge/Docker-GHCR-blue?logo=docker)](https://github.com/orgs/syllogic-ai/packages)
-[![Deploy on Railway](https://img.shields.io/badge/Deploy-Railway-blueviolet?logo=railway)](https://railway.com/deploy/N98lwA?referralCode=25KFsK&utm_medium=integration&utm_source=template&utm_campaign=generic)
+<p align="center">
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="License" />
+  </a>
+  <a href="https://github.com/orgs/syllogic-ai/packages">
+    <img src="https://img.shields.io/badge/Docker-GHCR-blue?logo=docker" alt="Docker" />
+  </a>
+  <a href="https://railway.com/deploy/N98lwA?referralCode=25KFsK&utm_medium=integration&utm_source=template&utm_campaign=generic">
+    <img src="https://img.shields.io/badge/Deploy-Railway-blueviolet?logo=railway" alt="Deploy on Railway" />
+  </a>
+</p>
 
-[Self-Host](#self-hosted-docker) · [Deploy to Railway](#railway-one-click) · [Contributing](CONTRIBUTING.md)
+## About Syllogic
 
-<!-- TODO: Add screenshot of dashboard -->
-
----
+Syllogic is an open-source wealth management platform that gives you a complete picture of your finances — balances, spending, subscriptions, and trends — all in one place. Connect your bank accounts, let AI handle categorization, and keep your data on your own infrastructure.
 
 ## Features
 
-- **Financial Dashboard** — real-time balances, spending patterns, and financial health overview
-- **AI Categorization** — automatic transaction categorization and merchant enrichment via OpenAI
-- **Bank Sync** — connect your bank accounts for automated transaction import
-- **Subscription Tracking** — monitor recurring payments with company logo integration
-- **Category Analytics** — interactive charts and spending breakdowns
-- **Transaction Linking** — link transactions with reimbursements for bill splitting
-- **CSV Import/Export** — bulk import and export transaction data
-- **Dark Mode** — full dark mode support
+**Financial Dashboard** — real-time balances, spending patterns, and financial health overview.<br/>
+**AI Categorization** — automatic transaction categorization and merchant enrichment via OpenAI.<br/>
+**Bank Sync** — connect your bank accounts for automated transaction import.<br/>
+**Subscription Tracking** — monitor recurring payments with company logo integration.<br/>
+**Category Analytics** — interactive charts and spending breakdowns.<br/>
+**Transaction Linking** — link transactions with reimbursements for bill splitting.<br/>
+**CSV Import/Export** — bulk import and export transaction data.<br/>
+**Dark Mode** — full dark mode support.
 
 ## Quick Start
 
@@ -76,8 +96,6 @@ For full Railway setup details, see [`deploy/railway/README.md`](deploy/railway/
 
 ## Configuration
 
-### Essential Environment Variables
-
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `POSTGRES_PASSWORD` | PostgreSQL password | Yes |
@@ -93,37 +111,13 @@ Full variable reference is available in [`deploy/compose/.env.example`](deploy/c
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Frontend (Next.js)                                         │
-│  - Server Actions + Drizzle ORM (all CRUD)                  │
-│  - BetterAuth (authentication)                              │
-│  - shadcn/ui + Recharts (UI/charts)                         │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-              ┌───────────▼───────────┐
-              │  PostgreSQL (shared)  │
-              └───────────┬───────────┘
-                          │
-┌─────────────────────────▼───────────────────────────────────┐
-│  Backend (Python/FastAPI)                                   │
-│  - Open banking + data integrations                         │
-│  - Transaction enrichment & categorization                  │
-│  - Celery + Redis (cron jobs)                               │
-└─────────────────────────────────────────────────────────────┘
-```
+- Next.js 16+ (TypeScript, Drizzle ORM, BetterAuth, shadcn/ui, Recharts)
+- FastAPI (SQLAlchemy 2.0, Celery + Redis, OpenAI)
+- PostgreSQL 16, Redis 7, Docker Compose
 
-### Tech Stack
-
-**Frontend:** Next.js 16+, TypeScript, Drizzle ORM, BetterAuth, shadcn/ui, Recharts, TanStack Query
-
-**Backend:** FastAPI, SQLAlchemy 2.0, Celery + Redis, OpenAI
-
-**Infrastructure:** PostgreSQL 16, Redis 7, Docker Compose
+Both services share a single PostgreSQL database. The frontend handles all CRUD via Server Actions; the backend handles data enrichment, bank sync, and background jobs.
 
 ## Development
-
-For local development, see the [Contributing Guide](CONTRIBUTING.md).
 
 Quick start for contributors:
 
@@ -133,11 +127,7 @@ cd personal-finance-app
 ./scripts/dev-up.sh --local
 ```
 
-This starts PostgreSQL and Redis in Docker, runs migrations, and leaves you ready to start the frontend and backend from source.
-
-## Contributing
-
-Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, code style guidelines, and PR process.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for full setup instructions and code style guidelines.
 
 ## License
 
