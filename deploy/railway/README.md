@@ -14,8 +14,8 @@ Keep secrets in Railway Shared Variables, not in the URL.
 Use v1 for compatibility while v2 is rolled out in parallel.
 
 Reference docs:
-- `/Users/gianniskotsas/.codex/worktrees/67f5/personal-finance-app/docs/deployment-matrix.md`
-- `/Users/gianniskotsas/.codex/worktrees/67f5/personal-finance-app/deploy/railway/V1_TO_V2_MIGRATION.md`
+- `docs/deployment-matrix.md`
+- `deploy/railway/V1_TO_V2_MIGRATION.md`
 
 ## 1. Import (V1 Image Template)
 
@@ -250,7 +250,7 @@ Use this gate before and after a production deploy:
    - app/account sync and assets pages load.
    - no decryption errors in backend logs.
 6. Confirm deployment contract gate
-   - run `/Users/gianniskotsas/.codex/worktrees/67f5/personal-finance-app/scripts/verify-deploy-contract.sh`.
+   - run `scripts/verify-deploy-contract.sh`.
 7. Confirm rollback readiness
    - previous release/service config can be restored if the new deploy regresses.
 

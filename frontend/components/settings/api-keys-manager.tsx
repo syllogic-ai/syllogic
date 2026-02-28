@@ -205,11 +205,11 @@ export function ApiKeysManager({ initialKeys }: ApiKeysManagerProps) {
     ? JSON.stringify(
         {
           mcpServers: {
-            "personal-finance": {
+            "syllogic": {
               command: "python",
               args: ["-m", "app.mcp.server"],
               env: {
-                PERSONAL_FINANCE_API_KEY: createdKey,
+                SYLLOGIC_API_KEY: createdKey,
               },
             },
           },

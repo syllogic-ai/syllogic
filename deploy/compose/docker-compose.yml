@@ -40,7 +40,7 @@ services:
 
   # One-shot DB migrations (Drizzle SQL migrations).
   migrate:
-    image: ghcr.io/syllogic-ai/personal-finance-frontend:${APP_VERSION:-edge}
+    image: ghcr.io/syllogic-ai/syllogic-frontend:${APP_VERSION:-edge}
     container_name: syllogic-migrate
     environment:
       DATABASE_URL: ${DATABASE_URL}
@@ -51,7 +51,7 @@ services:
     restart: "no"
 
   backend:
-    image: ghcr.io/syllogic-ai/personal-finance-backend:${APP_VERSION:-edge}
+    image: ghcr.io/syllogic-ai/syllogic-backend:${APP_VERSION:-edge}
     container_name: syllogic-backend
     environment:
       DATABASE_URL: ${DATABASE_URL}
@@ -88,7 +88,7 @@ services:
   # Internal service port is fixed at 8001.
   # External host port defaults to 8001 and is configurable via MCP_PORT.
   mcp:
-    image: ghcr.io/syllogic-ai/personal-finance-backend:${APP_VERSION:-edge}
+    image: ghcr.io/syllogic-ai/syllogic-backend:${APP_VERSION:-edge}
     container_name: syllogic-mcp
     command: uvicorn mcp_server:app --host 0.0.0.0 --port 8001
     environment:
@@ -110,7 +110,7 @@ services:
     restart: unless-stopped
 
   worker:
-    image: ghcr.io/syllogic-ai/personal-finance-backend:${APP_VERSION:-edge}
+    image: ghcr.io/syllogic-ai/syllogic-backend:${APP_VERSION:-edge}
     container_name: syllogic-worker
     command: celery -A celery_app worker --loglevel=info --concurrency=4
     environment:
@@ -134,7 +134,7 @@ services:
     restart: unless-stopped
 
   beat:
-    image: ghcr.io/syllogic-ai/personal-finance-backend:${APP_VERSION:-edge}
+    image: ghcr.io/syllogic-ai/syllogic-backend:${APP_VERSION:-edge}
     container_name: syllogic-beat
     command: celery -A celery_app beat --loglevel=info
     environment:
@@ -158,7 +158,7 @@ services:
     restart: unless-stopped
 
   app:
-    image: ghcr.io/syllogic-ai/personal-finance-frontend:${APP_VERSION:-edge}
+    image: ghcr.io/syllogic-ai/syllogic-frontend:${APP_VERSION:-edge}
     container_name: syllogic-app
     environment:
       NODE_ENV: production

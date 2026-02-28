@@ -6,9 +6,9 @@
     An open-source, minimal, wealth management app
     <br />
     <br />
-    <a href="https://github.com/syllogic-ai/personal-finance-app">GitHub</a>
+    <a href="https://github.com/syllogic-ai/syllogic">GitHub</a>
     ·
-    <a href="https://github.com/syllogic-ai/personal-finance-app/issues">Issues</a>
+    <a href="https://github.com/syllogic-ai/syllogic/issues">Issues</a>
     ·
     <a href="#railway-one-click">Deploy</a>
   </p>
@@ -46,15 +46,15 @@ Syllogic is an open-source wealth management platform that gives you a complete 
 **One-liner** (requires root, Docker, and Docker Compose):
 
 ```bash
-curl -fsSL https://github.com/syllogic-ai/personal-finance-app/releases/download/v1.0.0/install.sh | sudo bash -s -- v1.0.0
+curl -fsSL https://github.com/syllogic-ai/syllogic/releases/download/v1.0.0/install.sh | sudo bash -s -- v1.0.0
 ```
 
 **Or manually:**
 
 1. Clone and configure:
    ```bash
-   git clone https://github.com/syllogic-ai/personal-finance-app.git
-   cd personal-finance-app
+   git clone https://github.com/syllogic-ai/syllogic.git
+   cd syllogic
    cp deploy/compose/.env.example deploy/compose/.env
    # Edit deploy/compose/.env — set POSTGRES_PASSWORD, BETTER_AUTH_SECRET, INTERNAL_AUTH_SECRET
    ```
@@ -118,8 +118,8 @@ Both services share a single PostgreSQL database. The frontend handles all CRUD 
 Quick start for contributors:
 
 ```bash
-git clone https://github.com/syllogic-ai/personal-finance-app.git
-cd personal-finance-app
+git clone https://github.com/syllogic-ai/syllogic.git
+cd syllogic
 ./scripts/dev-up.sh --local
 ```
 

@@ -58,7 +58,7 @@ services:
   # ── Backend API (FastAPI) ─────────────────────────────────
   backend:
     # Template maintainers: replace :edge with a pinned release tag for production templates.
-    image: ghcr.io/syllogic-ai/personal-finance-backend:edge
+    image: ghcr.io/syllogic-ai/syllogic-backend:edge
     environment:
       NODE_ENV: production
       PORT: "8080"
@@ -76,7 +76,7 @@ services:
 
   # ── MCP Server (FastMCP) ──────────────────────────────────
   mcp:
-    image: ghcr.io/syllogic-ai/personal-finance-backend:edge
+    image: ghcr.io/syllogic-ai/syllogic-backend:edge
     command: uvicorn mcp_server:app --host 0.0.0.0 --port 8001
     healthcheck:
       test:
@@ -100,7 +100,7 @@ services:
 
   # ── Celery Worker ─────────────────────────────────────────
   worker:
-    image: ghcr.io/syllogic-ai/personal-finance-backend:edge
+    image: ghcr.io/syllogic-ai/syllogic-backend:edge
     command: celery -A celery_app worker --loglevel=info --concurrency=4
     environment:
       NODE_ENV: production
@@ -117,7 +117,7 @@ services:
 
   # ── Celery Beat (scheduler) ───────────────────────────────
   beat:
-    image: ghcr.io/syllogic-ai/personal-finance-backend:edge
+    image: ghcr.io/syllogic-ai/syllogic-backend:edge
     command: celery -A celery_app beat --loglevel=info
     environment:
       NODE_ENV: production
@@ -136,7 +136,7 @@ services:
   # Migrations run automatically at startup before Next.js boot.
   # Keep PORT=3000 so Railway proxy routes traffic correctly.
   app:
-    image: ghcr.io/syllogic-ai/personal-finance-frontend:edge
+    image: ghcr.io/syllogic-ai/syllogic-frontend:edge
     command: /bin/sh -lc "mkdir -p /app/public/uploads/profile /app/public/uploads/logos /app/public/uploads/imports && chmod -R u+rwX,g+rwX /app/public/uploads && node scripts/migrate.js && exec node_modules/.bin/next start -p 3000 -H 0.0.0.0"
     healthcheck:
       test:

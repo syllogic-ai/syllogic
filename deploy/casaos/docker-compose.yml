@@ -64,7 +64,7 @@ services:
     restart: "no"
 
   migrate:
-    image: ghcr.io/syllogic-ai/personal-finance-frontend:${APP_VERSION:-edge}
+    image: ghcr.io/syllogic-ai/syllogic-frontend:${APP_VERSION:-edge}
     environment:
       PUID: ${PUID:-1000}
       PGID: ${PGID:-1000}
@@ -76,7 +76,7 @@ services:
     restart: "no"
 
   backend:
-    image: ghcr.io/syllogic-ai/personal-finance-backend:${APP_VERSION:-edge}
+    image: ghcr.io/syllogic-ai/syllogic-backend:${APP_VERSION:-edge}
     environment:
       PUID: ${PUID:-1000}
       PGID: ${PGID:-1000}
@@ -127,7 +127,7 @@ services:
             en_US: OpenAI API key (optional).
 
   mcp:
-    image: ghcr.io/syllogic-ai/personal-finance-backend:${APP_VERSION:-edge}
+    image: ghcr.io/syllogic-ai/syllogic-backend:${APP_VERSION:-edge}
     command: uvicorn mcp_server:app --host 0.0.0.0 --port 8001
     environment:
       PROCESS_TYPE: mcp
@@ -158,7 +158,7 @@ services:
             en_US: MCP external port (maps to internal 8001).
 
   worker:
-    image: ghcr.io/syllogic-ai/personal-finance-backend:${APP_VERSION:-edge}
+    image: ghcr.io/syllogic-ai/syllogic-backend:${APP_VERSION:-edge}
     command: celery -A celery_app worker --loglevel=info --concurrency=4
     environment:
       PUID: ${PUID:-1000}
@@ -180,7 +180,7 @@ services:
     restart: unless-stopped
 
   beat:
-    image: ghcr.io/syllogic-ai/personal-finance-backend:${APP_VERSION:-edge}
+    image: ghcr.io/syllogic-ai/syllogic-backend:${APP_VERSION:-edge}
     command: celery -A celery_app beat --loglevel=info
     environment:
       PUID: ${PUID:-1000}
@@ -202,7 +202,7 @@ services:
     restart: unless-stopped
 
   app:
-    image: ghcr.io/syllogic-ai/personal-finance-frontend:${APP_VERSION:-edge}
+    image: ghcr.io/syllogic-ai/syllogic-frontend:${APP_VERSION:-edge}
     environment:
       PUID: ${PUID:-1000}
       PGID: ${PGID:-1000}
@@ -357,7 +357,7 @@ x-casaos:
   developer: syllogic-ai
   author: syllogic-ai
   category: Finance
-  website: https://github.com/syllogic-ai/personal-finance-app
+  website: https://github.com/syllogic-ai/syllogic
   index: /
   tips:
     before_install:

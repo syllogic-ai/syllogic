@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="syllogic-ai/personal-finance-app"
+REPO="syllogic-ai/syllogic"
 
 if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
   echo "Please run as root (e.g. sudo ./install.sh vX.Y.Z)"
