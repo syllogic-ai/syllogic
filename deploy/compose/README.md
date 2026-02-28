@@ -17,9 +17,9 @@ This directory contains the production-grade Docker Compose bundle:
      - `BETTER_AUTH_SECRET`: `openssl rand -hex 32`
      - `INTERNAL_AUTH_SECRET`: `openssl rand -hex 32`
      - `DATA_ENCRYPTION_KEY_CURRENT` (optional, recommended): `openssl rand -base64 32`
-   - `APP_URL` defaults to `http://localhost:8080`.
+   - `APP_URL` defaults to `http://localhost:8080` for LAN/dev mode.
    - `HTTP_PORT` defaults to `8080` in the example env for a conflict-free local default.
-   - For a real domain, set `APP_URL`, `CADDY_ADDRESS`, and `ACME_EMAIL`.
+   - For public internet exposure, set `APP_URL`, `CADDY_ADDRESS`, and `ACME_EMAIL` so TLS is enabled.
 3. Start:
 
 ```bash
@@ -71,6 +71,7 @@ docker compose \
 - File uploads and CSV imports are stored in `public/uploads` and persisted via the `uploads_data` Docker volume.
 - This bundle defaults to **Postgres 16**. If you have an existing local Docker volume created by **Postgres 15**, you must dump/restore to upgrade (or temporarily set `POSTGRES_IMAGE=postgres:15-alpine` to keep running on 15).
 - We set explicit `container_name` values to avoid the `*-1` suffix. This makes container names stable, but it also means you **cannot** scale services with `--scale`, and you shouldn't run multiple Syllogic stacks on the same Docker host without changing names.
+- See `/Users/gianniskotsas/.codex/worktrees/67f5/personal-finance-app/docs/deployment-matrix.md` for the cross-environment contract (local/self-host/Railway v1+v2).
 
 ## MCP Server (Enabled By Default)
 
@@ -108,6 +109,8 @@ docker compose --env-file deploy/compose/.env -f deploy/compose/docker-compose.y
 docker compose --env-file deploy/compose/.env -f deploy/compose/docker-compose.yml up -d
 ```
 
+Do not use `edge` for internet-facing production.
+
 ## Encryption Upgrade for Existing Data
 
 If you're upgrading an existing install to the encrypted-field rollout, run from the backend container or backend working directory:
@@ -134,6 +137,8 @@ From repository root:
 
 - Local infra + migrations for source development: `./scripts/dev-up.sh --local`
 - Full prebuilt self-host stack: `./scripts/prod-up.sh`
+- Local source-compose smoke validation: `./scripts/local-smoke.sh`
+- VPS post-install verification: `deploy/install/post-install-check.sh /opt/syllogic`
 
 ## Railway Deployment
 

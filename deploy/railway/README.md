@@ -6,10 +6,23 @@
 
 Keep secrets in Railway Shared Variables, not in the URL.
 
-## 1. Import
+## Template Channels
+
+1. `railway-v1` (current button): image-based compose template in this folder.
+2. `railway-v2` (target): GitHub-source services for `app/backend/worker/beat/mcp` plus Railway Postgres/Redis plugins.
+
+Use v1 for compatibility while v2 is rolled out in parallel.
+
+Reference docs:
+- `/Users/gianniskotsas/.codex/worktrees/67f5/personal-finance-app/docs/deployment-matrix.md`
+- `/Users/gianniskotsas/.codex/worktrees/67f5/personal-finance-app/deploy/railway/V1_TO_V2_MIGRATION.md`
+
+## 1. Import (V1 Image Template)
 
 Drag `docker-compose.yml` (this directory) onto your Railway project canvas.
 Railway will create services for: **postgres**, **redis**, **backend**, **mcp**, **worker**, **beat**, **app**.
+
+For v2 source-template setup, see section "Source-Service Config Mapping (V2)" below.
 
 ## 2. Post-Import Configuration
 
@@ -154,16 +167,46 @@ If your existing app service is mounted at `/data/uploads`, profile images can f
 | `uploads-init` | Replaced by app startup (`mkdir -p /app/public/uploads`) and `RAILWAY_RUN_UID=0` on Railway |
 | `migrate` | Replaced by app startup command (`node scripts/migrate.js`) |
 
-## 8. Updating
+## 8. Updating and Channel Policy
 
-Use pinned release tags for published templates and avoid `:edge` in production.
+Channel policy:
+1. `edge` is development/testing only.
+2. `vX.Y.Z` is for production, self-host, and published templates.
 
-Recommended process:
+V1 update process:
 1. Pin each image to a release tag (e.g. `vX.Y.Z`) in compose.
 2. Re-import compose (or update each Railway service image tag in dashboard).
 3. Redeploy all app services (`app`, `backend`, `worker`, `beat`, `mcp`).
 
 Railway's `${{shared.VAR}}` syntax is only supported in environment variables, not in `image` fields.
+
+### Source-Service Config Mapping (V2)
+
+When running Railway source services from this monorepo, set root directories and config paths explicitly.
+
+| Service | Root directory | Config path | Notes |
+|---|---|---|---|
+| `app` | `/frontend` | `/frontend/railway.toml` | Runs predeploy migrations + app start command. |
+| `backend` | `/backend` | `/backend/railway.api.toml` | API start + `/health` check. |
+| `worker` | `/backend` | `/backend/railway.worker.toml` | Celery worker start command. |
+| `beat` | `/backend` | `/backend/railway.beat.toml` | Celery beat start command. |
+| `mcp` | `/backend` | `/backend/railway.mcp.toml` | MCP start + `/health` check. |
+
+For v2, use Railway Postgres/Redis plugins and wire `DATABASE_URL`/`REDIS_URL` from plugin references.
+
+### V1 -> V2 Migration Guide (Template Consumers)
+
+1. Create a new environment or project for v2 validation.
+2. Stand up source services with the config mapping table above.
+3. Use Railway Postgres/Redis plugins in v2.
+4. Reuse shared secrets (`BETTER_AUTH_SECRET`, `INTERNAL_AUTH_SECRET`, encryption keys).
+5. Run smoke flow:
+   - app signup/login
+   - account sync/import
+   - worker/beat activity
+   - MCP `/health` = `200`, unauthenticated `/mcp` rejected
+6. Cut over public traffic after validation.
+7. Keep v1 available for rollback during a stabilization window.
 
 ## 9. Existing-Install Encryption Upgrade
 
@@ -206,6 +249,10 @@ Use this gate before and after a production deploy:
 5. Confirm runtime stability
    - app/account sync and assets pages load.
    - no decryption errors in backend logs.
+6. Confirm deployment contract gate
+   - run `/Users/gianniskotsas/.codex/worktrees/67f5/personal-finance-app/scripts/verify-deploy-contract.sh`.
+7. Confirm rollback readiness
+   - previous release/service config can be restored if the new deploy regresses.
 
 ## 11. Template Guarantees
 

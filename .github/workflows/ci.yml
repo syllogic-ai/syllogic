@@ -70,6 +70,9 @@ jobs:
       working-directory: ./frontend
       run: pnpm install --frozen-lockfile
 
+    - name: Verify deployment contract
+      run: ./scripts/verify-deploy-contract.sh
+
     - name: Lint frontend
       working-directory: ./frontend
       run: pnpm lint
@@ -172,6 +175,7 @@ jobs:
         echo "- ✅ Encryption upgrade orchestrator: Tested" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ MCP health/auth behavior: Tested" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ Encrypted account sync dedupe: Tested" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Deployment contract checks: Passed" >> $GITHUB_STEP_SUMMARY
 
     - name: Stop backend server
       if: always()
