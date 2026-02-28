@@ -44,7 +44,7 @@ export function HelpButton() {
           <SidebarMenuButton
             tooltip="Help"
             onClick={() => (isOpen ? closeOverview() : openOverview(config.page))}
-            className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+            className="data-[popup-open]:bg-sidebar-accent data-[popup-open]:text-sidebar-accent-foreground"
           >
             <RiInformationLine className="shrink-0" />
             {!isCollapsed && <span>Help</span>}

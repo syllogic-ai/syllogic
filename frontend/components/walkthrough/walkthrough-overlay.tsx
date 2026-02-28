@@ -19,14 +19,18 @@ export function WalkthroughOverlay({ step }: WalkthroughOverlayProps) {
     }
     const el = document.querySelector(`[data-walkthrough="${step.target}"]`);
     if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-      requestAnimationFrame(() => {
-        const rect = el.getBoundingClientRect();
-        setTargetRect(rect);
-      });
+      const rect = el.getBoundingClientRect();
+      setTargetRect(rect);
     } else {
       setTargetRect(null);
     }
+  }, [step?.target]);
+
+  // Scroll target into view only when step changes (not on scroll/resize)
+  useEffect(() => {
+    if (!step?.target) return;
+    const el = document.querySelector(`[data-walkthrough="${step.target}"]`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [step?.target]);
 
   useEffect(() => {
@@ -47,18 +51,17 @@ export function WalkthroughOverlay({ step }: WalkthroughOverlayProps) {
     };
   }, [step?.target, updateTargetRect]);
 
-  if (!step) return null;
-
   return (
     <AnimatePresence>
-      <motion.div
-        key={step.id}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[9998] pointer-events-none"
-        aria-hidden
-      >
+      {step && (
+        <motion.div
+          key={step.id}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[9998] pointer-events-none"
+          aria-hidden
+        >
         {/* Backdrop with cutout */}
         <svg
           className="absolute inset-0 w-full h-full pointer-events-auto"
@@ -87,6 +90,7 @@ export function WalkthroughOverlay({ step }: WalkthroughOverlayProps) {
           />
         </svg>
       </motion.div>
+      )}
     </AnimatePresence>
   );
 }

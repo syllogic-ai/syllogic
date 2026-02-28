@@ -65,11 +65,15 @@ export const useWalkthroughStore = create<WalkthroughState>()(
         const isLastStep = currentStepIndex >= steps.length - 1;
 
         if (isLastStep) {
+          const pages = get().completedPages;
+          const nextPages = pages.includes(currentPage)
+            ? pages
+            : [...pages, currentPage];
           set({
             isActive: false,
             currentPage: null,
             currentStepIndex: 0,
-            completedPages: [...get().completedPages, currentPage],
+            completedPages: nextPages,
           });
         } else {
           set({ currentStepIndex: currentStepIndex + 1 });

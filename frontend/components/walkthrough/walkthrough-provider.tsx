@@ -8,6 +8,7 @@ import { WalkthroughAutoStart } from "./walkthrough-auto-start";
 import {
   useWalkthroughStore,
   PAGE_CONFIGS,
+  getPageConfig,
 } from "./walkthrough-store";
 
 export function WalkthroughProvider({ children }: { children: React.ReactNode }) {
@@ -24,14 +25,7 @@ export function WalkthroughProvider({ children }: { children: React.ReactNode })
   // Close walkthrough when navigating to a different page
   useEffect(() => {
     if (isActive && currentPage) {
-      const routeMap: Record<string, string> = {
-        "/": "home",
-        "/transactions": "transactions",
-        "/subscriptions": "subscriptions",
-        "/assets": "assets",
-        "/settings": "settings",
-      };
-      const expectedPage = routeMap[pathname];
+      const expectedPage = getPageConfig(pathname)?.page ?? null;
       if (expectedPage !== currentPage) {
         skipWalkthrough();
       }
