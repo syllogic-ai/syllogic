@@ -149,6 +149,25 @@ def run_checks() -> bool:
         )
         assert existing_day_skip.get("skipped"), "Expected populated seeded day to be skipped"
 
+        # Daily generation path should follow monthly optional-income cadence (0-1 per month).
+        account_by_name = {account.name: account for account in accounts}
+        category_by_name = {category.name: category for category in categories}
+        feb_days = [date(2025, 2, d) for d in range(1, 29)]
+        feb_preview = []
+        for day in feb_days:
+            feb_preview.extend(
+                service._build_transactions_for_day(  # noqa: SLF001 - intentional integration-level check
+                    user_id=user.id,
+                    account_by_name=account_by_name,
+                    category_by_name=category_by_name,
+                    day=day,
+                )
+            )
+        feb_freelance = sum(1 for tx in feb_preview if (tx.description or "") == "FREELANCE PROJECT PAYMENT")
+        feb_refunds = sum(1 for tx in feb_preview if (tx.description or "") == "CARD REFUND")
+        assert feb_freelance <= 1, f"Expected at most one freelance tx in daily path month, got {feb_freelance}"
+        assert feb_refunds <= 1, f"Expected at most one refund tx in daily path month, got {feb_refunds}"
+
         # Gap backfill should detect and fill missing calendar days.
         deleted_for_gap = db.query(Transaction).filter(
             Transaction.user_id == user.id,

@@ -1051,7 +1051,15 @@ class DemoSeedService:
                 end_date=end_date,
             )
 
-            if self.rng.random() < 0.35:
+            freelance_day = self._monthly_optional_event_day(
+                event_key="freelance",
+                year=year,
+                month=month,
+                probability=0.35,
+                day_start=9,
+                day_end=24,
+            )
+            if freelance_day is not None:
                 self._append_monthly_if_in_range(
                     transactions=transactions,
                     user_id=user_id,
@@ -1060,14 +1068,22 @@ class DemoSeedService:
                     amount=_decimal_from_range(self.rng, 700, 2200),
                     year=year,
                     month=month,
-                    day=self.rng.randint(9, 24),
+                    day=freelance_day,
                     description="FREELANCE PROJECT PAYMENT",
                     merchant="Client Studio",
                     start_date=start_date,
                     end_date=end_date,
                 )
 
-            if self.rng.random() < 0.28:
+            refund_day = self._monthly_optional_event_day(
+                event_key="refund",
+                year=year,
+                month=month,
+                probability=0.28,
+                day_start=5,
+                day_end=27,
+            )
+            if refund_day is not None:
                 self._append_monthly_if_in_range(
                     transactions=transactions,
                     user_id=user_id,
@@ -1076,7 +1092,7 @@ class DemoSeedService:
                     amount=_decimal_from_range(self.rng, 20, 140),
                     year=year,
                     month=month,
-                    day=self.rng.randint(5, 27),
+                    day=refund_day,
                     description="CARD REFUND",
                     merchant="Refund Processor",
                     start_date=start_date,
@@ -1278,7 +1294,15 @@ class DemoSeedService:
                 )
             )
 
-        if 9 <= day.day <= 24 and self.rng.random() < 0.35:
+        freelance_day = self._monthly_optional_event_day(
+            event_key="freelance",
+            year=day.year,
+            month=day.month,
+            probability=0.35,
+            day_start=9,
+            day_end=24,
+        )
+        if freelance_day is not None and day.day == freelance_day:
             transactions.append(
                 self._build_transaction(
                     user_id=user_id,
@@ -1291,7 +1315,15 @@ class DemoSeedService:
                 )
             )
 
-        if 5 <= day.day <= 27 and self.rng.random() < 0.28:
+        refund_day = self._monthly_optional_event_day(
+            event_key="refund",
+            year=day.year,
+            month=day.month,
+            probability=0.28,
+            day_start=5,
+            day_end=27,
+        )
+        if refund_day is not None and day.day == refund_day:
             transactions.append(
                 self._build_transaction(
                     user_id=user_id,
@@ -1304,7 +1336,6 @@ class DemoSeedService:
                 )
             )
 
-        self._inject_categorization_edge_cases(transactions, list(category_by_name.values()))
         transactions.sort(key=lambda tx: tx.booked_at)
         return transactions
 
@@ -1314,6 +1345,21 @@ class DemoSeedService:
         if self.rng.random() < usd_bias:
             return self.rng.choice(USD_DAILY_TEMPLATES)
         return self.rng.choice(EUR_DAILY_TEMPLATES)
+
+    def _monthly_optional_event_day(
+        self,
+        event_key: str,
+        year: int,
+        month: int,
+        probability: float,
+        day_start: int,
+        day_end: int,
+    ) -> Optional[int]:
+        """Return deterministic optional event day for the month, or None."""
+        month_rng = random.Random(f"{self.random_seed}:{event_key}:{year:04d}-{month:02d}")
+        if month_rng.random() >= probability:
+            return None
+        return month_rng.randint(day_start, day_end)
 
     def _append_monthly_if_in_range(
         self,

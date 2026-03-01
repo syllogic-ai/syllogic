@@ -7,6 +7,8 @@ import os
 from datetime import date, timedelta
 from typing import Optional
 
+from celery.exceptions import MaxRetriesExceededError
+
 from celery_app import celery_app
 from app.database import SessionLocal
 from app.services.demo_seed_service import DEMO_DEFAULT_START_DATE, DemoSeedService
@@ -47,6 +49,7 @@ def reset_demo_environment(
         }
 
     random_seed = int(os.getenv("DEMO_SEED_RANDOM_SEED", "42"))
+    today = date.today()
     session = SessionLocal()
     try:
         service = DemoSeedService(session, random_seed=random_seed)
@@ -54,7 +57,7 @@ def reset_demo_environment(
         summary = service.seed_for_user(
             user=user,
             start_date=DEMO_DEFAULT_START_DATE,
-            end_date=date.today(),
+            end_date=today,
             reset=True,
         )
 
@@ -68,7 +71,11 @@ def reset_demo_environment(
         return summary
     except Exception as exc:  # noqa: BLE001
         logger.exception("[DEMO_RESET] Failed demo reset: %s", exc)
-        raise
+        try:
+            raise self.retry(exc=exc, countdown=60)
+        except MaxRetriesExceededError:
+            logger.error("[DEMO_RESET] Max retries exceeded")
+            raise
     finally:
         session.close()
 
@@ -99,8 +106,9 @@ def append_previous_day_demo_transactions(
         }
 
     random_seed = int(os.getenv("DEMO_SEED_RANDOM_SEED", "42"))
-    coverage_end = date.today()
-    target_date = date.today() - timedelta(days=1)
+    today = date.today()
+    coverage_end = today
+    target_date = today - timedelta(days=1)
 
     session = SessionLocal()
     try:
@@ -125,6 +133,10 @@ def append_previous_day_demo_transactions(
         return summary
     except Exception as exc:  # noqa: BLE001
         logger.exception("[DEMO_DAILY] Failed daily append: %s", exc)
-        raise
+        try:
+            raise self.retry(exc=exc, countdown=60)
+        except MaxRetriesExceededError:
+            logger.error("[DEMO_DAILY] Max retries exceeded")
+            raise
     finally:
         session.close()
