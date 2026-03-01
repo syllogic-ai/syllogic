@@ -3,9 +3,10 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/utils";
-import { buildTransactionsDrilldownQuery } from "@/lib/dashboard/drilldown-query";
+import { buildCategorySpendingQuery } from "@/lib/category-spending/query-params";
 
 interface CategoryData {
   id: string | null;
@@ -67,20 +68,30 @@ export function SpendingByCategoryChart({
 }: SpendingByCategoryChartProps) {
   const router = useRouter();
 
-  const navigateToTransactions = React.useCallback(
+  const navigateToCategorySpending = React.useCallback(
     (categoryId: string | null) => {
       if (!categoryId) return;
-      const query = buildTransactionsDrilldownQuery({
-        categoryId,
+      const query = buildCategorySpendingQuery({
+        categoryIds: [categoryId],
         accountIds,
         dateFrom,
         dateTo,
         horizon,
       });
-      router.push(`/transactions?${query}`);
+      router.push(query ? `/category-spending?${query}` : "/category-spending");
     },
     [accountIds, dateFrom, dateTo, horizon, router]
   );
+
+  const navigateToCategorySpendingAll = React.useCallback(() => {
+    const query = buildCategorySpendingQuery({
+      accountIds,
+      dateFrom,
+      dateTo,
+      horizon,
+    });
+    router.push(query ? `/category-spending?${query}` : "/category-spending");
+  }, [accountIds, dateFrom, dateTo, horizon, router]);
 
   if (isLoading) {
     return <SpendingByCategoryChartSkeleton />;
@@ -99,7 +110,7 @@ export function SpendingByCategoryChart({
           </span>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 pb-3">
         {displayData.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No expense data for this period
@@ -115,7 +126,7 @@ export function SpendingByCategoryChart({
                 key={category.id || index}
                 className="space-y-1.5 rounded-md px-2 py-1 transition-colors hover:bg-muted/30 cursor-pointer"
                 onClick={() => {
-                  navigateToTransactions(categoryKey);
+                  navigateToCategorySpending(categoryKey);
                 }}
               >
                 <div className="flex items-center justify-between text-sm">
@@ -138,6 +149,17 @@ export function SpendingByCategoryChart({
           })
         )}
       </CardContent>
+      <div className="px-6 pb-4">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 border-white/70 bg-transparent px-2 text-xs text-white hover:bg-white/10 hover:text-white"
+          onClick={navigateToCategorySpendingAll}
+        >
+          View All
+        </Button>
+      </div>
     </Card>
   );
 }

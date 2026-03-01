@@ -120,6 +120,7 @@ export default async function HomePage({ searchParams }: PageProps) {
             data={data.spendingByCategory.categories}
             total={data.spendingByCategory.total}
             currency={data.balance.currency}
+            limit={4}
             periodTitle={data.periodLabel.title}
             accountIds={accountIds}
             dateFrom={dateFromParam}
