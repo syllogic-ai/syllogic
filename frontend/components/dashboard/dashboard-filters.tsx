@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { type DateRange } from "react-day-picker";
 import { differenceInCalendarDays, format } from "date-fns";
 import {
@@ -37,6 +37,7 @@ const HORIZON_OPTIONS = [
 export function DashboardFilters({ accounts }: DashboardFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const [accountsOpen, setAccountsOpen] = React.useState(false);
 
   useFilterPersistence();
@@ -81,9 +82,11 @@ export function DashboardFilters({ accounts }: DashboardFiltersProps) {
   const pushParams = React.useCallback(
     (nextParams: URLSearchParams) => {
       const queryString = nextParams.toString();
-      router.push(queryString ? `?${queryString}` : "/", { scroll: false });
+      router.push(queryString ? `${pathname}?${queryString}` : pathname, {
+        scroll: false,
+      });
     },
-    [router]
+    [pathname, router]
   );
 
   const updateSelectedAccounts = React.useCallback(

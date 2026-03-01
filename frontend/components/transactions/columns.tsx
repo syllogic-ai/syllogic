@@ -1,6 +1,7 @@
 "use client";
 
 import { type ColumnDef } from "@tanstack/react-table";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import type { TransactionWithRelations } from "@/lib/actions/transactions";
@@ -12,6 +13,8 @@ import {
 } from "@/components/ui/tooltip";
 import { format } from "date-fns";
 import { AccountLogo } from "@/components/ui/account-logo";
+import { parseGlobalFiltersFromSearchParams } from "@/lib/filters/global-filters";
+import { buildCategorySpendingQuery } from "@/lib/category-spending/query-params";
 
 function AccountCell({
   accountId,
@@ -49,6 +52,50 @@ function AccountCell({
       />
       <span className="truncate text-center">{accountName}</span>
     </button>
+  );
+}
+
+function CategoryCell({
+  transaction,
+  maxWidth,
+}: {
+  transaction: TransactionWithRelations;
+  maxWidth: number;
+}) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const displayCategory = transaction.category ?? transaction.categorySystem;
+
+  if (!displayCategory) {
+    return <div className="text-center text-muted-foreground">Uncategorized</div>;
+  }
+
+  return (
+    <div className="flex justify-center">
+      <button
+        type="button"
+        className="inline-flex items-center px-2 py-0.5 text-xs text-white truncate transition-opacity hover:opacity-90"
+        style={{
+          backgroundColor: displayCategory.color ?? "#6B7280",
+          maxWidth: `${maxWidth}px`,
+        }}
+        title={displayCategory.name}
+        onClick={(event) => {
+          event.stopPropagation();
+          const globalFilters = parseGlobalFiltersFromSearchParams(searchParams);
+          const query = buildCategorySpendingQuery({
+            categoryId: displayCategory.id,
+            accountIds: globalFilters.accountIds,
+            dateFrom: globalFilters.from,
+            dateTo: globalFilters.to,
+            horizon: globalFilters.horizon,
+          });
+          router.push(query ? `/category-spending?${query}` : "/category-spending");
+        }}
+      >
+        {displayCategory.name}
+      </button>
+    </div>
   );
 }
 
@@ -193,23 +240,12 @@ export const transactionColumns: ColumnDef<TransactionWithRelations>[] = [
     accessorKey: "category",
     header: () => <div className="text-center">Category</div>,
     cell: ({ row, column }) => {
-      const category = row.original.category;
       const columnSize = column.getSize();
-      return category ? (
-        <div className="flex justify-center">
-          <span
-            className="inline-flex items-center px-2 py-0.5 text-xs text-white truncate"
-            style={{ 
-              backgroundColor: category.color ?? "#6B7280",
-              maxWidth: `${columnSize}px`
-            }}
-            title={category.name}
-          >
-            {category.name}
-          </span>
-        </div>
-      ) : (
-        <div className="text-center text-muted-foreground">Uncategorized</div>
+      return (
+        <CategoryCell
+          transaction={row.original}
+          maxWidth={columnSize}
+        />
       );
     },
     size: 140,
@@ -373,3 +409,19 @@ export const transactionColumns: ColumnDef<TransactionWithRelations>[] = [
     },
   },
 ];
+
+export const categorySpendingTransactionColumns: ColumnDef<TransactionWithRelations>[] =
+  transactionColumns.filter((column) => {
+    const key = String(
+      ("accessorKey" in column ? column.accessorKey : undefined) ??
+        ("id" in column ? column.id : "")
+    );
+
+    return ![
+      "merchant",
+      "recurringTransaction",
+      "transactionLink",
+      "pending",
+      "includeInAnalytics",
+    ].includes(key);
+  });

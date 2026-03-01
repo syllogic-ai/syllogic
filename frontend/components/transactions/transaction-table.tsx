@@ -2,7 +2,12 @@
 
 import * as React from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { type OnChangeFn, type PaginationState, type SortingState } from "@tanstack/react-table";
+import {
+  type ColumnDef,
+  type OnChangeFn,
+  type PaginationState,
+  type SortingState,
+} from "@tanstack/react-table";
 import { DataTable } from "@/components/ui/data-table";
 import type {
   FilteredTransactionTotals,
@@ -34,6 +39,9 @@ interface TransactionTableProps {
   onDeleteTransaction?: (id: string) => void;
   onBulkUpdate?: (transactionIds: string[], categoryId: string | null) => void;
   action?: React.ReactNode;
+  basePath?: string;
+  showToolbar?: boolean;
+  columns?: ColumnDef<TransactionWithRelations>[];
 }
 
 const MANAGED_QUERY_KEYS = [
@@ -92,6 +100,9 @@ export function TransactionTable({
   onDeleteTransaction,
   onBulkUpdate,
   action,
+  basePath = "/transactions",
+  showToolbar = true,
+  columns,
 }: TransactionTableProps) {
   const [selectedTransaction, setSelectedTransaction] = React.useState<TransactionWithRelations | null>(null);
   const searchParams = useSearchParams();
@@ -114,11 +125,11 @@ export function TransactionTable({
 
       const merged = mergeManagedQueryParams(currentParams, nextState);
       const queryString = merged.toString();
-      router.replace(queryString ? `/transactions?${queryString}` : "/transactions", {
+      router.replace(queryString ? `${basePath}?${queryString}` : basePath, {
         scroll: false,
       });
     },
-    [router, searchParams]
+    [basePath, router, searchParams]
   );
 
   const sortingState = React.useMemo<SortingState>(
@@ -207,10 +218,10 @@ export function TransactionTable({
     const params = new URLSearchParams(searchParams.toString());
     params.delete("tx");
     const queryString = params.toString();
-    router.replace(queryString ? `/transactions?${queryString}` : "/transactions", {
+    router.replace(queryString ? `${basePath}?${queryString}` : basePath, {
       scroll: false,
     });
-  }, [router, searchParams, transactions]);
+  }, [basePath, router, searchParams, transactions]);
 
   const handleRowClick = (transaction: TransactionWithRelations) => {
     setSelectedTransaction(transaction);
@@ -226,7 +237,7 @@ export function TransactionTable({
   return (
     <>
       <DataTable
-        columns={transactionColumns}
+        columns={columns ?? transactionColumns}
         data={transactions}
         onRowClick={handleRowClick}
         enableColumnResizing={true}
@@ -240,37 +251,41 @@ export function TransactionTable({
         onPaginationStateChange={handlePaginationStateChange}
         sortingState={sortingState}
         onSortingStateChange={handleSortingStateChange}
-        toolbar={() => (
-          <TransactionFilters
-            filters={queryState}
-            categories={categories}
-            accounts={accounts}
-            recurringOptions={recurringOptions}
-            action={action}
-            onFiltersChange={updateQueryState}
-            onClearFilters={() =>
-              updateQueryState(
-                {
-                  page: 1,
-                  search: undefined,
-                  category: [],
-                  accountIds: [],
-                  status: [],
-                  subscription: [],
-                  analytics: [],
-                  minAmount: undefined,
-                  maxAmount: undefined,
-                  from: undefined,
-                  to: undefined,
-                  horizon: 30,
-                  sort: "bookedAt",
-                  order: "desc",
-                },
-                { resetPage: false }
+        toolbar={
+          showToolbar
+            ? () => (
+                <TransactionFilters
+                  filters={queryState}
+                  categories={categories}
+                  accounts={accounts}
+                  recurringOptions={recurringOptions}
+                  action={action}
+                  onFiltersChange={updateQueryState}
+                  onClearFilters={() =>
+                    updateQueryState(
+                      {
+                        page: 1,
+                        search: undefined,
+                        category: [],
+                        accountIds: [],
+                        status: [],
+                        subscription: [],
+                        analytics: [],
+                        minAmount: undefined,
+                        maxAmount: undefined,
+                        from: undefined,
+                        to: undefined,
+                        horizon: 30,
+                        sort: "bookedAt",
+                        order: "desc",
+                      },
+                      { resetPage: false }
+                    )
+                  }
+                />
               )
-            }
-          />
-        )}
+            : undefined
+        }
         pagination={(table) => (
           <TransactionPagination
             table={table}
