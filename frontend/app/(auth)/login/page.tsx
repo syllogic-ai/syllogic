@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
@@ -33,7 +33,7 @@ type LoginFormData = z.infer<typeof loginSchema>;
 
 const truthyParamValues = new Set(["1", "true", "yes", "on"]);
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
@@ -118,7 +118,8 @@ export default function LoginPage() {
             )}
             {demoModeRequested && !demoPassword && (
               <div className="bg-muted p-3 text-sm">
-                Demo mode link detected, but demo credentials are not configured on this deployment.
+                Demo mode link detected, but demo credentials are not configured
+                on this deployment.
               </div>
             )}
             <Field>
@@ -163,5 +164,25 @@ export default function LoginPage() {
         </form>
       </CardContent>
     </Card>
+  );
+}
+
+function LoginPageFallback() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Login to your account</CardTitle>
+        <CardDescription>Loading login form...</CardDescription>
+      </CardHeader>
+      <CardContent />
+    </Card>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginPageFallback />}>
+      <LoginPageContent />
+    </Suspense>
   );
 }
