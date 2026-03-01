@@ -84,6 +84,25 @@ After deploy, set these **Shared Variables** in Railway:
 
 For full Railway setup details, see [`deploy/railway/README.md`](deploy/railway/README.md).
 
+### Shared Demo Login Link
+
+For public demo environments, you can share a login URL that prefills demo credentials:
+
+`https://your-app-domain.com/login?demo=1`
+
+Set these frontend environment variables on that deployment:
+
+- `NEXT_PUBLIC_DEMO_EMAIL`
+- `NEXT_PUBLIC_DEMO_PASSWORD`
+
+Optional auth throttling (recommended for public demos):
+
+- `AUTH_RATE_LIMIT_ENABLED=true`
+- `AUTH_RATE_LIMIT_WINDOW_MS=60000`
+- `AUTH_RATE_LIMIT_MAX_ATTEMPTS_PER_WINDOW=30`
+- `DEMO_AUTH_RATE_LIMIT_MAX_ATTEMPTS_PER_WINDOW=10`
+- `DEMO_AUTH_RATE_LIMIT_GLOBAL_MAX_ATTEMPTS_PER_WINDOW=120`
+
 ### Other Deployment Methods
 
 | Method | Use case | Docs |
