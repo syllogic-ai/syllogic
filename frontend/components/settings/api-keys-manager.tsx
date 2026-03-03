@@ -50,7 +50,7 @@ import {
   createApiKey,
   deleteApiKey,
 } from "@/lib/actions/api-keys";
-import type { ApiKey } from "@/lib/db/schema";
+import { stringifyClaudeDesktopMcpConfig } from "@/lib/mcp/claude-desktop-config";
 
 interface ApiKeysManagerProps {
   initialKeys: Array<{
@@ -202,20 +202,9 @@ export function ApiKeysManager({ initialKeys }: ApiKeysManagerProps) {
   };
 
   const configSnippet = createdKey
-    ? JSON.stringify(
-        {
-          mcpServers: {
-            "syllogic": {
-              command: "python",
-              args: ["-m", "app.mcp.server"],
-              env: {
-                SYLLOGIC_API_KEY: createdKey,
-              },
-            },
-          },
-        },
-        null,
-        2
+    ? stringifyClaudeDesktopMcpConfig(
+        createdKey,
+        process.env.NEXT_PUBLIC_MCP_SERVER_URL
       )
     : "";
 
@@ -409,6 +398,16 @@ export function ApiKeysManager({ initialKeys }: ApiKeysManagerProps) {
               <Label>Claude Desktop Configuration</Label>
               <p className="text-xs text-muted-foreground">
                 Add this to your Claude Desktop config file:
+              </p>
+              <p className="text-xs text-muted-foreground">
+                This uses a local{" "}
+                <code className="rounded bg-muted px-1 font-mono">npx</code>{" "}
+                bridge{" ("}
+                <code className="rounded bg-muted px-1 font-mono">
+                  mcp-remote
+                </code>
+                {") "}to connect Claude Desktop to the remote Syllogic MCP
+                server.
               </p>
               <div className="relative min-w-0">
                 <pre className="max-h-48 overflow-x-auto overflow-y-auto rounded bg-muted p-3 pr-10 text-xs whitespace-pre">

@@ -23,14 +23,18 @@ def _require_app() -> None:
         raise RuntimeError("fastmcp is not installed in this Python environment.")
 
 
-def _resolve_mcp_route_path() -> str:
+def _get_mcp_route_candidates() -> list[str]:
     _require_app()
     candidates: list[str] = []
     for route in app.routes:
         path = getattr(route, "path", "")
         if "mcp" in path:
             candidates.append(path)
+    return candidates
 
+
+def _resolve_mcp_route_path() -> str:
+    candidates = _get_mcp_route_candidates()
     if not candidates:
         raise AssertionError("No MCP transport route found on the MCP app.")
 
@@ -58,6 +62,14 @@ def test_mcp_transport_rejects_unauthenticated_requests() -> None:
     print("✓ MCP transport rejects unauthenticated requests")
 
 
+def test_mcp_transport_route_exposes_mcp_path() -> None:
+    _require_app()
+    candidates = _get_mcp_route_candidates()
+
+    assert "/mcp" in candidates
+    print("✓ MCP transport includes /mcp route")
+
+
 if __name__ == "__main__":
     if app is None:
         print("Skipping MCP health/auth tests because fastmcp is not installed.")
@@ -65,4 +77,5 @@ if __name__ == "__main__":
 
     test_health_endpoint_is_public()
     test_mcp_transport_rejects_unauthenticated_requests()
+    test_mcp_transport_route_exposes_mcp_path()
     print("All MCP health/auth tests passed.")
