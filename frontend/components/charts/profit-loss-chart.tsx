@@ -18,13 +18,13 @@ import {
   ChartTooltip,
 } from "@/components/ui/chart";
 import { formatCurrency, cn } from "@/lib/utils";
-import { format, parseISO } from "date-fns";
 
 interface IncomeExpenseDataPoint {
   month: string;
   monthDate: string;
   income: number;
   expenses: number;
+  tooltipLabel?: string;
 }
 
 interface ProfitLossChartProps {
@@ -89,7 +89,7 @@ function CustomTooltip({ active, payload, label, currency }: CustomTooltipProps)
     return null;
   }
 
-  const monthLabel = label ? format(parseISO(label), "MMMM yy") : "";
+  const monthLabel = payload[0]?.payload.tooltipLabel ?? label ?? "";
   const income = payload.find((p) => p.dataKey === "income")?.value ?? 0;
   const expenses = payload.find((p) => p.dataKey === "expenses")?.value ?? 0;
   const net = income - expenses;
@@ -167,12 +167,12 @@ export function ProfitLossChart({
               vertical={false}
             />
             <XAxis
-              dataKey="monthDate"
+              dataKey="month"
               axisLine={false}
               tickLine={false}
               tick={({ x, y, payload }) => {
-                const date = parseISO(payload.value);
-                const label = format(date, "MMM yy");
+                const axisLabel =
+                  typeof payload.value === "string" ? payload.value : String(payload.value);
                 return (
                   <g transform={`translate(${x},${y})`}>
                     <text
@@ -183,7 +183,7 @@ export function ProfitLossChart({
                       className="fill-muted-foreground"
                       fontSize={12}
                     >
-                      <tspan x="0">{label}</tspan>
+                      <tspan x="0">{axisLabel}</tspan>
                     </text>
                   </g>
                 );
