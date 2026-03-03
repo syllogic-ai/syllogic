@@ -53,6 +53,7 @@ import {
 import { stringifyClaudeDesktopMcpConfig } from "@/lib/mcp/claude-desktop-config";
 
 interface ApiKeysManagerProps {
+  mcpServerUrl: string;
   initialKeys: Array<{
     id: string;
     name: string;
@@ -109,7 +110,7 @@ function isExpired(date: Date | null): boolean {
   return new Date(date) < new Date();
 }
 
-export function ApiKeysManager({ initialKeys }: ApiKeysManagerProps) {
+export function ApiKeysManager({ initialKeys, mcpServerUrl }: ApiKeysManagerProps) {
   const router = useRouter();
   const [keys, setKeys] = useState(initialKeys);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -202,10 +203,7 @@ export function ApiKeysManager({ initialKeys }: ApiKeysManagerProps) {
   };
 
   const configSnippet = createdKey
-    ? stringifyClaudeDesktopMcpConfig(
-        createdKey,
-        process.env.NEXT_PUBLIC_MCP_SERVER_URL
-      )
+    ? stringifyClaudeDesktopMcpConfig(createdKey, mcpServerUrl)
     : "";
 
   return (

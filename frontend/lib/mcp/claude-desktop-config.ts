@@ -1,4 +1,4 @@
-const DEFAULT_MCP_SERVER_URL = "https://mcp.syllogic.ai/mcp";
+export const DEFAULT_MCP_SERVER_URL = "https://mcp.syllogic.ai/mcp";
 
 type ClaudeDesktopServerConfig = {
   command: "npx";

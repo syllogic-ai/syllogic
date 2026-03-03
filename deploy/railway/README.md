@@ -40,6 +40,7 @@ remove them to avoid overriding compose-derived values.
 | `DATA_ENCRYPTION_KEY_ID` | `k1` | key identifier embedded in encrypted payloads |
 | `OPENAI_API_KEY` | (optional) | Your OpenAI key |
 | `LOGO_DEV_API_KEY` | (optional) | Your Logo.dev key |
+| `MCP_SERVER_URL` | (optional) | Override Claude Desktop snippet MCP URL shown in Settings (defaults to URL-derived value) |
 
 > The compose file derives `DATABASE_URL`, `REDIS_URL`, `APP_URL`, and `BACKEND_URL`
 > directly in service environment blocks using Railway service references. Do not set those
