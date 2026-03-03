@@ -5,6 +5,11 @@ import { accounts, transactions, categories, users, properties, vehicles, accoun
 import { getAuthenticatedSession } from "@/lib/auth-helpers";
 import { eq, sql, gte, lte, and, desc, inArray, isNull } from "drizzle-orm";
 import { buildConservativeSankey } from "@/lib/dashboard/sankey";
+import {
+  buildIncomeExpenseBuckets,
+  resolveIncomeExpenseGrouping,
+  type IncomeExpenseGrouping,
+} from "@/lib/dashboard/income-expense-buckets";
 
 async function getUserCurrency(userId: string): Promise<string> {
   const result = await db
@@ -447,7 +452,12 @@ export async function getIncomeHistory(startDate: Date, endDate: Date, accountId
   }));
 }
 
-export async function getIncomeExpenseData(startDate: Date, endDate: Date, accountIds?: string[]) {
+export async function getIncomeExpenseData(
+  startDate: Date,
+  endDate: Date,
+  accountIds?: string[],
+  grouping?: IncomeExpenseGrouping
+) {
   const session = await getAuthenticatedSession();
 
   if (!session?.user?.id) {
@@ -466,14 +476,14 @@ export async function getIncomeExpenseData(startDate: Date, endDate: Date, accou
     conditions.push(inArray(transactions.accountId, normalizedAccountIds));
   }
 
-  // Get monthly income and expenses in the selected range
+  // Get daily income and expenses in the selected range,
+  // then bucket at day/week/month granularity in JS.
   // Filter by category type to exclude transfers
   // For linked transactions: use net amount via subquery
   try {
     const result = await db
     .select({
-      year: sql<number>`EXTRACT(YEAR FROM ${transactions.bookedAt})::int`,
-      month: sql<number>`EXTRACT(MONTH FROM ${transactions.bookedAt})::int`,
+      date: sql<string>`DATE(${transactions.bookedAt})`,
       income: sql<string>`COALESCE(SUM(
         CASE
           WHEN ${categories.categoryType} = 'income' THEN
@@ -528,72 +538,22 @@ export async function getIncomeExpenseData(startDate: Date, endDate: Date, accou
     )
     .where(and(...conditions))
     .groupBy(
-      sql`EXTRACT(YEAR FROM ${transactions.bookedAt})`,
-      sql`EXTRACT(MONTH FROM ${transactions.bookedAt})`
+      sql`DATE(${transactions.bookedAt})`
     )
     .orderBy(
-      sql`EXTRACT(YEAR FROM ${transactions.bookedAt})`,
-      sql`EXTRACT(MONTH FROM ${transactions.bookedAt})`
+      sql`DATE(${transactions.bookedAt})`
     );
 
-    const monthNames = [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec",
-    ];
-
-    const startMonth = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-    const endMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
-
-    // Create array of months in selected range
-    const months: { month: string; monthDate: string; income: number; expenses: number }[] = [];
-    for (
-      let date = new Date(startMonth);
-      date <= endMonth;
-      date = new Date(date.getFullYear(), date.getMonth() + 1, 1)
-    ) {
-      const monthLabel = monthNames[date.getMonth()];
-      const monthDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`;
-      months.push({
-        month: monthLabel,
-        monthDate,
-        income: 0,
-        expenses: 0,
-      });
-    }
-
-    // Fill in the data
-    for (const row of result) {
-      // Find the corresponding month in our array
-      const rowDate = new Date(row.year, row.month - 1, 1);
-      const monthIndex = months.findIndex((_, i) => {
-        const targetDate = new Date(
-          startMonth.getFullYear(),
-          startMonth.getMonth() + i,
-          1
-        );
-        return (
-          targetDate.getFullYear() === rowDate.getFullYear() &&
-          targetDate.getMonth() === rowDate.getMonth()
-        );
-      });
-
-      if (monthIndex !== -1) {
-        months[monthIndex].income = parseFloat(row.income);
-        months[monthIndex].expenses = parseFloat(row.expenses);
-      }
-    }
-
-    return months;
+    return buildIncomeExpenseBuckets({
+      startDate,
+      endDate,
+      grouping,
+      dailyData: result.map((row) => ({
+        date: row.date,
+        income: parseFloat(row.income),
+        expenses: parseFloat(row.expenses),
+      })),
+    });
   } catch (error: unknown) {
     const normalizedError = errorToLogContext(error);
     console.error("[getIncomeExpenseData] Query failed:", {
@@ -1223,6 +1183,8 @@ export async function getDashboardData(filters: DashboardFilters = {}) {
     startDate.setHours(0, 0, 0, 0);
   }
 
+  const incomeExpenseGrouping = resolveIncomeExpenseGrouping(startDate, endDate);
+
   const currency = await getUserCurrency(session.user.id);
 
   const [
@@ -1243,7 +1205,7 @@ export async function getDashboardData(filters: DashboardFilters = {}) {
     getPeriodIncome(startDate, endDate, normalizedAccountIds),
     getSpendingHistory(startDate, endDate, normalizedAccountIds),
     getIncomeHistory(startDate, endDate, normalizedAccountIds),
-    getIncomeExpenseData(startDate, endDate, normalizedAccountIds),
+    getIncomeExpenseData(startDate, endDate, normalizedAccountIds, incomeExpenseGrouping),
     getSpendingByCategory(startDate, endDate, normalizedAccountIds, 5),
     getAssetsOverview(),
     getSankeyData(startDate, endDate, normalizedAccountIds),
