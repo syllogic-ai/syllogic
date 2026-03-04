@@ -225,9 +225,16 @@ cd frontend
 pnpm dev
 ```
 
-**4. Open http://localhost:3000**
+**4. (Optional) Start the backend** (required for CSV import and other backend features):
 
-> **Note:** Local mode runs only infrastructure. CSV import and other backend features require starting the backend separately or using prebuilt mode.
+```bash
+cd backend
+uvicorn app.main:app --reload
+```
+
+**5. Open http://localhost:3000**
+
+> **Note:** Local mode runs only infrastructure. CSV import and other backend features require starting the backend (step 4) or using prebuilt mode.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for full setup instructions and code style guidelines.
 
