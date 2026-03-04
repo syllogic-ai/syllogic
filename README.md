@@ -52,6 +52,8 @@ curl -fsSL https://raw.githubusercontent.com/syllogic-ai/syllogic/main/deploy/in
 **Or manually:**
 
 1. Clone and configure:
+
+   **Linux/macOS:**
    ```bash
    git clone https://github.com/syllogic-ai/syllogic.git
    cd syllogic
@@ -59,9 +61,24 @@ curl -fsSL https://raw.githubusercontent.com/syllogic-ai/syllogic/main/deploy/in
    # Edit deploy/compose/.env — set POSTGRES_PASSWORD, BETTER_AUTH_SECRET, INTERNAL_AUTH_SECRET
    ```
 
+   **Windows (PowerShell):**
+   ```powershell
+   git clone https://github.com/syllogic-ai/syllogic.git
+   cd syllogic
+   copy deploy\compose\.env.example deploy\compose\.env
+   # Edit deploy\compose\.env — set POSTGRES_PASSWORD, BETTER_AUTH_SECRET, INTERNAL_AUTH_SECRET
+   ```
+
 2. Start:
+
+   **Linux/macOS:**
    ```bash
    ./scripts/prod-up.sh
+   ```
+
+   **Windows (PowerShell or CMD):**
+   ```powershell
+   .\scripts\prod-up.bat
    ```
 
 3. Open `http://localhost:8080` and create your account.
@@ -126,6 +143,16 @@ Optional auth throttling (recommended for public demos):
 
 Generate secrets with `openssl rand -hex 32`. For encryption keys: `openssl rand -base64 32`.
 
+### Optional Features Behavior
+
+**`OPENAI_API_KEY`** — AI-powered categorization via OpenAI (GPT-4o-mini by default).
+- **When set**: Transactions are categorized using the LLM for high accuracy.
+- **When not set**: Falls back to keyword-based matching (e.g., "Tesco" → Groceries, "Netflix" → Entertainment). The keyword matcher uses a 70% confidence threshold.
+
+**`LOGO_DEV_API_KEY`** — Company logo lookup via [logo.dev](https://logo.dev).
+- **When set**: Merchant logos are fetched and displayed for transactions and accounts.
+- **When not set**: No logos are shown; the feature is silently disabled.
+
 Full variable reference is available in [`deploy/compose/.env.example`](deploy/compose/.env.example).
 
 ## Architecture
@@ -140,11 +167,67 @@ Both services share a single PostgreSQL database. The frontend handles all CRUD 
 
 Quick start for contributors:
 
+### Option A: Prebuilt Mode (Recommended)
+
+Everything runs in Docker using prebuilt images. Easiest setup for full-stack testing.
+
+**1. Clone and configure:**
+
 ```bash
 git clone https://github.com/syllogic-ai/syllogic.git
 cd syllogic
-./scripts/dev-up.sh --local
+cp deploy/compose/.env.example deploy/compose/.env
+# Edit deploy/compose/.env — set INTERNAL_AUTH_SECRET, BETTER_AUTH_SECRET
+# Keep DATABASE_URL=postgresql://...@postgres:5432/... (Docker internal)
 ```
+
+**2. Start the stack:**
+
+```bash
+# Linux/macOS
+./scripts/dev-up.sh --prebuilt
+
+# Windows
+.\scripts\dev-up.bat prebuilt
+```
+
+**3. Open http://localhost:8080**
+
+### Option B: Local Mode
+
+Infrastructure runs in Docker, frontend runs on host. Best for frontend development with hot reload.
+
+**1. Clone and configure:**
+
+```bash
+git clone https://github.com/syllogic-ai/syllogic.git
+cd syllogic
+cp deploy/compose/.env.example deploy/compose/.env
+# Edit deploy/compose/.env — set INTERNAL_AUTH_SECRET, BETTER_AUTH_SECRET
+```
+
+**2. Start infrastructure:**
+
+```bash
+# Linux/macOS
+./scripts/dev-up.sh --local
+
+# Windows
+.\scripts\dev-up.bat local
+```
+
+This starts PostgreSQL, Redis, and Celery workers, installs dependencies, runs migrations, and creates `frontend/.env.local` with the required environment variables.
+
+**3. Start the Next.js dev server:**
+
+```bash
+cd frontend
+pnpm dev
+```
+
+**4. Open http://localhost:3000**
+
+> **Note:** Local mode runs only infrastructure. CSV import and other backend features require starting the backend separately or using prebuilt mode.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for full setup instructions and code style guidelines.
 

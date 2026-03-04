@@ -57,7 +57,9 @@ class CategoryMatcher:
     - Comprehensive logging for debugging
 
     Environment Variables:
-    - OPENAI_API_KEY: OpenAI API key for LLM categorization
+    - OPENAI_API_KEY: OpenAI API key for LLM categorization (optional)
+    - CATEGORIZATION_MIN_CONFIDENCE: Minimum confidence % for deterministic matching.
+        Defaults to 999.0 (disabled) when OPENAI_API_KEY is set, or 70.0 when not set.
     - CATEGORIZATION_LLM_MODEL: LLM model to use (default: gpt-4o-mini)
     - CATEGORIZATION_LLM_TEMPERATURE: Temperature for LLM (default: 0.1)
     - CATEGORIZATION_LLM_MAX_TOKENS: Max tokens for LLM response (default: 50)
@@ -75,8 +77,17 @@ class CategoryMatcher:
     """
 
     # Deterministic Matching Configuration
-    # Set to very high value to deactivate deterministic matching (effectively disabled)
-    MIN_CONFIDENCE_THRESHOLD = float(os.getenv("CATEGORIZATION_MIN_CONFIDENCE", "999.0"))  # Minimum % to match
+    # When OPENAI_API_KEY is set, default to 999.0 to prefer LLM categorization.
+    # When OPENAI_API_KEY is NOT set, default to 70.0 to enable keyword-based fallback.
+    # Can be overridden via CATEGORIZATION_MIN_CONFIDENCE environment variable.
+    _DEFAULT_CONFIDENCE_WITH_LLM = 999.0  # Effectively disables deterministic matching
+    _DEFAULT_CONFIDENCE_WITHOUT_LLM = 70.0  # Enables keyword matching as fallback
+    MIN_CONFIDENCE_THRESHOLD = float(
+        os.getenv(
+            "CATEGORIZATION_MIN_CONFIDENCE",
+            str(_DEFAULT_CONFIDENCE_WITH_LLM if os.getenv("OPENAI_API_KEY") else _DEFAULT_CONFIDENCE_WITHOUT_LLM)
+        )
+    )  # Minimum % confidence to accept a deterministic match
 
     # LLM Configuration (can be overridden via environment variables)
     LLM_MODEL = os.getenv("CATEGORIZATION_LLM_MODEL", "gpt-4o-mini")
