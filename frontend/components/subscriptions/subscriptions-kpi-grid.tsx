@@ -10,7 +10,7 @@ interface SubscriptionsKpiGridProps {
 
 export function SubscriptionsKpiGrid({ kpis }: SubscriptionsKpiGridProps) {
   return (
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="grid gap-4 md:grid-cols-3" data-walkthrough="walkthrough-kpis">
       <Card>
         <CardContent className="flex items-center justify-between p-6">
           <div className="space-y-1">

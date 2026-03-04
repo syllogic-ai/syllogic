@@ -5,6 +5,7 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { getOnboardingStatus, getOnboardingRedirectPath } from "@/lib/actions/onboarding";
 import { ImportStatusNotifier } from "@/components/import-status-notifier";
+import { WalkthroughProvider } from "@/components/walkthrough/walkthrough-provider";
 
 export default async function DashboardLayout({
   children,
@@ -35,9 +36,11 @@ export default async function DashboardLayout({
 
   return (
     <SidebarProvider defaultOpen={defaultSidebarOpen}>
-      <AppSidebar initialUser={session.user} />
-      <SidebarInset>{children}</SidebarInset>
-      <ImportStatusNotifier />
+      <WalkthroughProvider>
+        <AppSidebar initialUser={session.user} />
+        <SidebarInset>{children}</SidebarInset>
+        <ImportStatusNotifier />
+      </WalkthroughProvider>
     </SidebarProvider>
   );
 }

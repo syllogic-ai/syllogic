@@ -13,6 +13,7 @@ import {
   RiArrowRightSLine,
   RiArrowLeftSLine,
 } from "@remixicon/react";
+import { HelpButton } from "@/components/walkthrough/help-button";
 import { signOut, useSession } from "@/lib/auth-client";
 import {
   Sidebar,
@@ -218,6 +219,9 @@ export function AppSidebar({ initialUser }: AppSidebarProps) {
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
+          <SidebarMenuItem>
+            <HelpButton />
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

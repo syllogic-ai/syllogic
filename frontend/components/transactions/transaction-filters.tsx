@@ -577,7 +577,7 @@ export function TransactionFilters({
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <div className="relative w-64">
+          <div className="relative w-64" data-walkthrough="walkthrough-search">
             <RiSearchLine className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Search transactions..."
@@ -588,7 +588,10 @@ export function TransactionFilters({
           </div>
 
           <Popover>
-            <PopoverTrigger className="inline-flex h-8 items-center justify-center gap-2 whitespace-nowrap border border-input bg-transparent px-3 text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50">
+            <PopoverTrigger
+              data-walkthrough="walkthrough-filters"
+              className="inline-flex h-8 items-center justify-center gap-2 whitespace-nowrap border border-input bg-transparent px-3 text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+            >
               <RiFilter3Line className="h-4 w-4" />
               Filters
               {activeFilterCount > 0 && (
@@ -713,7 +716,9 @@ export function TransactionFilters({
             </PopoverContent>
           </Popover>
         </div>
+        <div data-walkthrough="walkthrough-import">
         {action}
+        </div>
       </div>
 
       {filterTags.length > 0 && (

@@ -52,6 +52,7 @@ interface DataTableProps<TData, TValue> {
   footer?: React.ReactNode;
   wrapperClassName?: string;
   tableContainerClassName?: string;
+  tableContainerProps?: React.HTMLAttributes<HTMLDivElement>;
 }
 
 export function DataTable<TData, TValue>({
@@ -78,6 +79,7 @@ export function DataTable<TData, TValue>({
   footer,
   wrapperClassName,
   tableContainerClassName,
+  tableContainerProps,
 }: DataTableProps<TData, TValue>) {
   const [uncontrolledSorting, setUncontrolledSorting] = React.useState<SortingState>([]);
   const resolvedSorting = sortingState ?? uncontrolledSorting;
@@ -150,7 +152,19 @@ export function DataTable<TData, TValue>({
   return (
     <div className={cn("w-full", wrapperClassName)}>
       {toolbar && <div className="shrink-0 mb-4">{toolbar(table)}</div>}
-      <div className={cn("overflow-auto rounded-md border relative", tableContainerClassName)}>
+      <div
+        className={cn(
+          "overflow-auto rounded-md border relative",
+          tableContainerClassName,
+          tableContainerProps?.className
+        )}
+        {...(tableContainerProps
+          ? (() => {
+              const { className, ...rest } = tableContainerProps;
+              return rest;
+            })()
+          : {})}
+      >
         <table className="w-full table-fixed caption-bottom text-xs">
           <TableHeader className="bg-muted sticky top-0 z-20 shadow-sm">
             {table.getHeaderGroups().map((headerGroup) => (

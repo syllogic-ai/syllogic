@@ -3,6 +3,9 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
 
+/** Module-level set for toast deduplication across all hook instances */
+const shownToastKeys = new Set<string>();
+
 /**
  * Import status event types from the SSE stream
  */
@@ -46,11 +49,27 @@ export interface ImportFailedEvent {
   timestamp: string;
 }
 
+export interface SubscriptionsStartedEvent {
+  type: "subscriptions_started";
+  import_id: string;
+  timestamp: string;
+}
+
+export interface SubscriptionsCompletedEvent {
+  type: "subscriptions_completed";
+  import_id: string;
+  matched_count: number;
+  detected_count: number;
+  timestamp: string;
+}
+
 export type ImportStatusEvent =
   | ImportStartedEvent
   | ImportProgressEvent
   | ImportCompletedEvent
-  | ImportFailedEvent;
+  | ImportFailedEvent
+  | SubscriptionsStartedEvent
+  | SubscriptionsCompletedEvent;
 
 export interface UseImportStatusOptions {
   /** Called when import starts */
@@ -61,6 +80,10 @@ export interface UseImportStatusOptions {
   onCompleted?: (event: ImportCompletedEvent) => void;
   /** Called when import fails */
   onFailed?: (event: ImportFailedEvent) => void;
+  /** Called when subscription processing starts */
+  onSubscriptionsStarted?: (event: SubscriptionsStartedEvent) => void;
+  /** Called when subscription processing completes */
+  onSubscriptionsCompleted?: (event: SubscriptionsCompletedEvent) => void;
   /** Whether to show toast notifications */
   showToasts?: boolean;
 }
@@ -76,12 +99,16 @@ export interface UseImportStatusResult {
   isConnected: boolean;
   /** Whether the import is currently processing */
   isImporting: boolean;
-  /** Whether the import has completed (success or failure) */
+  /** Whether subscription processing is running */
+  isProcessingSubscriptions: boolean;
+  /** Whether the entire flow has completed (import + subscriptions) */
   isComplete: boolean;
   /** Error message if import failed */
   error: string | null;
   /** Result of completed import */
   result: ImportCompletedEvent | null;
+  /** Result of subscription processing */
+  subscriptionsResult: SubscriptionsCompletedEvent | null;
   /** Manually disconnect the SSE connection */
   disconnect: () => void;
 }
@@ -121,6 +148,8 @@ export function useImportStatus(
     onProgress,
     onCompleted,
     onFailed,
+    onSubscriptionsStarted,
+    onSubscriptionsCompleted,
     showToasts = true,
   } = options;
 
@@ -129,11 +158,27 @@ export function useImportStatus(
   const [processedRows, setProcessedRows] = useState<number | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isProcessingSubscriptions, setIsProcessingSubscriptions] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ImportCompletedEvent | null>(null);
+  const [subscriptionsResult, setSubscriptionsResult] = useState<SubscriptionsCompletedEvent | null>(null);
 
   const eventSourceRef = useRef<EventSource | null>(null);
+
+  // Store callbacks in refs to avoid effect re-runs (which would close/reopen SSE connection)
+  const onStartedRef = useRef(onStarted);
+  const onProgressRef = useRef(onProgress);
+  const onCompletedRef = useRef(onCompleted);
+  const onFailedRef = useRef(onFailed);
+  const onSubscriptionsStartedRef = useRef(onSubscriptionsStarted);
+  const onSubscriptionsCompletedRef = useRef(onSubscriptionsCompleted);
+  onStartedRef.current = onStarted;
+  onProgressRef.current = onProgress;
+  onCompletedRef.current = onCompleted;
+  onFailedRef.current = onFailed;
+  onSubscriptionsStartedRef.current = onSubscriptionsStarted;
+  onSubscriptionsCompletedRef.current = onSubscriptionsCompleted;
 
   const disconnect = useCallback(() => {
     if (eventSourceRef.current) {
@@ -148,17 +193,24 @@ export function useImportStatus(
     if (!userId || !importId) {
       setIsConnected(false);
       setIsImporting(false);
+      setIsProcessingSubscriptions(false);
       setIsComplete(false);
       setProgress(null);
       setTotalRows(null);
       setProcessedRows(null);
       setError(null);
       setResult(null);
+      setSubscriptionsResult(null);
       return;
     }
 
     // Don't reconnect if already complete
     if (isComplete) {
+      return;
+    }
+
+    // Don't create a new connection if one already exists for this import
+    if (eventSourceRef.current && eventSourceRef.current.readyState !== EventSource.CLOSED) {
       return;
     }
 
@@ -171,18 +223,19 @@ export function useImportStatus(
       setIsConnected(true);
     };
 
-    eventSource.onerror = () => {
-      // EventSource will automatically try to reconnect
-      // Only set disconnected if the connection is fully closed
+    eventSource.onerror = (e) => {
       if (eventSource.readyState === EventSource.CLOSED) {
         setIsConnected(false);
       }
     };
 
-    // Handle connected event
-    eventSource.addEventListener("connected", () => {
-      // Connection established, no action needed
-    });
+    // Helper to deduplicate toasts across all hook instances (shared module-level set)
+    const shouldShowToast = (eventType: string, data: { import_id: string; timestamp?: string }) => {
+      const key = `${data.import_id}:${eventType}:${data.timestamp ?? ""}`;
+      if (shownToastKeys.has(key)) return false;
+      shownToastKeys.add(key);
+      return true;
+    };
 
     // Handle import_started event
     eventSource.addEventListener("import_started", (event) => {
@@ -191,13 +244,13 @@ export function useImportStatus(
         setTotalRows(data.total_rows);
         setIsImporting(true);
 
-        if (showToasts) {
+        if (showToasts && shouldShowToast("import_started", data)) {
           toast.info(`Importing ${data.total_rows} transactions...`);
         }
 
-        onStarted?.(data);
-      } catch {
-        // Error parsing import_started event - fail silently
+        onStartedRef.current?.(data);
+      } catch (e) {
+        console.error("[useImportStatus] Error parsing import_started event:", e);
       }
     });
 
@@ -209,7 +262,7 @@ export function useImportStatus(
         setProcessedRows(data.processed_rows);
         setTotalRows(data.total_rows);
 
-        onProgress?.(data);
+        onProgressRef.current?.(data);
       } catch {
         // Error parsing import_progress event - fail silently
       }
@@ -219,12 +272,12 @@ export function useImportStatus(
     eventSource.addEventListener("import_completed", (event) => {
       try {
         const data: ImportCompletedEvent = JSON.parse(event.data);
-        setIsComplete(true);
+        // Don't set isComplete yet - wait for subscriptions to finish
         setIsImporting(false);
         setProgress(100);
         setResult(data);
 
-        if (showToasts) {
+        if (showToasts && shouldShowToast("import_completed", data)) {
           toast.success(
             `Successfully imported ${data.imported_count} transactions`,
             {
@@ -239,12 +292,11 @@ export function useImportStatus(
           );
         }
 
-        onCompleted?.(data);
+        onCompletedRef.current?.(data);
 
-        // Close connection after completion
-        eventSource.close();
-      } catch {
-        // Error parsing import_completed event - fail silently
+        // Keep connection open for subscription events
+      } catch (e) {
+        console.error("[useImportStatus] Error parsing import_completed event:", e);
       }
     });
 
@@ -256,16 +308,73 @@ export function useImportStatus(
         setIsImporting(false);
         setError(data.error);
 
-        if (showToasts) {
+        if (showToasts && shouldShowToast("import_failed", data)) {
           toast.error(`Import failed: ${data.error}`);
         }
 
-        onFailed?.(data);
+        onFailedRef.current?.(data);
 
         // Close connection after failure
         eventSource.close();
-      } catch {
-        // Error parsing import_failed event - fail silently
+      } catch (e) {
+        console.error("[useImportStatus] Error parsing import_failed event:", e);
+      }
+    });
+
+    // Handle subscriptions_started event
+    eventSource.addEventListener("subscriptions_started", (event) => {
+      try {
+        const data: SubscriptionsStartedEvent = JSON.parse(event.data);
+        setIsProcessingSubscriptions(true);
+        // No toast - subscription processing is silent
+        onSubscriptionsStartedRef.current?.(data);
+      } catch (e) {
+        console.error("[useImportStatus] Error parsing subscriptions_started event:", e);
+      }
+    });
+
+    // Handle subscriptions_completed event
+    eventSource.addEventListener("subscriptions_completed", (event) => {
+      try {
+        const data: SubscriptionsCompletedEvent = JSON.parse(event.data);
+        setIsProcessingSubscriptions(false);
+        setIsComplete(true);
+        setSubscriptionsResult(data);
+
+        if (showToasts && shouldShowToast("subscriptions_completed", data)) {
+          const hasResults = data.matched_count > 0 || data.detected_count > 0;
+
+          if (hasResults) {
+            const parts: string[] = [];
+            if (data.matched_count > 0) {
+              parts.push(`${data.matched_count} matched`);
+            }
+            if (data.detected_count > 0) {
+              parts.push(`${data.detected_count} new detected`);
+            }
+
+            toast.success("Subscription detection complete", {
+              description: parts.join(", "),
+              action: {
+                label: "View",
+                onClick: () => {
+                  window.location.href = "/subscriptions";
+                },
+              },
+            });
+          } else {
+            toast.info("Subscription detection complete", {
+              description: "No new subscriptions found",
+            });
+          }
+        }
+
+        onSubscriptionsCompletedRef.current?.(data);
+
+        // Close connection after subscriptions complete
+        eventSource.close();
+      } catch (e) {
+        console.error("[useImportStatus] Error parsing subscriptions_completed event:", e);
       }
     });
 
@@ -279,7 +388,7 @@ export function useImportStatus(
       eventSource.close();
       eventSourceRef.current = null;
     };
-  }, [userId, importId, isComplete, showToasts, onStarted, onProgress, onCompleted, onFailed]);
+  }, [userId, importId, isComplete, showToasts]);
 
   return {
     progress,
@@ -287,9 +396,11 @@ export function useImportStatus(
     processedRows,
     isConnected,
     isImporting,
+    isProcessingSubscriptions,
     isComplete,
     error,
     result,
+    subscriptionsResult,
     disconnect,
   };
 }

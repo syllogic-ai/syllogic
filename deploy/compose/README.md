@@ -13,6 +13,8 @@ This directory contains the production-grade Docker Compose bundle:
 
 1. Copy `deploy/compose/.env.example` to `deploy/compose/.env`.
 2. Edit `.env` values (at minimum: `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, `INTERNAL_AUTH_SECRET`).
+   - **CRITICAL**: Set a strong `POSTGRES_PASSWORD` (e.g., `openssl rand -hex 32`).
+   - **IMPORTANT**: The `DATABASE_URL` value **must use the same password** you set in `POSTGRES_PASSWORD`. The format is `postgresql://financeuser:YOUR_PASSWORD@postgres:5432/finance_db` where `YOUR_PASSWORD` matches `POSTGRES_PASSWORD`.
    - Generate secrets:
      - `BETTER_AUTH_SECRET`: `openssl rand -hex 32`
      - `INTERNAL_AUTH_SECRET`: `openssl rand -hex 32`
@@ -25,6 +27,27 @@ This directory contains the production-grade Docker Compose bundle:
 ```bash
 docker compose --env-file deploy/compose/.env -f deploy/compose/docker-compose.yml up -d
 ```
+
+4. Verify all services are running:
+
+```bash
+docker compose --env-file deploy/compose/.env -f deploy/compose/docker-compose.yml ps
+```
+
+All containers should show `Up` status. The `migrate` container will exit after completing database migrations (this is expected).
+
+## Accessing the Application
+
+Once all containers are running:
+
+- **Web UI**: Open your browser and navigate to `http://localhost:8080` (or whatever `HTTP_PORT` you configured in `.env`)
+- **Backend API**: Internal only at `http://backend:8000` within the Docker network; proxied through Caddy for external access
+- **MCP Server**: Available at `http://localhost:8001` (if enabled)
+
+**First Time Setup**:
+1. The app will prompt you to create an account or log in.
+2. Follow the authentication flow to set up your profile.
+3. Start importing transactions or connecting your accounts.
 
 ## Local Build From Current Checkout (Dev/QA)
 
