@@ -16,6 +16,7 @@ This guide migrates an existing Railway deployment from the v1 image-based templ
    - `INTERNAL_AUTH_SECRET`
    - `DATA_ENCRYPTION_KEY_CURRENT`
    - `DATA_ENCRYPTION_KEY_ID`
+   - `DATA_ENCRYPTION_KEY_PREVIOUS` (optional, for key rotation — carry if you use it in v1)
 3. Confirm app is healthy on v1.
 
 ## Service Mapping

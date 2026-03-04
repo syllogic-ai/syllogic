@@ -14,6 +14,10 @@ require_file() {
 assert_contains() {
   local file="$1"
   local pattern="$2"
+  if [ ! -f "$file" ]; then
+    echo "[contract] Missing required file: $file"
+    exit 1
+  fi
   if ! grep -qF "$pattern" "$file"; then
     echo "[contract] Expected pattern not found in $file: $pattern"
     exit 1

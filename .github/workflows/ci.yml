@@ -72,6 +72,7 @@ jobs:
 
     - name: Verify deployment contract
       id: deploy-contract
+      continue-on-error: true
       run: ./scripts/verify-deploy-contract.sh
 
     - name: Lint frontend

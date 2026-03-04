@@ -13,7 +13,10 @@ fi
 
 set -a
 # shellcheck disable=SC1090
+# Temporarily disable nounset so .env with unset variable refs doesn't abort
+set +u
 source "$ENV_FILE"
+set -u
 set +a
 
 POSTGRES_USER="${POSTGRES_USER:-financeuser}"

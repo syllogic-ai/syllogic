@@ -101,13 +101,13 @@ Choose one path based on how you want to run Syllogic:
 
 1. Local developer workflow (run app/backend from source, DB/Redis in Docker):
 ```bash
-cd /Users/gianniskotsas/Documents/WebDev/personal-finance-app
+cd syllogic
 ./scripts/dev-up.sh --local
 ```
 
 2. Local full-stack Docker (build images from your current checkout):
 ```bash
-cd /Users/gianniskotsas/Documents/WebDev/personal-finance-app
+cd syllogic
 cp deploy/compose/.env.example deploy/compose/.env
 # edit deploy/compose/.env and set:
 # - POSTGRES_PASSWORD
@@ -122,7 +122,7 @@ docker compose \
 
 3. Production/self-host with prebuilt GHCR images:
 ```bash
-cd /Users/gianniskotsas/Documents/WebDev/personal-finance-app
+cd syllogic
 cp deploy/compose/.env.example deploy/compose/.env
 # edit deploy/compose/.env and set:
 # - POSTGRES_PASSWORD
@@ -131,15 +131,15 @@ cp deploy/compose/.env.example deploy/compose/.env
 ./scripts/prod-up.sh
 ```
 
-For full production details, see `/Users/gianniskotsas/Documents/WebDev/personal-finance-app/deploy/compose/README.md`.
-For CasaOS installs, see `/Users/gianniskotsas/Documents/WebDev/personal-finance-app/deploy/casaos/README.md`.
+For full production details, see [`deploy/compose/README.md`](deploy/compose/README.md).
+For CasaOS installs, see [`deploy/casaos/README.md`](deploy/casaos/README.md).
 
 ## Cloud Deploy (Recommended)
 
 - Railway (recommended): use the Railway Template for a one-click install.
 - DigitalOcean App Platform: good managed alternative if you want team-friendly app specs and predictable managed services.
 - Self-hosted Docker Compose remains the most complete/supported path in this repository.
-- Cross-environment contract: see `/Users/gianniskotsas/.codex/worktrees/67f5/personal-finance-app/docs/deployment-matrix.md`.
+- Cross-environment contract: see [`docs/deployment-matrix.md`](docs/deployment-matrix.md).
 
 ### Deploy To Railway (Templates)
 
@@ -150,7 +150,7 @@ Template channels:
 - **V1 (current button)**: image-based compose template.
 - **V2 (recommended target)**: GitHub-source services (`app/backend/worker/beat/mcp`) + Railway Postgres/Redis plugins.
 
-Migration guide: `/Users/gianniskotsas/.codex/worktrees/67f5/personal-finance-app/deploy/railway/V1_TO_V2_MIGRATION.md`.
+Migration guide: [`deploy/railway/V1_TO_V2_MIGRATION.md`](deploy/railway/V1_TO_V2_MIGRATION.md).
 
 This V1 template provisions 7 services: `postgres`, `redis`, `backend`, `worker`, `beat`, `mcp`, `app`.
 
@@ -207,7 +207,7 @@ python postgres_migration/run_encryption_upgrade.py --batch-size 500 --clear-pla
 3. Run `python postgres_migration/run_encryption_upgrade.py --batch-size 500` for upgraded environments.
 4. Confirm MCP health at `/health` returns `200` with `{"status":"healthy","service":"mcp"}`.
 5. Confirm no decrypt errors in backend logs during smoke tests.
-6. Run `/Users/gianniskotsas/.codex/worktrees/67f5/personal-finance-app/scripts/verify-deploy-contract.sh` before publishing deployment-related changes.
+6. Run `scripts/verify-deploy-contract.sh` before publishing deployment-related changes.
 7. Confirm rollback plan is tested (previous tag/service config can be restored quickly).
 
 ### Prerequisites

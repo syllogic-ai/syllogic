@@ -10,7 +10,7 @@
 # Run DB migrations before each deploy so auth (users, sessions) tables exist.
 preDeployCommand = "node scripts/migrate.js"
 startCommand = "/bin/sh -lc \"mkdir -p /app/public/uploads/profile /app/public/uploads/logos /app/public/uploads/imports && chmod -R u+rwX,g+rwX /app/public/uploads && exec node_modules/.bin/next start -p ${PORT:-3000} -H 0.0.0.0\""
-healthcheckPath = "/"
+healthcheckPath = "/api/health"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
