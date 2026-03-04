@@ -1,14 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Portable timeout wrapper for macOS compatibility
-if command -v gtimeout &>/dev/null; then
-  timeout() { gtimeout "$@"; }
-elif ! command -v timeout &>/dev/null; then
-  echo "ERROR: 'timeout' (coreutils) is required. On macOS: brew install coreutils" >&2
-  exit 1
-fi
-
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${ROOT_DIR}/deploy/compose/.env"
 
