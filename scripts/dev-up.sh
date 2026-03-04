@@ -74,7 +74,7 @@ if [ -f "$ENV_COMPOSE_FILE" ]; then
   echo "" >> "$ENV_LOCAL_FILE"
   echo "# Copied from deploy/compose/.env" >> "$ENV_LOCAL_FILE"
 
-  for var in INTERNAL_AUTH_SECRET BETTER_AUTH_SECRET BETTER_AUTH_URL OPENAI_API_KEY LOGO_DEV_API_KEY; do
+  for var in INTERNAL_AUTH_SECRET BETTER_AUTH_SECRET OPENAI_API_KEY LOGO_DEV_API_KEY; do
     value=$(grep "^$var=" "$ENV_COMPOSE_FILE" | head -n1)
     if [ -n "$value" ]; then
       echo "$value" >> "$ENV_LOCAL_FILE"

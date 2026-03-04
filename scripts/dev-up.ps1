@@ -43,12 +43,15 @@ $EnvFile = Join-Path $RootDir "deploy\compose\.env"
 $ComposeFile = Join-Path $RootDir "deploy\compose\docker-compose.yml"
 $LocalComposeFile = Join-Path $RootDir "docker-compose.yml"
 
-# Check for Docker
+# Check for Docker (installed and running)
 try {
     $null = docker version 2>&1
 } catch {
-    Write-Host "Docker is not running or not installed." -ForegroundColor Red
-    Write-Host "Please start Docker Desktop and try again."
+    Write-Host "Docker is not installed or not in PATH." -ForegroundColor Red
+    exit 1
+}
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Docker is not running. Please start Docker Desktop and try again." -ForegroundColor Red
     exit 1
 }
 
@@ -101,7 +104,6 @@ if (Test-Path $EnvFile) {
     $varsToInclude = @(
         "INTERNAL_AUTH_SECRET",
         "BETTER_AUTH_SECRET",
-        "BETTER_AUTH_URL",
         "OPENAI_API_KEY",
         "LOGO_DEV_API_KEY"
     )
