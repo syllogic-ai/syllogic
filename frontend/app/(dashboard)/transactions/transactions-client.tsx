@@ -195,11 +195,9 @@ export function TransactionsClient({
       onStarted: () => { setImportStatus("importing"); },
       onProgress: () => { setImportStatus("importing"); },
       onCompleted: () => {
-        clearPendingImport();
-        setPendingImportState(null);
+        // Import done, but wait for subscriptions to finish before clearing
         setImportStatus("completed");
         router.refresh();
-        if (importingId) clearImportingParam();
       },
       onFailed: () => {
         clearPendingImport();
@@ -207,7 +205,14 @@ export function TransactionsClient({
         setImportStatus("failed");
         if (importingId) clearImportingParam();
       },
-      showToasts: false,  // Global ImportStatusNotifier handles toasts
+      onSubscriptionsCompleted: () => {
+        // Full flow complete - clear pending import
+        clearPendingImport();
+        setPendingImportState(null);
+        if (importingId) clearImportingParam();
+        router.refresh();
+      },
+      showToasts: true,
     }
   );
 

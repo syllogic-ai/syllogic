@@ -89,7 +89,7 @@ export function AddAssetDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {showTrigger && (
-        <DialogTrigger render={<Button size="sm" variant="outline" />}>
+        <DialogTrigger render={<Button size="sm" variant="outline" data-walkthrough="walkthrough-add" />}>
           <RiAddLine className="mr-2 h-4 w-4" />
           Add Asset
         </DialogTrigger>

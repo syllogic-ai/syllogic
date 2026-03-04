@@ -9,27 +9,35 @@
 
 services:
   app:
+    image: syllogic-frontend:local
+    pull_policy: never
     build:
       context: ../../frontend
       dockerfile: Dockerfile
 
   migrate:
-    # Use the locally-built frontend image; do not attempt to pull from GHCR.
+    # Use the locally-built frontend image
+    image: syllogic-frontend:local
     pull_policy: never
 
   backend:
+    image: syllogic-backend:local
+    pull_policy: never
     build:
       context: ../../backend
       dockerfile: Dockerfile
 
   mcp:
-    # Use the locally-built backend image; do not attempt to pull from GHCR.
+    # Use the locally-built backend image
+    image: syllogic-backend:local
     pull_policy: never
 
   worker:
-    # Use the locally-built backend image; do not attempt to pull from GHCR.
+    # Use the locally-built backend image
+    image: syllogic-backend:local
     pull_policy: never
 
   beat:
-    # Use the locally-built backend image; do not attempt to pull from GHCR.
+    # Use the locally-built backend image
+    image: syllogic-backend:local
     pull_policy: never

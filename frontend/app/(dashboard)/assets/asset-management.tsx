@@ -439,7 +439,7 @@ export function AssetManagement({
       </div>
 
       {/* Accounts Section */}
-      <Card>
+      <Card data-walkthrough="walkthrough-accounts">
         <CardHeader>
           <CardTitle>Accounts</CardTitle>
           <CardDescription>Your financial accounts and cash holdings.</CardDescription>
@@ -567,7 +567,7 @@ export function AssetManagement({
       </Card>
 
       {/* Vehicles Section */}
-      <Card>
+      <Card data-walkthrough="walkthrough-vehicles">
         <CardHeader>
           <CardTitle>Vehicles</CardTitle>
           <CardDescription>Your vehicles and transportation assets.</CardDescription>
