@@ -5,32 +5,34 @@ import { getBackendBaseUrl } from "@/lib/backend-url";
 import { createInternalAuthHeaders } from "@/lib/internal-auth";
 import { requireAuth } from "@/lib/auth-helpers";
 
-interface AccountBalanceImpact {
+export interface AccountBalanceImpact {
   account_id: string;
   account_name: string;
-  institution: string | null;
   currency: string;
-  transactions_count: number;
-  total_amount: number;
-  current_balance: number;
-  new_balance: number;
+  current_balance: number | null;
+  balance_change: number;
+  projected_balance: number | null;
+  has_anchored_balances: boolean;
+  anchored_balance_count: number;
 }
 
 interface DeletePreviewResponse {
-  success: boolean;
-  total_transactions: number;
+  transaction_count: number;
+  total_amount: number;
   affected_accounts: AccountBalanceImpact[];
-  confirmation_required: string;
-  warnings: string[];
+  has_modified_transactions: boolean;
+  modified_transaction_count: number;
+  category_impacts: Array<{ category_id: string | null; amount: number; count: number }>;
 }
 
 interface DeleteResponse {
   success: boolean;
-  message: string;
   deleted_count: number;
+  affected_account_ids: string[];
+  balance_recalculation: string;
 }
 
-interface ImportHistoryItem {
+export interface ImportHistoryItem {
   id: string;
   account_id: string;
   account_name: string;
@@ -38,31 +40,27 @@ interface ImportHistoryItem {
   status: string;
   total_rows: number | null;
   imported_rows: number | null;
+  duplicates_found: number | null;
   completed_at: string | null;
-  created_at: string;
+  created_at: string | null;
   transaction_count: number;
-}
-
-interface ImportHistoryResponse {
-  success: boolean;
-  imports: ImportHistoryItem[];
 }
 
 interface RevertImportResponse {
   success: boolean;
-  message: string;
   deleted_count: number;
+  import_id: string;
+  affected_account_ids: string[];
+  balance_recalculation: string;
 }
 
 export async function getDeleteTransactionsPreview(
-  transactionIds: string[]
+  transactionIds: string[],
+  importId?: string
 ): Promise<{
   success: boolean;
   error?: string;
-  totalTransactions?: number;
-  affectedAccounts?: AccountBalanceImpact[];
-  confirmationRequired?: string;
-  warnings?: string[];
+  preview?: DeletePreviewResponse;
 }> {
   const userId = await requireAuth();
 
@@ -74,6 +72,13 @@ export async function getDeleteTransactionsPreview(
     const backendUrl = getBackendBaseUrl();
     const pathWithQuery = "/api/transactions/delete-preview";
 
+    const body: Record<string, unknown> = {};
+    if (importId) {
+      body.import_id = importId;
+    } else {
+      body.transaction_ids = transactionIds;
+    }
+
     const response = await fetch(`${backendUrl}${pathWithQuery}`, {
       method: "POST",
       headers: {
@@ -84,7 +89,7 @@ export async function getDeleteTransactionsPreview(
           userId,
         }),
       },
-      body: JSON.stringify({ transaction_ids: transactionIds }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
@@ -95,16 +100,9 @@ export async function getDeleteTransactionsPreview(
 
     const data: DeletePreviewResponse = await response.json();
 
-    if (!data.success) {
-      return { success: false, error: "Failed to get delete preview" };
-    }
-
     return {
       success: true,
-      totalTransactions: data.total_transactions,
-      affectedAccounts: data.affected_accounts,
-      confirmationRequired: data.confirmation_required,
-      warnings: data.warnings,
+      preview: data,
     };
   } catch (error) {
     console.error("Failed to get delete transactions preview:", error);
@@ -196,13 +194,9 @@ export async function getImportHistory(): Promise<{
       return { success: false, error: `Failed to get import history: ${response.status}` };
     }
 
-    const data: ImportHistoryResponse = await response.json();
+    const data: ImportHistoryItem[] = await response.json();
 
-    if (!data.success) {
-      return { success: false, error: "Failed to get import history" };
-    }
-
-    return { success: true, imports: data.imports };
+    return { success: true, imports: data };
   } catch (error) {
     console.error("Failed to get import history:", error);
     return { success: false, error: "Failed to get import history" };

@@ -249,3 +249,65 @@ def get_import_status(
     except Exception as e:
         logger.error(f"Error getting import status: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
+
+
+class ImportHistoryItem(BaseModel):
+    id: str
+    account_id: str
+    account_name: str
+    file_name: str
+    status: str
+    imported_rows: Optional[int] = None
+    total_rows: Optional[int] = None
+    duplicates_found: Optional[int] = None
+    created_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    transaction_count: int = 0
+
+
+@router.get("/history")
+def get_import_history(
+    user_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """List all CSV imports for the current user with transaction counts."""
+    from sqlalchemy import func
+    from app.models import Transaction
+
+    resolved_user_id = get_user_id(user_id)
+
+    imports = (
+        db.query(CsvImport)
+        .filter(CsvImport.user_id == resolved_user_id)
+        .order_by(CsvImport.created_at.desc())
+        .all()
+    )
+
+    result = []
+    for imp in imports:
+        txn_count = (
+            db.query(func.count(Transaction.id))
+            .filter(Transaction.import_id == imp.id)
+            .scalar()
+            or 0
+        )
+
+        account = db.query(Account).filter(Account.id == imp.account_id).first()
+
+        result.append(
+            ImportHistoryItem(
+                id=str(imp.id),
+                account_id=str(imp.account_id),
+                account_name=account.name if account else "Unknown",
+                file_name=imp.file_name,
+                status=imp.status or "unknown",
+                imported_rows=imp.imported_rows,
+                total_rows=imp.total_rows,
+                duplicates_found=imp.duplicates_found,
+                created_at=imp.created_at.isoformat() if imp.created_at else None,
+                completed_at=imp.completed_at.isoformat() if imp.completed_at else None,
+                transaction_count=txn_count,
+            )
+        )
+
+    return result

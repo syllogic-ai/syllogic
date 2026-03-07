@@ -71,6 +71,13 @@
       "when": 1772308800000,
       "tag": "0009_data_encryption_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1772913600000,
+      "tag": "0010_transaction_import_tracking",
+      "breakpoints": true
     }
   ]
 }

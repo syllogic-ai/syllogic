@@ -192,6 +192,7 @@ export const transactions = pgTable(
     enrichmentData: jsonb("enrichment_data"), // Enriched merchant info, logos, etc.
     recurringTransactionId: uuid("recurring_transaction_id").references(() => recurringTransactions.id, { onDelete: "set null" }), // Link to recurring transaction label
     includeInAnalytics: boolean("include_in_analytics").default(true).notNull(), // Whether to include in analytics (charts, KPIs, etc.)
+    importId: uuid("import_id").references(() => csvImports.id, { onDelete: "set null" }), // Which CSV import created this transaction
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },
@@ -202,6 +203,7 @@ export const transactions = pgTable(
     index("idx_transactions_category").on(table.categoryId),
     index("idx_transactions_category_system").on(table.categorySystemId),
     index("idx_transactions_recurring").on(table.recurringTransactionId),
+    index("idx_transactions_import").on(table.importId),
     // Composite indexes for common query patterns
     index("idx_transactions_user_category_system").on(table.userId, table.categorySystemId),
     index("idx_transactions_user_type_date").on(table.userId, table.transactionType, table.bookedAt),
@@ -393,6 +395,7 @@ export const accountBalances = pgTable(
     date: timestamp("date").notNull(), // Date of the balance snapshot
     balanceInAccountCurrency: decimal("balance_in_account_currency", { precision: 15, scale: 2 }).notNull(), // Balance in account's currency
     balanceInFunctionalCurrency: decimal("balance_in_functional_currency", { precision: 15, scale: 2 }).notNull(), // Balance converted to functional currency
+    isAnchored: boolean("is_anchored").default(false).notNull(), // Whether this balance point came from a bank statement (CSV) vs being calculated
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },
@@ -550,6 +553,10 @@ export const transactionsRelations = relations(transactions, ({ one }) => ({
     fields: [transactions.id],
     references: [transactionLinks.transactionId],
   }),
+  csvImport: one(csvImports, {
+    fields: [transactions.importId],
+    references: [csvImports.id],
+  }),
 }));
 
 export const recurringTransactionsRelations = relations(recurringTransactions, ({ one, many }) => ({
@@ -583,7 +590,7 @@ export const categorizationRulesRelations = relations(categorizationRules, ({ on
   }),
 }));
 
-export const csvImportsRelations = relations(csvImports, ({ one }) => ({
+export const csvImportsRelations = relations(csvImports, ({ one, many }) => ({
   user: one(users, {
     fields: [csvImports.userId],
     references: [users.id],
@@ -592,6 +599,7 @@ export const csvImportsRelations = relations(csvImports, ({ one }) => ({
     fields: [csvImports.accountId],
     references: [accounts.id],
   }),
+  transactions: many(transactions),
 }));
 
 export const propertiesRelations = relations(properties, ({ one }) => ({

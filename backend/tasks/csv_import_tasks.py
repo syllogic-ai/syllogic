@@ -352,6 +352,11 @@ def process_csv_import(
                 categorization_instructions=categorization_instructions,
             )
 
+            # Stamp import_id on inserted transactions for import revert
+            for txn in result["inserted_transactions"]:
+                txn.import_id = csv_import.id
+            db.commit()
+
             total_inserted += result["inserted_count"]
             total_skipped += result["skipped_count"]
             all_inserted_transactions.extend(result["inserted_transactions"])

@@ -1,10 +1,11 @@
 "use client";
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { RiUserLine, RiFolderLine, RiKeyLine } from "@remixicon/react";
+import { RiUserLine, RiFolderLine, RiKeyLine, RiFileTextLine } from "@remixicon/react";
 import { ProfileEditor } from "./profile-editor";
 import { CategoryManager } from "./category-manager";
 import { ApiKeysManager } from "./api-keys-manager";
+import { ImportHistory } from "./import-history";
 import type { User, Category } from "@/lib/db/schema";
 
 interface SettingsTabsProps {
@@ -42,6 +43,10 @@ export function SettingsTabs({
           <RiKeyLine className="mr-1.5 h-4 w-4" />
           API Keys
         </TabsTrigger>
+        <TabsTrigger value="import-history">
+          <RiFileTextLine className="mr-1.5 h-4 w-4" />
+          Import History
+        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="profile">
@@ -54,6 +59,10 @@ export function SettingsTabs({
 
       <TabsContent value="api-keys">
         <ApiKeysManager initialKeys={apiKeys} mcpServerUrl={mcpServerUrl} />
+      </TabsContent>
+
+      <TabsContent value="import-history">
+        <ImportHistory />
       </TabsContent>
     </Tabs>
   );

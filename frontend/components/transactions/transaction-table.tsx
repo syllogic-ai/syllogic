@@ -317,6 +317,10 @@ export function TransactionTable({
               onLinkSuccess={() => {
                 router.refresh();
               }}
+              onBulkDelete={() => {
+                table.resetRowSelection();
+                router.refresh();
+              }}
             />
           );
         }}

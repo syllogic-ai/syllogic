@@ -44,6 +44,7 @@ interface DeleteTransactionsDialogProps {
   isDeleting?: boolean;
   importMode?: boolean;
   importFileName?: string;
+  importId?: string;
 }
 
 function formatCurrencyValue(amount: number, currency: string): string {
@@ -63,6 +64,7 @@ export function DeleteTransactionsDialog({
   isDeleting = false,
   importMode = false,
   importFileName,
+  importId,
 }: DeleteTransactionsDialogProps) {
   const [preview, setPreview] = useState<DeletePreview | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -72,25 +74,36 @@ export function DeleteTransactionsDialog({
   const isConfirmed = confirmText.trim().toLowerCase() === "delete transactions";
 
   useEffect(() => {
-    if (open && transactionIds.length > 0) {
-      setConfirmText("");
-      setError(null);
-      setPreview(null);
-      setIsLoading(true);
+    if (!open) return;
+    if (transactionIds.length === 0 && !importId) return;
 
-      getDeleteTransactionsPreview(transactionIds)
-        .then((data) => {
-          setPreview(data);
-        })
-        .catch(() => {
-          setError("Failed to load deletion preview. Please try again.");
+    let cancelled = false;
+    setConfirmText("");
+    setError(null);
+    setPreview(null);
+    setIsLoading(true);
+
+    (async () => {
+      try {
+        const result = await getDeleteTransactionsPreview(transactionIds, importId);
+        if (cancelled) return;
+        if (result.success && result.preview) {
+          setPreview(result.preview);
+        } else {
+          setError(result.error || "Failed to load deletion preview.");
           toast.error("Failed to load deletion preview");
-        })
-        .finally(() => {
-          setIsLoading(false);
-        });
-    }
-  }, [open, transactionIds]);
+        }
+      } catch {
+        if (cancelled) return;
+        setError("Failed to load deletion preview. Please try again.");
+        toast.error("Failed to load deletion preview");
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [open, transactionIds, importId]);
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!isDeleting) {
@@ -109,7 +122,7 @@ export function DeleteTransactionsDialog({
           <DialogDescription>
             {importMode
               ? `Revert the import${importFileName ? ` "${importFileName}"` : ""} and delete all associated transactions.`
-              : `Permanently delete ${transactionIds.length} transaction${transactionIds.length !== 1 ? "s" : ""}.`}
+              : `Permanently delete ${preview?.transaction_count ?? transactionIds.length} transaction${(preview?.transaction_count ?? transactionIds.length) !== 1 ? "s" : ""}.`}
           </DialogDescription>
         </DialogHeader>
 

@@ -27,10 +27,12 @@ import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { bulkUpdateTransactionCategory, bulkUpdateTransactionIncludeInAnalytics } from "@/lib/actions/transactions";
 import { createLinkGroupFromSelection } from "@/lib/actions/transaction-links";
+import { deleteTransactions } from "@/lib/actions/transaction-delete";
 import { exportTransactionsToCSV } from "@/lib/utils/csv-export";
 import type { CategoryDisplay } from "@/types";
 import type { TransactionWithRelations } from "@/lib/actions/transactions";
 import { filterSelectableCategories } from "@/lib/utils/category-utils";
+import { DeleteTransactionsDialog } from "./delete-transactions-dialog";
 
 interface BulkActionsDockProps {
   selectedCount: number;
@@ -41,6 +43,7 @@ interface BulkActionsDockProps {
   onBulkUpdate: (categoryId: string | null) => void;
   onBulkAnalyticsUpdate?: (includeInAnalytics: boolean) => void;
   onLinkSuccess?: () => void;
+  onBulkDelete?: () => void;
 }
 
 export function BulkActionsDock({
@@ -52,10 +55,13 @@ export function BulkActionsDock({
   onBulkUpdate,
   onBulkAnalyticsUpdate,
   onLinkSuccess,
+  onBulkDelete,
 }: BulkActionsDockProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [categoryPopoverOpen, setCategoryPopoverOpen] = useState(false);
   const [analyticsPopoverOpen, setAnalyticsPopoverOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -132,6 +138,25 @@ export function BulkActionsDock({
       toast.error("An error occurred. Please try again.");
     } finally {
       setIsAnalyticsLoading(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const result = await deleteTransactions(selectedIds, "delete transactions");
+      if (result.success) {
+        toast.success(`Deleted ${result.deletedCount} transactions. Balance recalculation in progress.`);
+        onBulkDelete?.();
+        onClearSelection();
+        setShowDeleteDialog(false);
+      } else {
+        toast.error(result.error || "Failed to delete transactions");
+      }
+    } catch {
+      toast.error("An error occurred. Please try again.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -314,6 +339,23 @@ export function BulkActionsDock({
           </Tooltip>
         )}
 
+        {/* Delete */}
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <DockIcon
+                className="bg-muted hover:bg-destructive/20 hover:text-destructive"
+                onClick={() => setShowDeleteDialog(true)}
+              />
+            }
+          >
+            <RiDeleteBinLine className="size-5" />
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={8}>
+            <p>Delete transactions</p>
+          </TooltipContent>
+        </Tooltip>
+
         {/* Export */}
         <Tooltip>
           <TooltipTrigger
@@ -350,6 +392,14 @@ export function BulkActionsDock({
           </TooltipContent>
         </Tooltip>
       </Dock>
+
+      <DeleteTransactionsDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        transactionIds={selectedIds}
+        onConfirm={handleBulkDelete}
+        isDeleting={isDeleting}
+      />
     </div>
   );
 }

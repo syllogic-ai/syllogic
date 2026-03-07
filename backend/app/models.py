@@ -135,6 +135,7 @@ class Transaction(Base):
     enrichment_data = Column(JSONB)  # Enriched merchant info, logos, etc.
     recurring_transaction_id = Column(UUID(as_uuid=True), ForeignKey("recurring_transactions.id", ondelete="SET NULL"), nullable=True, index=True)  # Link to recurring transaction label
     include_in_analytics = Column(Boolean, default=True, nullable=False)  # Whether to include in analytics (charts, KPIs, etc.)
+    import_id = Column(UUID(as_uuid=True), ForeignKey("csv_imports.id", ondelete="SET NULL"), nullable=True, index=True)  # Which CSV import created this transaction
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -145,6 +146,7 @@ class Transaction(Base):
     category_system = relationship("Category", foreign_keys=[category_system_id], back_populates="system_transactions")
     recurring_transaction = relationship("RecurringTransaction", back_populates="linked_transactions")
     transaction_link = relationship("TransactionLink", back_populates="transaction", uselist=False)
+    csv_import = relationship("CsvImport", back_populates="transactions")
 
     # Indexes and constraints
     __table_args__ = (
@@ -246,6 +248,7 @@ class CsvImport(Base):
     # Relationships
     user = relationship("User", back_populates="csv_imports")
     account = relationship("Account", back_populates="csv_imports")
+    transactions = relationship("Transaction", back_populates="csv_import")
 
     # Indexes and constraints
     __table_args__ = (
@@ -290,6 +293,7 @@ class AccountBalance(Base):
     date = Column(DateTime, nullable=False, index=True)  # Date of the balance snapshot
     balance_in_account_currency = Column(Numeric(15, 2), nullable=False)  # Balance in account's currency
     balance_in_functional_currency = Column(Numeric(15, 2), nullable=False)  # Balance converted to functional currency
+    is_anchored = Column(Boolean, default=False, nullable=False)  # Whether this balance point came from a bank statement (CSV)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

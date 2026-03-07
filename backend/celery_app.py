@@ -13,7 +13,7 @@ celery_app = Celery(
     "finance_tasks",
     broker=REDIS_URL,
     backend=REDIS_URL,
-    include=["tasks.csv_import_tasks", "tasks.demo_tasks"],
+    include=["tasks.csv_import_tasks", "tasks.demo_tasks", "tasks.balance_recalc_tasks"],
 )
 
 

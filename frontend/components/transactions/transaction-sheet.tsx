@@ -43,6 +43,8 @@ import { SubscriptionDetectionDialog } from "./subscription-detection-dialog";
 import { SubscriptionLinkedDialog } from "./subscription-linked-dialog";
 import { LinkReimbursementsDialog } from "./link-reimbursements-dialog";
 import { LinkedTransactionsSection } from "./linked-transactions-section";
+import { DeleteTransactionsDialog } from "./delete-transactions-dialog";
+import { deleteTransactions } from "@/lib/actions/transaction-delete";
 
 interface TransactionSheetProps {
   transaction: TransactionWithRelations | null;
@@ -75,6 +77,8 @@ export function TransactionSheet({
   const [showSubscriptionDialog, setShowSubscriptionDialog] = useState(false);
   const [showLinkedSubscriptionDialog, setShowLinkedSubscriptionDialog] = useState(false);
   const [showLinkReimbursementsDialog, setShowLinkReimbursementsDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const isBalancingTransfer = transaction?.category?.name === "Balancing Transfer";
   const isExpense = transaction?.transactionType === "debit";
@@ -177,6 +181,26 @@ export function TransactionSheet({
       }
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDeleteTransaction = async () => {
+    if (!transaction) return;
+    setIsDeleting(true);
+    try {
+      const result = await deleteTransactions([transaction.id], "delete transactions");
+      if (result.success) {
+        toast.success("Transaction deleted. Balance recalculation in progress.");
+        onDeleteTransaction?.(transaction.id);
+        setShowDeleteDialog(false);
+        onOpenChange(false);
+      } else {
+        toast.error(result.error || "Failed to delete transaction");
+      }
+    } catch {
+      toast.error("Failed to delete transaction");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -380,6 +404,18 @@ export function TransactionSheet({
             {isSaving ? "Saving..." : "Save Changes"}
           </Button>
 
+          {/* Delete button for non-balancing-transfer transactions */}
+          {!isBalancingTransfer && (
+            <Button
+              variant="outline"
+              className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={() => setShowDeleteDialog(true)}
+            >
+              <RiDeleteBinLine className="h-4 w-4 mr-2" />
+              Delete Transaction
+            </Button>
+          )}
+
           {/* Revert button for balancing transfers */}
           {isBalancingTransfer && (
             <AlertDialog>
@@ -442,6 +478,15 @@ export function TransactionSheet({
         open={showLinkReimbursementsDialog}
         onOpenChange={setShowLinkReimbursementsDialog}
         onSuccess={handleSubscriptionSuccess}
+      />
+
+      {/* Delete Transaction Dialog */}
+      <DeleteTransactionsDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        transactionIds={transaction ? [transaction.id] : []}
+        onConfirm={handleDeleteTransaction}
+        isDeleting={isDeleting}
       />
     </Sheet>
   );
