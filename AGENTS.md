@@ -24,6 +24,13 @@ Syllogic is a personal finance app with three components:
 - **Frontend build**: `cd frontend && pnpm build`
 - **Backend tests**: Require running backend server; see `backend/tests/README.md`
 
+### Agentic import feature
+
+The AI-powered import (`/transactions/import`) requires `OPENAI_API_KEY` in both frontend (`.env.local`) and backend (`.env` or env var). Without it, the import page shows a disabled state. The feature uses:
+- Backend endpoints at `/api/agentic-import/` (upload, analyze, approve, profiles)
+- Script sandbox: subprocess execution with AST validation for security
+- Format profiles: per-user, keyed by SHA-256 of sorted column headers
+
 ### Non-obvious caveats
 
 - The root `docker-compose.yml` is for local dev infra only (db + redis + optional celery workers). Production uses `deploy/compose/docker-compose.yml`.
