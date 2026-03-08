@@ -426,6 +426,25 @@ export const transactionLinks = pgTable(
   ]
 );
 
+export const formatProfiles = pgTable(
+  "format_profiles",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    fingerprint: varchar("fingerprint", { length: 64 }).notNull(),
+    script: text("script").notNull(),
+    label: varchar("label", { length: 255 }),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_format_profiles_user").on(table.userId),
+    index("idx_format_profiles_fingerprint").on(table.fingerprint),
+    unique("format_profiles_user_fingerprint").on(table.userId, table.fingerprint),
+  ]
+);
+
 export const companyLogos = pgTable(
   "company_logos",
   {
@@ -462,6 +481,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   subscriptionSuggestions: many(subscriptionSuggestions),
   apiKeys: many(apiKeys),
   transactionLinks: many(transactionLinks),
+  formatProfiles: many(formatProfiles),
 }));
 
 export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
@@ -636,6 +656,13 @@ export const transactionLinksRelations = relations(transactionLinks, ({ one }) =
   }),
 }));
 
+export const formatProfilesRelations = relations(formatProfiles, ({ one }) => ({
+  user: one(users, {
+    fields: [formatProfiles.userId],
+    references: [users.id],
+  }),
+}));
+
 export const companyLogosRelations = relations(companyLogos, ({ many }) => ({
   accounts: many(accounts),
   recurringTransactions: many(recurringTransactions),
@@ -690,6 +717,9 @@ export type NewApiKey = typeof apiKeys.$inferInsert;
 
 export type TransactionLink = typeof transactionLinks.$inferSelect;
 export type NewTransactionLink = typeof transactionLinks.$inferInsert;
+
+export type FormatProfile = typeof formatProfiles.$inferSelect;
+export type NewFormatProfile = typeof formatProfiles.$inferInsert;
 
 export type CompanyLogo = typeof companyLogos.$inferSelect;
 export type NewCompanyLogo = typeof companyLogos.$inferInsert;

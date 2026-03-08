@@ -559,6 +559,32 @@ class User(Base):
     subscription_suggestions = relationship("SubscriptionSuggestion", back_populates="user", cascade="all, delete-orphan")
     api_keys = relationship("ApiKey", back_populates="user", cascade="all, delete-orphan")
     transaction_links = relationship("TransactionLink", back_populates="user", cascade="all, delete-orphan")
+    format_profiles = relationship("FormatProfile", back_populates="user", cascade="all, delete-orphan")
+
+
+class FormatProfile(Base):
+    """
+    Stores learned file format profiles for agentic import.
+    Each profile maps a column fingerprint to a generated transformation script.
+    Per-user — profiles are never shared between users.
+    """
+    __tablename__ = "format_profiles"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    fingerprint = Column(String(64), nullable=False)  # SHA-256 of sorted column headers
+    script = Column(Text, nullable=False)  # Generated Python transformation script
+    label = Column(String(255))  # Human-readable label, e.g. "Revolut CSV — 10 columns"
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="format_profiles")
+
+    __table_args__ = (
+        Index("idx_format_profiles_user", "user_id"),
+        Index("idx_format_profiles_fingerprint", "fingerprint"),
+        UniqueConstraint("user_id", "fingerprint", name="format_profiles_user_fingerprint"),
+    )
 
 
 class ApiKey(Base):
