@@ -8,15 +8,26 @@ function isDisabled(val: string | undefined) {
 }
 
 export function middleware(request: NextRequest) {
-  if (
-    request.nextUrl.pathname === "/register" &&
-    isDisabled(process.env.DISABLE_SIGN_UPS)
-  ) {
-    return NextResponse.redirect(new URL("/login", request.url));
+  if (!isDisabled(process.env.DISABLE_SIGN_UPS)) {
+    return NextResponse.next();
   }
+
+  // Block the UI registration page
+  if (request.nextUrl.pathname === "/register") {
+    return NextResponse.redirect(new URL("/login", request.nextUrl));
+  }
+
+  // Block the BetterAuth sign-up API endpoint
+  if (request.nextUrl.pathname === "/api/auth/sign-up/email") {
+    return new NextResponse(
+      JSON.stringify({ error: "Registrations are currently disabled." }),
+      { status: 403, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/register"],
+  matcher: ["/register", "/api/auth/sign-up/email"],
 };
