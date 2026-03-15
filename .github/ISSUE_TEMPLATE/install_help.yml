@@ -1,0 +1,60 @@
+name: Help with self-hosting
+description: Ask for help with Docker, Railway, CasaOS, or local setup
+title: "[INSTALL] "
+labels: ["question", "setup"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form when something blocks your install or first-run experience.
+
+  - type: dropdown
+    id: deployment_path
+    attributes:
+      label: Deployment path
+      options:
+        - Docker install script
+        - Docker Compose manual setup
+        - Railway
+        - CasaOS
+        - Local development
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What are you trying to do?
+      placeholder: I am trying to deploy Syllogic on...
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Include the exact error, failing step, or behavior that blocked you.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Paste log lines or add screenshots that help explain the failure.
+      render: shell
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: Ubuntu 24.04, Docker 27, Railway, Synology, etc.
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context
+      placeholder: Anything else that would help reproduce or diagnose the problem.
+

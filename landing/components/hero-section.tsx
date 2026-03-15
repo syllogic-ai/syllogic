@@ -1,6 +1,7 @@
 import { SplitFlapText } from "./split-flap-text";
 import { BitmapChevron } from "./bitmap-chevron";
 import { DrawText } from "./draw-text";
+import { LINKS } from "@/lib/links";
 
 export function HeroSection() {
   return (
@@ -31,37 +32,50 @@ export function HeroSection() {
         style={{ color: "var(--color-fg)" }}
       >
         <p>
-          Manage your wealth. Reach financial freedom.
+          Self-hosted personal finance dashboard with AI categorization,
+          recurring spend tracking, and a live demo.
         </p>
         <p style={{ color: "var(--color-muted)" }}>
-          Your data stays on your hardware.
+          Run it on Docker or Railway and keep your financial data on
+          infrastructure you control.
         </p>
       </div>
 
       {/* CTAs */}
       <div className="flex flex-wrap items-center gap-4">
         <a
-          href="#deploy"
+          href={LINKS.demo.hero}
+          target="_blank"
+          rel="noopener noreferrer"
           className="inline-flex items-center gap-2 px-6 py-3 font-mono text-sm uppercase tracking-widest transition-opacity hover:opacity-80"
           style={{
             backgroundColor: "var(--color-accent)",
             color: "var(--color-bg)",
           }}
         >
-          Deploy Now
+          Try Live Demo
           <BitmapChevron className="-rotate-90" size={9} />
         </a>
         <a
-          href="https://app.syllogic.ai/login?demo=true"
-          target="_blank"
-          rel="noopener noreferrer"
+          href="#install"
           className="inline-flex items-center gap-2 px-6 py-3 font-mono text-sm uppercase tracking-widest transition-colors hover:border-fg"
           style={{
             border: "1px solid var(--color-border)",
             color: "var(--color-fg)",
           }}
         >
-          View Demo
+          Self-Host In 10 Minutes
+          <BitmapChevron className="-rotate-90" size={9} />
+        </a>
+        <a
+          href={LINKS.startPath}
+          className="inline-flex items-center gap-2 px-6 py-3 font-mono text-sm uppercase tracking-widest transition-colors hover:border-fg"
+          style={{
+            border: "1px solid var(--color-border)",
+            color: "var(--color-muted)",
+          }}
+        >
+          Start Here
           <BitmapChevron className="-rotate-90" size={9} />
         </a>
       </div>

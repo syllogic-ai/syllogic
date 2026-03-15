@@ -6,9 +6,9 @@ import { FeatureModal, type Feature } from "./feature-modal";
 const FEATURES: Feature[] = [
   {
     id: "01",
-    title: "Financial Dashboard",
+    title: "Balances and cash flow",
     description:
-      "Live KPIs, P&L charts, and cash-flow Sankey. See your full financial picture at a glance.",
+      "Live balances, savings, spending, and cash-flow views that make it obvious where your money goes.",
     detail:
       "Your home base for understanding your money. At a glance you see total income, total expenses, and net savings for any period you choose — a week, a month, or a custom range. A profit & loss chart breaks down the trend over time, while a Sankey flow diagram shows exactly where your money comes from and where it ends up. All numbers update in real time as you import new transactions.",
     wide: true,
@@ -17,7 +17,7 @@ const FEATURES: Feature[] = [
     id: "02",
     title: "AI Categorization",
     description:
-      "Automatic transaction categorization powered by OpenAI. Learns from your corrections.",
+      "Optional OpenAI-powered categorization with a fallback path when no API key is set.",
     detail:
       "Every time you import a transaction, Syllogic reads the description and assigns it a spending category — things like Groceries, Dining, Travel, or Subscriptions — without you lifting a finger. When the AI gets it wrong (it occasionally does), you correct it once and it remembers. Over time the categories get more accurate and reflect your personal spending patterns.",
     wide: false,
@@ -26,7 +26,7 @@ const FEATURES: Feature[] = [
     id: "03",
     title: "Subscription Tracking",
     description:
-      "Automatically detects recurring charges and groups them by merchant.",
+      "Detect recurring charges, group them by merchant, and understand monthly subscription drag.",
     detail:
       "Syllogic scans your transaction history to find recurring charges — the ones that repeat every month or year at a predictable amount. It groups them by merchant so you can see the full list of your active subscriptions, when they renew, and what your total monthly subscription spend looks like. A surprisingly useful number once you actually see it.",
     wide: false,
@@ -35,14 +35,14 @@ const FEATURES: Feature[] = [
     id: "04",
     title: "Category Analytics",
     description:
-      "Drill into spending by category over time. Compare months, spot trends.",
+      "Break spending down by category, compare periods, and spot trends before they become habits.",
     detail:
       "Pick any category — say, Dining — and see exactly how much you spent in it each month for the past year. Compare it to the previous period, see if you're trending up or down, and spot the months where you overspent. A donut chart shows the category breakdown at a glance so you immediately know where the biggest opportunities to cut back are.",
     wide: false,
   },
   {
     id: "05",
-    title: "Transaction Linking",
+    title: "Transfer and reimbursement linking",
     description:
       "Link related transactions across accounts to avoid double-counting.",
     detail:
@@ -53,7 +53,7 @@ const FEATURES: Feature[] = [
     id: "06",
     title: "CSV Import / Export",
     description:
-      "Import from any bank CSV format. Your data is always exportable.",
+      "Import from bank CSVs and export your data whenever you want. No lock-in.",
     detail:
       "Every bank lets you download your transaction history as a CSV file. Syllogic can import those files regardless of the column format your bank uses — it adapts to the structure automatically. And because your data is yours, you can export everything at any time in a clean, standard format. No lock-in, no strings attached.",
     wide: false,
@@ -126,24 +126,32 @@ export function WorkSection() {
       >
         {/* Section header */}
         <div className="flex items-baseline gap-4 mb-4">
-          <span
-            className="font-mono text-sm"
-            style={{ color: "var(--color-accent)" }}
-          >
-            03
-          </span>
+        <span
+          className="font-mono text-sm"
+          style={{ color: "var(--color-accent)" }}
+        >
+            04
+        </span>
           <h2
             className="font-display text-5xl"
             style={{ color: "var(--color-fg)" }}
           >
-            FEATURES
+            WHAT WORKS TODAY
           </h2>
         </div>
         <p
-          className="font-mono text-xs mb-16"
+          className="font-mono text-xs mb-4"
           style={{ color: "var(--color-muted)" }}
         >
           Click any card to learn more
+        </p>
+        <p
+          className="font-mono text-sm leading-relaxed max-w-3xl mb-16"
+          style={{ color: "var(--color-muted)" }}
+        >
+          Syllogic already covers the workflows a self-hoster needs to evaluate
+          the product honestly: dashboards, imports, recurring spend, optional
+          AI enrichment, and exportable data.
         </p>
 
         {/* Bento grid */}

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { BitmapChevron } from "./bitmap-chevron";
+import { LINKS } from "@/lib/links";
 
 const RAILWAY_FEATURES = [
   "One-click deploy from Railway template",
@@ -115,25 +116,34 @@ function InstallSnippet() {
 export function PrinciplesSection() {
   return (
     <section
-      id="deploy"
+      id="install"
       className="py-24 px-8 lg:px-24"
       style={{ borderTop: "1px solid var(--color-border)" }}
     >
       {/* Section header */}
-      <div className="flex items-baseline gap-4 mb-16">
+      <div className="flex items-baseline gap-4 mb-8">
         <span
           className="font-mono text-sm"
           style={{ color: "var(--color-accent)" }}
         >
-          04
+          05
         </span>
         <h2
           className="font-display text-5xl"
           style={{ color: "var(--color-fg)" }}
         >
-          DEPLOY
+          INSTALL IN 10 MINUTES
         </h2>
       </div>
+
+      <p
+        className="font-mono text-sm leading-relaxed max-w-3xl mb-16"
+        style={{ color: "var(--color-muted)" }}
+      >
+        Choose the path that matches how you like to run software. Start with
+        the live demo, self-host with Docker, or use Railway when you want the
+        quickest production path.
+      </p>
 
       {/* Cards */}
       <div
@@ -164,8 +174,9 @@ export function PrinciplesSection() {
             className="font-mono text-sm leading-relaxed mb-8"
             style={{ color: "var(--color-muted)" }}
           >
-            Fastest path to production. Deploy the full stack in under two
-            minutes — no DevOps required.
+            Fastest path to a working hosted stack. Use the published template,
+            add your secrets, and validate the product before you commit to a
+            longer self-hosted setup.
           </p>
 
           <ul className="space-y-3 mb-10">
@@ -186,7 +197,7 @@ export function PrinciplesSection() {
           </ul>
 
           <a
-            href="https://railway.app/template/syllogic"
+            href={LINKS.railway.install}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-6 py-3 font-mono text-sm uppercase tracking-widest transition-opacity hover:opacity-80"
@@ -224,8 +235,8 @@ export function PrinciplesSection() {
             className="font-mono text-sm leading-relaxed mb-8"
             style={{ color: "var(--color-muted)" }}
           >
-            Self-host on any machine. Full control, zero vendor lock-in. One
-            command and you&apos;re running.
+            Self-host on your own machine, VPS, or homelab. Full control, no
+            vendor lock-in, and a documented path from demo to production.
           </p>
 
           <ul className="space-y-3 mb-8">
@@ -289,6 +300,24 @@ export function PrinciplesSection() {
           </div>
 
           <InstallSnippet />
+          <div className="flex flex-wrap gap-3 mt-6">
+            <a
+              href={LINKS.startPath}
+              className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-widest"
+              style={{ color: "var(--color-fg)" }}
+            >
+              Read the quick-start guide
+            </a>
+            <a
+              href={LINKS.demo.hero}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-widest"
+              style={{ color: "var(--color-muted)" }}
+            >
+              Try the live demo first
+            </a>
+          </div>
         </div>
       </div>
     </section>

@@ -1,3 +1,5 @@
+import { LINKS } from "@/lib/links";
+
 const STACK = [
   { label: "Frontend", value: "Next.js 16 + Drizzle ORM" },
   { label: "Backend", value: "FastAPI + Celery" },
@@ -9,26 +11,30 @@ const STACK = [
   { label: "License", value: "AGPL-3.0" },
 ];
 
-const LINKS = [
+const LINK_ITEMS = [
   {
     label: "GitHub",
-    href: "https://github.com/syllogic-ai/syllogic",
+    href: LINKS.repo,
   },
   {
-    label: "Railway Template",
-    href: "https://railway.app/template/syllogic",
+    label: "Start Here",
+    href: LINKS.startHere,
   },
   {
-    label: "Documentation",
-    href: "https://github.com/syllogic-ai/syllogic/blob/main/README.md",
+    label: "Roadmap",
+    href: LINKS.roadmap,
   },
   {
-    label: "Issues",
-    href: "https://github.com/syllogic-ai/syllogic/issues",
+    label: "Live Demo",
+    href: LINKS.demo.hero,
   },
   {
-    label: "Contributing",
-    href: "https://github.com/syllogic-ai/syllogic/blob/main/CONTRIBUTING.md",
+    label: "Install Help",
+    href: LINKS.issuesNew.installHelp,
+  },
+  {
+    label: "Discussions",
+    href: LINKS.discussions,
   },
 ];
 
@@ -45,13 +51,13 @@ export function ColophonSection() {
           className="font-mono text-sm"
           style={{ color: "var(--color-accent)" }}
         >
-          05
+          07
         </span>
         <h2
           className="font-display text-5xl"
           style={{ color: "var(--color-fg)" }}
         >
-          STACK
+          STACK AND LINKS
         </h2>
       </div>
 
@@ -97,10 +103,10 @@ export function ColophonSection() {
             className="font-mono text-xs uppercase tracking-widest mb-6"
             style={{ color: "var(--color-muted)" }}
           >
-            LINKS
+            START HERE
           </h3>
           <div className="flex flex-col gap-4">
-            {LINKS.map(({ label, href }) => (
+            {LINK_ITEMS.map(({ label, href }) => (
               <a
                 key={label}
                 href={href}

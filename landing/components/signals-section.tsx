@@ -1,10 +1,10 @@
 const SIGNALS = [
   { label: "LICENSE", value: "AGPL-3.0" },
-  { label: "LANGUAGE", value: "TS / Python" },
-  { label: "DATABASE", value: "PostgreSQL" },
-  { label: "AI", value: "OpenAI" },
-  { label: "DEPLOY", value: "Railway / Docker" },
-  { label: "AUTH", value: "BetterAuth" },
+  { label: "DEPLOY", value: "Docker / Railway / CasaOS" },
+  { label: "DEMO", value: "Live" },
+  { label: "RELEASE", value: "v1.0.0" },
+  { label: "DATA", value: "PostgreSQL 16" },
+  { label: "AI", value: "Optional OpenAI" },
 ];
 
 export function SignalsSection() {
