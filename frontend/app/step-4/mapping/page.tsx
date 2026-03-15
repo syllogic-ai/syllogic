@@ -46,6 +46,7 @@ function MappingPageContent() {
     endingBalance: null,
     typeConfig: {
       isAmountSigned: false,
+      amountFormat: "AUTO",
       dateFormat: "DD-MM-YYYY",
     },
   });

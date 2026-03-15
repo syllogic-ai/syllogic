@@ -10,6 +10,7 @@ from typing import List, Optional
 from decimal import Decimal
 from datetime import datetime
 from app.integrations.base import BankAdapter, AccountData, TransactionData
+from app.integrations.number_parsing import infer_amount_format, parse_localized_decimal
 
 
 class RevolutCSVAdapter(BankAdapter):
@@ -138,16 +139,23 @@ class RevolutCSVAdapter(BankAdapter):
                 print(f"DEBUG: Success with alternative delimiter! Headers: {reader.fieldnames}")
                 delimiter = alt_delimiter
         
+        rows = list(reader)
+        inferred_amount_format = infer_amount_format(self._collect_amount_samples(rows))
+        
         row_count = 0
         parsed_count = 0
         skipped_count = 0
         
-        for row in reader:
+        for row in rows:
             row_count += 1
             try:
                 # Parse transaction based on common Revolut CSV formats
                 # Format may vary, so we try multiple field name variations
-                transaction = self._parse_transaction_row(row, account_external_id)
+                transaction = self._parse_transaction_row(
+                    row,
+                    account_external_id,
+                    inferred_amount_format=inferred_amount_format,
+                )
                 
                 if transaction:
                     # Apply date filters if provided
@@ -175,7 +183,12 @@ class RevolutCSVAdapter(BankAdapter):
         
         return transactions
     
-    def _parse_transaction_row(self, row: dict, account_external_id: str) -> Optional[TransactionData]:
+    def _parse_transaction_row(
+        self,
+        row: dict,
+        account_external_id: str,
+        inferred_amount_format: str = "AMBIGUOUS",
+    ) -> Optional[TransactionData]:
         """Parse a single CSV row into TransactionData."""
         # Try different CSV format variations
         # Common Revolut CSV formats:
@@ -225,6 +238,7 @@ class RevolutCSVAdapter(BankAdapter):
         
         # Get amount - try multiple field variations
         amount_str = None
+        amount = None
         for key in row.keys():
             key_lower = key.lower()
             if key_lower == 'amount':
@@ -241,12 +255,12 @@ class RevolutCSVAdapter(BankAdapter):
                         break
                 # Use paid_in if positive, negative paid_out if negative
                 try:
-                    out_val = Decimal(str(paid_out).replace(',', '').strip() or '0')
-                    in_val = Decimal(str(paid_in).replace(',', '').strip() or '0')
+                    out_val = parse_localized_decimal(str(paid_out), inferred_format=inferred_amount_format) or Decimal("0")
+                    in_val = parse_localized_decimal(str(paid_in), inferred_format=inferred_amount_format) or Decimal("0")
                     if in_val > 0:
-                        amount_str = str(in_val)
+                        amount = in_val
                     elif out_val > 0:
-                        amount_str = str(-out_val)
+                        amount = -out_val
                     break
                 except:
                     pass
@@ -260,17 +274,13 @@ class RevolutCSVAdapter(BankAdapter):
                 row.get('transaction_amount')
             )
         
-        if not amount_str:
+        if amount is None and not amount_str:
             return None
         
-        try:
-            # Remove currency symbols, whitespace, and handle various formats
-            amount_str = str(amount_str).replace(',', '').replace('€', '').replace('$', '').replace('£', '').strip()
-            # Handle empty strings
-            if not amount_str or amount_str == '':
-                return None
-            amount = Decimal(amount_str)
-        except (ValueError, AttributeError, TypeError):
+        if amount is None:
+            amount = parse_localized_decimal(str(amount_str), inferred_format=inferred_amount_format)
+
+        if amount is None:
             return None
         
         # Determine transaction type
@@ -379,6 +389,21 @@ class RevolutCSVAdapter(BankAdapter):
             pending=pending,
             metadata={'source': 'revolut_csv', 'raw_row': row}
         )
+
+    def _collect_amount_samples(self, rows: List[dict]) -> List[str]:
+        samples: List[str] = []
+
+        for row in rows:
+            for key, value in row.items():
+                key_lower = key.lower()
+                if key_lower == "amount" or "paid out" in key_lower or "paid in" in key_lower:
+                    if value is not None and str(value).strip():
+                        samples.append(str(value))
+
+            if len(samples) >= 100:
+                break
+
+        return samples
     
     def _parse_date(self, date_str: str) -> Optional[datetime]:
         """Parse date string in various formats."""
@@ -429,4 +454,3 @@ class RevolutCSVAdapter(BankAdapter):
         # This is already handled in _parse_transaction_row
         # But we implement it for the interface
         return self._parse_transaction_row(raw, raw.get('account_external_id', 'default'))
-

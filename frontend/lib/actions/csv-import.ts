@@ -8,6 +8,14 @@ import { getAuthenticatedSession, requireAuth } from "@/lib/auth-helpers";
 import { storage } from "@/lib/storage";
 import { getBackendBaseUrl } from "@/lib/backend-url";
 import { createInternalAuthHeaders } from "@/lib/internal-auth";
+import {
+  detectCsvDelimiter,
+  inferAmountFormat,
+  parseDelimitedText,
+  parseLocalizedNumber,
+  type AmountFormat,
+  type InferredAmountFormat,
+} from "@/lib/import/parsing";
 import { detectDuplicates, markDuplicates } from "@/lib/utils/duplicate-detection";
 import { decryptWithFallback, encryptValue } from "@/lib/security/data-encryption";
 import OpenAI from "openai";
@@ -22,6 +30,77 @@ function resolveImportFilePath(importSession: {
   filePathCiphertext: string | null;
 }): string | null {
   return decryptWithFallback(importSession.filePathCiphertext, importSession.filePath);
+}
+
+function normalizeColumnMapping(mapping: ColumnMapping): ColumnMapping {
+  return {
+    ...mapping,
+    typeConfig: {
+      ...mapping.typeConfig,
+      amountFormat: mapping.typeConfig?.amountFormat ?? "AUTO",
+      dateFormat: mapping.typeConfig?.dateFormat ?? "DD-MM-YYYY",
+    },
+  };
+}
+
+function collectNumericSamples(rows: string[][], indices: number[]): string[] {
+  const samples: string[] = [];
+
+  for (const row of rows) {
+    for (const index of indices) {
+      if (index < 0) {
+        continue;
+      }
+
+      const value = row[index]?.trim();
+      if (value) {
+        samples.push(value);
+      }
+    }
+
+    if (samples.length >= 100) {
+      break;
+    }
+  }
+
+  return samples;
+}
+
+function createNumberParseOptions(
+  mapping: ColumnMapping,
+  rows: string[][],
+  indices: number[]
+): {
+  amountFormat: AmountFormat;
+  inferredFormat: InferredAmountFormat;
+} {
+  return {
+    amountFormat: mapping.typeConfig?.amountFormat ?? "AUTO",
+    inferredFormat: inferAmountFormat(collectNumericSamples(rows, indices)),
+  };
+}
+
+function parseImportedNumber(
+  raw: string | undefined,
+  label: string,
+  rowNumber: number,
+  options: {
+    amountFormat: AmountFormat;
+    inferredFormat: InferredAmountFormat;
+  }
+): number | null {
+  if (!raw?.trim()) {
+    return null;
+  }
+
+  const parsed = parseLocalizedNumber(raw, options);
+  if (parsed !== null) {
+    return parsed;
+  }
+
+  throw new Error(
+    `Could not parse ${label} on row ${rowNumber}: "${raw}". Choose Amount Format in mapping if the file uses a different decimal separator.`
+  );
 }
 
 // Column mapping types
@@ -43,6 +122,7 @@ export interface ColumnMapping {
     creditValue?: string;
     debitValue?: string;
     isAmountSigned?: boolean; // If true, positive = credit, negative = debit
+    amountFormat?: AmountFormat; // Decimal separator handling for imported amounts/balances
     dateFormat?: "DD-MM-YYYY" | "MM-DD-YYYY"; // Date format for ambiguous dates
     completedStateValue?: string; // Value that indicates a completed transaction (e.g., "COMPLETED")
   };
@@ -109,9 +189,9 @@ export async function initializeCsvImport(
       contentType: "text/csv",
     });
 
-    // Parse CSV to count rows
-    const lines = fileContent.split("\n").filter((line) => line.trim());
-    const totalRows = Math.max(0, lines.length - 1); // Exclude header
+    const delimiter = detectCsvDelimiter(fileContent);
+    const parsed = parseDelimitedText(fileContent, delimiter);
+    const totalRows = parsed.rows.length;
 
     // Create import session
     const [result] = await db
@@ -165,42 +245,19 @@ export async function parseCsvHeaders(
     const fileBuffer = await storage.download(filePath);
     const fileContent = fileBuffer.toString("utf-8");
 
-    // Parse CSV
-    const lines = fileContent.split("\n").filter((line) => line.trim());
-    if (lines.length === 0) {
+    const delimiter = detectCsvDelimiter(fileContent);
+    const parsed = parseDelimitedText(fileContent, delimiter);
+
+    if (parsed.headers.length === 0) {
       return { success: false, error: "CSV file is empty" };
     }
-
-    const parseCSVLine = (line: string): string[] => {
-      const result: string[] = [];
-      let current = "";
-      let inQuotes = false;
-
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        if (char === '"') {
-          inQuotes = !inQuotes;
-        } else if ((char === "," || char === ";") && !inQuotes) {
-          result.push(current.trim());
-          current = "";
-        } else {
-          current += char;
-        }
-      }
-      result.push(current.trim());
-      return result;
-    };
-
-    const headers = parseCSVLine(lines[0]);
-    const rows = lines.slice(1).map(parseCSVLine);
-    const sampleRows = rows.slice(0, 5);
 
     return {
       success: true,
       data: {
-        headers,
-        rows,
-        sampleRows,
+        headers: parsed.headers,
+        rows: parsed.rows,
+        sampleRows: parsed.rows.slice(0, 5),
       },
     };
   } catch (error) {
@@ -257,6 +314,7 @@ Map these columns to the following transaction fields:
 
 Also determine:
 - If amount is signed (positive for credits, negative for debits)
+- The amount format: "DOT_DECIMAL" for values like "1,234.56", "COMMA_DECIMAL" for values like "1.234,56", or "AUTO" if it cannot be determined confidently
 - If there's a separate column for transaction type, what values indicate credit vs debit
 - The date format: analyze the date column values to determine if dates are in "DD-MM-YYYY" (European) or "MM-DD-YYYY" (US) format. Look at the date values carefully - if you see dates like "13/05/2025" or "25/12/2024", these are clearly DD-MM-YYYY. If all dates have first value ≤12, try to infer from context or default to "DD-MM-YYYY".
 - If there's a state column, what value indicates a completed transaction (e.g., "COMPLETED", "Completed", "settled", "posted")
@@ -276,6 +334,7 @@ Respond ONLY with a valid JSON object in this exact format:
     "creditValue": "value_that_indicates_credit_or_null",
     "debitValue": "value_that_indicates_debit_or_null",
     "isAmountSigned": true_or_false,
+    "amountFormat": "AUTO" or "DOT_DECIMAL" or "COMMA_DECIMAL",
     "dateFormat": "DD-MM-YYYY" or "MM-DD-YYYY",
     "completedStateValue": "value_that_indicates_completed_or_null"
   }
@@ -300,7 +359,7 @@ Use null for columns that don't exist or can't be determined.`;
       return { success: false, error: "Invalid AI response format" };
     }
 
-    const mapping = JSON.parse(jsonMatch[0]) as ColumnMapping;
+    const mapping = normalizeColumnMapping(JSON.parse(jsonMatch[0]) as ColumnMapping);
 
     // Update the import session with the mapping
     await db
@@ -332,7 +391,7 @@ export async function saveColumnMapping(
     await db
       .update(csvImports)
       .set({
-        columnMapping: mapping,
+        columnMapping: normalizeColumnMapping(mapping),
         status: "previewing",
       })
       .where(
@@ -390,35 +449,13 @@ export async function previewImportedTransactions(
       return { success: false, error: "Import file path is unavailable" };
     }
 
-    const mapping = importSession.columnMapping as ColumnMapping;
+    const mapping = normalizeColumnMapping(importSession.columnMapping as ColumnMapping);
 
     // Read and parse the CSV file
     const fileBuffer = await storage.download(filePath);
     const fileContent = fileBuffer.toString("utf-8");
-
-    const parseCSVLine = (line: string): string[] => {
-      const result: string[] = [];
-      let current = "";
-      let inQuotes = false;
-
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        if (char === '"') {
-          inQuotes = !inQuotes;
-        } else if ((char === "," || char === ";") && !inQuotes) {
-          result.push(current.trim());
-          current = "";
-        } else {
-          current += char;
-        }
-      }
-      result.push(current.trim());
-      return result;
-    };
-
-    const lines = fileContent.split("\n").filter((line) => line.trim());
-    const headers = parseCSVLine(lines[0]);
-    const rows = lines.slice(1).map(parseCSVLine);
+    const delimiter = detectCsvDelimiter(fileContent);
+    const { headers, rows } = parseDelimitedText(fileContent, delimiter);
 
     // Get column indices
     const dateIndex = mapping.date ? headers.indexOf(mapping.date) : -1;
@@ -427,10 +464,20 @@ export async function previewImportedTransactions(
     const merchantIndex = mapping.merchant ? headers.indexOf(mapping.merchant) : -1;
     const typeIndex = mapping.transactionType ? headers.indexOf(mapping.transactionType) : -1;
     const stateIndex = mapping.state ? headers.indexOf(mapping.state) : -1;
+    const startBalIdx = mapping.startingBalance ? headers.indexOf(mapping.startingBalance) : -1;
+    const endBalIdx = mapping.endingBalance ? headers.indexOf(mapping.endingBalance) : -1;
+    const feeIdx = mapping.fee ? headers.indexOf(mapping.fee) : -1;
 
     if (dateIndex === -1 || amountIndex === -1 || descriptionIndex === -1) {
       return { success: false, error: "Required columns not mapped" };
     }
+
+    const numberParseOptions = createNumberParseOptions(mapping, rows, [
+      amountIndex,
+      feeIdx,
+      startBalIdx,
+      endBalIdx,
+    ]);
 
     // Parse transactions
     const previewTransactions: PreviewTransaction[] = [];
@@ -639,9 +686,8 @@ export async function previewImportedTransactions(
       }
 
       // Parse amount (preserve sign for now to determine transaction type)
-      const cleanedAmount = amountStr.replace(/[^0-9.\-,]/g, "").replace(",", ".");
-      const parsedAmount = parseFloat(cleanedAmount);
-      if (isNaN(parsedAmount)) continue;
+      const parsedAmount = parseImportedNumber(amountStr, "amount", i + 2, numberParseOptions);
+      if (parsedAmount === null) continue;
 
       // Determine transaction type BEFORE calling Math.abs()
       let transactionType: "debit" | "credit" = "debit";
@@ -707,22 +753,11 @@ export async function previewImportedTransactions(
     let balanceVerification: BalanceVerification | undefined;
     let dailyBalances: DailyBalance[] = [];
 
-    const startBalIdx = mapping.startingBalance ? headers.indexOf(mapping.startingBalance) : -1;
-    const endBalIdx = mapping.endingBalance ? headers.indexOf(mapping.endingBalance) : -1;
-    const feeIdx = mapping.fee ? headers.indexOf(mapping.fee) : -1;
-
-    // Helper to clean and parse balance amounts
-    const cleanAmount = (str: string | undefined): number | null => {
-      if (!str) return null;
-      const cleaned = str.replace(/[^0-9.\-,]/g, "").replace(",", ".");
-      const parsed = parseFloat(cleaned);
-      return isNaN(parsed) ? null : parsed;
-    };
-
     // Calculate total fees from CSV if fee column is mapped (only from COMPLETED transactions)
     let totalFees = 0;
     if (feeIdx >= 0) {
-      for (const row of rows) {
+      for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+        const row = rows[rowIndex];
         // Only count fees from completed transactions
         if (stateIndex >= 0 && completedStateValue) {
           const rowState = row[stateIndex]?.toLowerCase()?.trim();
@@ -730,7 +765,7 @@ export async function previewImportedTransactions(
             continue; // Skip fees from non-completed transactions
           }
         }
-        const fee = cleanAmount(row[feeIdx]);
+        const fee = parseImportedNumber(row[feeIdx], "fee", rowIndex + 2, numberParseOptions);
         if (fee !== null && fee > 0) {
           totalFees += fee;
         }
@@ -743,8 +778,12 @@ export async function previewImportedTransactions(
       const firstRow = rows[0];
       const lastRow = rows[rows.length - 1];
 
-      const fileStartingBalance = startBalIdx >= 0 ? cleanAmount(firstRow?.[startBalIdx]) : null;
-      const fileEndingBalance = endBalIdx >= 0 ? cleanAmount(lastRow?.[endBalIdx]) : null;
+      const fileStartingBalance = startBalIdx >= 0
+        ? parseImportedNumber(firstRow?.[startBalIdx], "starting balance", 2, numberParseOptions)
+        : null;
+      const fileEndingBalance = endBalIdx >= 0
+        ? parseImportedNumber(lastRow?.[endBalIdx], "ending balance", rows.length + 1, numberParseOptions)
+        : null;
 
       // Calculate starting balance from first row's ending balance when no explicit starting balance
       // Formula: balance_before_first_tx = first_ending_balance - first_amount
@@ -753,9 +792,10 @@ export async function previewImportedTransactions(
       // captured in the daily balances from the CSV which are the source of truth.
       let calculatedStartingBalance: number | null = null;
       if (fileStartingBalance === null && endBalIdx >= 0) {
-        const firstRowEndingBalance = cleanAmount(firstRow?.[endBalIdx]);
-        const amountIdx = mapping.amount ? headers.indexOf(mapping.amount) : -1;
-        const firstRowAmount = amountIdx >= 0 ? cleanAmount(firstRow?.[amountIdx]) : null;
+        const firstRowEndingBalance = parseImportedNumber(firstRow?.[endBalIdx], "ending balance", 2, numberParseOptions);
+        const firstRowAmount = amountIndex >= 0
+          ? parseImportedNumber(firstRow?.[amountIndex], "amount", 2, numberParseOptions)
+          : null;
 
         if (firstRowEndingBalance !== null && firstRowAmount !== null) {
           // first_ending_balance = starting_balance + first_amount
@@ -881,13 +921,12 @@ export async function previewImportedTransactions(
 
           if (endBalIdx >= 0) {
             // Use ending balance directly if available
-            dayBalance = cleanAmount(row[endBalIdx]);
+            dayBalance = parseImportedNumber(row[endBalIdx], "ending balance", i + 2, numberParseOptions);
           } else if (startBalIdx >= 0 && amountIndex >= 0) {
             // Calculate ending balance from starting balance + transaction amount
-            const startBal = cleanAmount(row[startBalIdx]);
+            const startBal = parseImportedNumber(row[startBalIdx], "starting balance", i + 2, numberParseOptions);
             const amountStr = row[amountIndex];
-            const cleanedAmount = amountStr?.replace(/[^0-9.\-,]/g, "").replace(",", ".");
-            const txAmount = cleanedAmount ? parseFloat(cleanedAmount) : null;
+            const txAmount = parseImportedNumber(amountStr, "amount", i + 2, numberParseOptions);
 
             if (startBal !== null && txAmount !== null) {
               // For signed amounts, just add directly. For type-based, need to check type
@@ -923,7 +962,10 @@ export async function previewImportedTransactions(
     return { success: true, transactions: markedTransactions, balanceVerification, dailyBalances };
   } catch (error) {
     console.error("Failed to preview transactions:", error);
-    return { success: false, error: "Failed to preview transactions" };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to preview transactions",
+    };
   }
 }
 
@@ -1423,7 +1465,9 @@ export async function getCsvImportSession(
     accountId: importSession.accountId,
     fileName: importSession.fileName,
     status: importSession.status || "pending",
-    columnMapping: importSession.columnMapping as ColumnMapping | null,
+    columnMapping: importSession.columnMapping
+      ? normalizeColumnMapping(importSession.columnMapping as ColumnMapping)
+      : null,
     totalRows: importSession.totalRows,
   };
 }
@@ -1563,12 +1607,8 @@ export async function importRevolutCsv(filePath: string): Promise<{
   try {
     // Read and parse CSV
     const content = await fs.readFile(filePath, "utf-8");
-    const lines = content.trim().split("\n");
-    const headerLine = lines[0];
-    const dataLines = lines.slice(1);
-
-    // Parse header
-    const csvHeaders = headerLine.split(",");
+    const delimiter = detectCsvDelimiter(content);
+    const { headers: csvHeaders, rows: dataRows } = parseDelimitedText(content, delimiter);
     const typeIdx = csvHeaders.indexOf("Type");
     const completedDateIdx = csvHeaders.indexOf("Completed Date");
     const descriptionIdx = csvHeaders.indexOf("Description");
@@ -1628,19 +1668,28 @@ export async function importRevolutCsv(filePath: string): Promise<{
 
     // Parse and import transactions
     let importedCount = 0;
+    const inferredAmountFormat = inferAmountFormat(
+      dataRows.flatMap((row) => [row[amountIdx], row[feeIdx]])
+    );
 
-    for (const line of dataLines) {
-      const values = line.split(",");
+    for (const values of dataRows) {
 
       const type = values[typeIdx];
       const completedDate = values[completedDateIdx];
       const description = values[descriptionIdx];
-      const amount = parseFloat(values[amountIdx]);
-      const fee = parseFloat(values[feeIdx]);
+      const amount = parseLocalizedNumber(values[amountIdx], {
+        amountFormat: "AUTO",
+        inferredFormat: inferredAmountFormat,
+      });
+      const fee = parseLocalizedNumber(values[feeIdx], {
+        amountFormat: "AUTO",
+        inferredFormat: inferredAmountFormat,
+      }) ?? 0;
       const currency = values[currencyIdx];
       const state = values[stateIdx];
 
       if (state !== "COMPLETED") continue;
+      if (amount === null) continue;
 
       const categoryName = categorizeTransactionByDescription(description);
       const categoryId = categoryName ? categoryMap.get(categoryName) : null;

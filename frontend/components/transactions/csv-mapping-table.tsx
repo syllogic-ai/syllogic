@@ -138,6 +138,30 @@ export function CsvMappingTable({
           </div>
         </div>
 
+        <div className="rounded-lg border bg-card p-4">
+          <div className="space-y-3">
+            <div>
+              <Label className="font-medium">Amount Format</Label>
+              <p className="text-xs text-muted-foreground">
+                Controls decimal separators for amounts, fees, and balance columns.
+              </p>
+            </div>
+            <Select
+              value={mapping.typeConfig?.amountFormat ?? "AUTO"}
+              onValueChange={(value) => updateTypeConfig("amountFormat", value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select amount format" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="AUTO">Auto detect</SelectItem>
+                <SelectItem value="DOT_DECIMAL">1,234.56</SelectItem>
+                <SelectItem value="COMMA_DECIMAL">1.234,56</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
         {/* Completed State Value Configuration - only shown when State column is mapped */}
         {mapping.state && (
           <div className="rounded-lg border bg-card p-4">
