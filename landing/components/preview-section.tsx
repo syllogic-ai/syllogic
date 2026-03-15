@@ -10,6 +10,11 @@ const SCREENSHOTS = [
   },
 ];
 
+const WIDE_SCREENSHOT_SIZES =
+  "(min-width: 1024px) calc(100vw - 12rem), calc(100vw - 4rem)";
+const HALF_SCREENSHOT_SIZES =
+  "(min-width: 1024px) calc((100vw - 12rem - 0.75rem) / 2), calc(100vw - 4rem)";
+
 function ScreenshotPlaceholder({
   label,
   wide,
@@ -58,7 +63,7 @@ function ScreenshotPlaceholder({
         alt={label}
         width={width}
         height={height}
-        sizes={wide ? "(min-width: 1024px) 66vw, 100vw" : "100vw"}
+        sizes={wide ? WIDE_SCREENSHOT_SIZES : HALF_SCREENSHOT_SIZES}
         className="block h-auto w-full"
       />
     </div>
