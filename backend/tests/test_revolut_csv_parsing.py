@@ -76,7 +76,7 @@ class NumberParsingTests(unittest.TestCase):
         self.assertEqual(transactions[1].amount, Decimal("2500.00"))
         self.assertEqual(transactions[1].transaction_type, "credit")
 
-    def test_revolut_adapter_keeps_grouped_whole_numbers_when_inference_is_ambiguous(self) -> None:
+    def test_revolut_adapter_does_not_coerce_ambiguous_amounts_into_grouped_integers(self) -> None:
         csv_content = "\n".join(
             [
                 "Type,Product,Completed Date,Description,Amount,Fee,Currency,State",
@@ -88,9 +88,7 @@ class NumberParsingTests(unittest.TestCase):
         adapter = RevolutCSVAdapter(csv_content)
         transactions = adapter.fetch_transactions("current")
 
-        self.assertEqual(len(transactions), 2)
-        self.assertEqual(transactions[0].amount, Decimal("1234"))
-        self.assertEqual(transactions[1].amount, Decimal("2000"))
+        self.assertEqual(len(transactions), 0)
 
 
 if __name__ == "__main__":

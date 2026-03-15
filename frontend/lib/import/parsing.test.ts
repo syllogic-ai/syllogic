@@ -48,6 +48,11 @@ describe("import parsing helpers", () => {
   it("returns ambiguous when the file does not disambiguate decimals", () => {
     expect(inferAmountFormat(["1,234", "9,876", "123"])).toBe("AMBIGUOUS");
     expect(parseLocalizedNumber("1,234", { amountFormat: "AUTO", inferredFormat: "AMBIGUOUS" })).toBeNull();
+    expect(parseLocalizedNumber("1,234", {
+      amountFormat: "AUTO",
+      inferredFormat: "AMBIGUOUS",
+      allowGroupedIntegersWhenAmbiguous: true,
+    })).toBe(1234);
   });
 
   it("parses dot-decimal values with grouping and currency markers", () => {
