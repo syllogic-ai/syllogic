@@ -117,6 +117,7 @@ export function parseLocalizedNumber(
   options: {
     amountFormat?: AmountFormat;
     inferredFormat?: InferredAmountFormat;
+    allowGroupedIntegersWhenAmbiguous?: boolean;
   } = {}
 ): number | null {
   const parsed = parseNumericToken(raw);
@@ -145,9 +146,14 @@ export function parseLocalizedNumber(
     } else {
       const digitsAfter = token.length - token.lastIndexOf(separator) - 1;
       if (digitsAfter === 0 || digitsAfter === 3) {
-        return null;
+        if (options.allowGroupedIntegersWhenAmbiguous && digitsAfter === 3) {
+          normalized = normalizeGroupedInteger(token);
+        } else {
+          return null;
+        }
+      } else {
+        normalized = normalizeWithDecimalSeparator(token, separator);
       }
-      normalized = normalizeWithDecimalSeparator(token, separator);
     }
   } else {
     normalized = token;
@@ -299,4 +305,23 @@ function normalizeWithDecimalSeparator(
   }
 
   return normalized;
+}
+
+function normalizeGroupedInteger(token: string): string | null {
+  let normalized = "";
+
+  for (const char of token) {
+    if (/\d/.test(char)) {
+      normalized += char;
+      continue;
+    }
+
+    if (char === "." || char === ",") {
+      continue;
+    }
+
+    return null;
+  }
+
+  return normalized || null;
 }
