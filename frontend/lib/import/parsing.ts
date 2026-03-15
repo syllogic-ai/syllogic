@@ -315,7 +315,6 @@ function normalizeGroupedInteger(token: string, separator: "." | ","): string | 
   if (!groupedIntegerPattern.test(token)) {
     return null;
   }
-
   let normalized = "";
 
   for (const char of token) {
