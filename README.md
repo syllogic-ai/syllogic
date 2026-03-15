@@ -1,16 +1,18 @@
-![Syllogic](https://pub-9a7afb92aeda47c8a8856a83903f29d1.r2.dev/syllogic/syllogic/syllogic-finance-banner.png)
-
 <p align="center">
   <h1 align="center"><b>Syllogic</b></h1>
   <p align="center">
-    An open-source, minimal, wealth management app
+    Self-hosted personal finance dashboard with AI categorization, recurring spend tracking, and a live demo.
     <br />
     <br />
-    <a href="https://github.com/syllogic-ai/syllogic">GitHub</a>
+    <a href="https://app.syllogic.ai/login?demo=1&utm_source=github&utm_medium=readme&utm_campaign=oss_promotion&utm_content=hero_demo">Live Demo</a>
     ·
-    <a href="https://github.com/syllogic-ai/syllogic/issues">Issues</a>
+    <a href="START_HERE.md">Start Here</a>
     ·
-    <a href="#railway-one-click">Deploy</a>
+    <a href="#quick-start">Self-Host</a>
+    ·
+    <a href="ROADMAP.md">Roadmap</a>
+    ·
+    <a href="https://github.com/syllogic-ai/syllogic/discussions">Discussions</a>
   </p>
 </p>
 
@@ -21,23 +23,39 @@
   <a href="https://github.com/orgs/syllogic-ai/packages">
     <img src="https://img.shields.io/badge/Docker-GHCR-blue?logo=docker" alt="Docker" />
   </a>
-  <a href="https://railway.com/deploy/N98lwA?referralCode=25KFsK&utm_medium=integration&utm_source=template&utm_campaign=generic">
+  <a href="https://railway.com/deploy/N98lwA?referralCode=25KFsK&utm_source=github&utm_medium=readme&utm_campaign=oss_promotion&utm_content=hero_railway">
     <img src="https://img.shields.io/badge/Deploy-Railway-blueviolet?logo=railway" alt="Deploy on Railway" />
   </a>
 </p>
 
+![Syllogic dashboard screenshot](landing/public/images/screenshots/dashboard.png)
+
 ## About Syllogic
 
-Syllogic is an open-source wealth management platform that gives you a complete picture of your finances — balances, spending, subscriptions, and trends — all in one place. Connect your bank accounts, let AI handle categorization, and keep your data on your own infrastructure.
+Syllogic is an open-source personal finance app for self-hosters who want control over their data without giving up a polished product. Track balances, spending, recurring charges, and trends, import and export CSVs, and optionally enable AI categorization.
 
-## Features
+## Why self-hosters care
 
-**Financial Dashboard** — real-time balances, spending patterns, and financial health overview.<br/>
-**AI Categorization** — automatic transaction categorization and merchant enrichment via OpenAI.<br/>
-**Subscription Tracking** — monitor recurring payments with company logo integration.<br/>
-**Category Analytics** — interactive charts and spending breakdowns.<br/>
-**Transaction Linking** — link transactions with reimbursements for bill splitting.<br/>
-**CSV Import/Export** — bulk import and export transaction data.<br/>
+- Keep financial data on infrastructure you control
+- Start with Docker, Railway, or CasaOS instead of building from scratch
+- Export your data whenever you want
+- Use AI categorization only if it helps your workflow
+
+## Try it now
+
+- Live demo: [app.syllogic.ai/login?demo=1](https://app.syllogic.ai/login?demo=1&utm_source=github&utm_medium=readme&utm_campaign=oss_promotion&utm_content=top_demo)
+- Quick guide: [START_HERE.md](START_HERE.md)
+- Roadmap: [ROADMAP.md](ROADMAP.md)
+
+## What works today
+
+- **Balances and cash flow**: dashboard views, savings trends, and cash-flow breakdowns
+- **AI categorization**: optional OpenAI-powered categorization with rule-based fallback
+- **Recurring spend tracking**: identify subscriptions and recurring charges
+- **Category analytics**: compare spending over time and spot trends
+- **Transfer and reimbursement linking**: avoid double-counting across accounts
+- **CSV import/export**: ingest bank exports and keep your data portable
+- **MCP server**: connect compatible LLM clients for technical finance workflows
 
 ## Quick Start
 
@@ -87,7 +105,7 @@ For advanced configuration (TLS, custom domains, MCP server), see [`deploy/compo
 
 ### Railway (One-Click)
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/N98lwA?referralCode=25KFsK&utm_medium=integration&utm_source=template&utm_campaign=generic)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/N98lwA?referralCode=25KFsK&utm_source=github&utm_medium=readme&utm_campaign=oss_promotion&utm_content=quickstart_railway)
 
 After deploy, set these **Shared Variables** in Railway:
 

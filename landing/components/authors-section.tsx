@@ -83,7 +83,7 @@ export function AuthorsSection() {
             className="font-mono text-sm"
             style={{ color: "var(--color-accent)" }}
           >
-            06
+            08
           </span>
           <h2
             className="font-display text-5xl"

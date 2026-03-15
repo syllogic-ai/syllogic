@@ -7,10 +7,12 @@ const SECTIONS = [
   { id: "hero", label: "00" },
   { id: "signals", label: "01" },
   { id: "preview", label: "02" },
-  { id: "work", label: "03" },
-  { id: "deploy", label: "04" },
-  { id: "colophon", label: "05" },
-  { id: "authors", label: "06" },
+  { id: "why", label: "03" },
+  { id: "work", label: "04" },
+  { id: "install", label: "05" },
+  { id: "roadmap", label: "06" },
+  { id: "colophon", label: "07" },
+  { id: "authors", label: "08" },
 ];
 
 export function SideNav() {

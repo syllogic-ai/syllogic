@@ -1,0 +1,12 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Start here
+    url: https://github.com/syllogic-ai/syllogic/blob/main/START_HERE.md
+    about: Read the short guide before opening an issue.
+  - name: Roadmap
+    url: https://github.com/syllogic-ai/syllogic/blob/main/ROADMAP.md
+    about: See what works today and what is coming next.
+  - name: Live demo
+    url: https://app.syllogic.ai/login?demo=1&utm_source=github&utm_medium=issue_templates&utm_campaign=oss_promotion&utm_content=demo_contact_link
+    about: Try the product before you decide whether to self-host it.
+

@@ -16,9 +16,9 @@ const bebasNeue = Bebas_Neue({
 });
 
 export const metadata: Metadata = {
-  title: "Syllogic — Open Source Personal Finance",
+  title: "Syllogic - Self-Hosted Personal Finance",
   description:
-    "Track every transaction. Understand every pattern. Your data stays on your hardware.",
+    "Self-hosted personal finance dashboard with AI categorization, recurring spend tracking, and a live demo.",
 };
 
 export default function RootLayout({

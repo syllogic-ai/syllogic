@@ -8,6 +8,18 @@ const SCREENSHOTS = [
     width: 3776,
     height: 1810,
   },
+  {
+    label: "Transactions",
+    src: "/images/screenshots/transactions.png",
+    width: 2946,
+    height: 1624,
+  },
+  {
+    label: "Category Analytics",
+    src: "/images/screenshots/spending-category.png",
+    width: 2934,
+    height: 1604,
+  },
 ];
 
 const WIDE_SCREENSHOT_SIZES =
@@ -85,13 +97,21 @@ export function PreviewSection() {
         >
           02
         </span>
-        <h2
-          className="font-display text-5xl"
-          style={{ color: "var(--color-fg)" }}
-        >
-          PREVIEW
-        </h2>
-      </div>
+          <h2
+            className="font-display text-5xl"
+            style={{ color: "var(--color-fg)" }}
+          >
+            WHAT IT LOOKS LIKE
+          </h2>
+        </div>
+
+      <p
+        className="font-mono text-sm leading-relaxed max-w-3xl mb-12"
+        style={{ color: "var(--color-muted)" }}
+      >
+        Real UI, real workflows, and a live demo you can click through before
+        you ever deploy the stack.
+      </p>
 
       {/* Screenshots grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">

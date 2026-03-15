@@ -33,6 +33,9 @@ type LoginFormData = z.infer<typeof loginSchema>;
 
 const truthyParamValues = new Set(["1", "true", "yes", "on"]);
 
+const signUpsDisabledVal = process.env.NEXT_PUBLIC_DISABLE_SIGN_UPS?.trim().toLowerCase();
+const signUpsDisabled = ["1", "true", "yes", "on"].includes(signUpsDisabledVal ?? "");
+
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -153,12 +156,14 @@ function LoginPageContent() {
               <Button type="submit" disabled={isLoading} className="w-full">
                 {isLoading ? "Signing in..." : "Login"}
               </Button>
-              <FieldDescription className="text-center">
-                Don&apos;t have an account?{" "}
-                <Link href="/register" className="underline underline-offset-4">
-                  Sign up
-                </Link>
-              </FieldDescription>
+              {!signUpsDisabled && (
+                <FieldDescription className="text-center">
+                  Don&apos;t have an account?{" "}
+                  <Link href="/register" className="underline underline-offset-4">
+                    Sign up
+                  </Link>
+                </FieldDescription>
+              )}
             </Field>
           </FieldGroup>
         </form>

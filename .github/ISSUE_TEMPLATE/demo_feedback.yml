@@ -1,0 +1,45 @@
+name: Demo feedback
+description: Share what confused you, what worked, and what is missing from the live demo
+title: "[DEMO] "
+labels: ["feedback", "demo"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This form helps us improve the live demo and first impression for new users.
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What did you try in the demo?
+      placeholder: I looked at the dashboard, recurring spend section, CSV import flow, etc.
+    validations:
+      required: true
+
+  - type: textarea
+    id: clear
+    attributes:
+      label: What felt clear or useful?
+      placeholder: The dashboard made sense immediately because...
+
+  - type: textarea
+    id: confusing
+    attributes:
+      label: What felt confusing or missing?
+      description: Call out copy, onboarding, missing workflows, or trust issues.
+    validations:
+      required: true
+
+  - type: textarea
+    id: next_step
+    attributes:
+      label: What would make you try self-hosting it?
+      placeholder: A better install guide, bank import support, more screenshots, etc.
+
+  - type: input
+    id: comparison
+    attributes:
+      label: What are you comparing Syllogic against?
+      placeholder: YNAB, Monarch, spreadsheets, custom scripts, etc.
+
