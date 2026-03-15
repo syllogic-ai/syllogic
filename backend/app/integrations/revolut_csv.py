@@ -252,6 +252,8 @@ class RevolutCSVAdapter(BankAdapter):
                 paid_in = row.get(key.replace('Out', 'In').replace('out', 'in')) or '0'
                 # Try to get the corresponding "In" column
                 for other_key in row.keys():
+                    if not isinstance(other_key, str):
+                        continue
                     if 'paid in' in other_key.lower() and key != other_key:
                         paid_in = row.get(other_key) or '0'
                         break
@@ -260,12 +262,10 @@ class RevolutCSVAdapter(BankAdapter):
                     out_val = parse_localized_decimal(
                         str(paid_out),
                         inferred_format=inferred_amount_format,
-                        allow_grouped_integers_when_ambiguous=True,
                     ) or Decimal("0")
                     in_val = parse_localized_decimal(
                         str(paid_in),
                         inferred_format=inferred_amount_format,
-                        allow_grouped_integers_when_ambiguous=True,
                     ) or Decimal("0")
                     if in_val > 0:
                         amount = in_val
@@ -291,7 +291,6 @@ class RevolutCSVAdapter(BankAdapter):
             amount = parse_localized_decimal(
                 str(amount_str),
                 inferred_format=inferred_amount_format,
-                allow_grouped_integers_when_ambiguous=True,
             )
 
         if amount is None:
