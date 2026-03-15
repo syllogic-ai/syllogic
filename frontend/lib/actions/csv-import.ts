@@ -1727,6 +1727,7 @@ export async function importRevolutCsv(filePath: string): Promise<{
       ? parseLocalizedNumber(lastValues[balanceIdx], {
           amountFormat: "AUTO",
           inferredFormat: inferredAmountFormat,
+          allowGroupedIntegersWhenAmbiguous: true,
         })
       : null;
 
