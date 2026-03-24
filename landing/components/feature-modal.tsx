@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { createPortal } from "react-dom";
 
 export interface Feature {
@@ -10,6 +11,7 @@ export interface Feature {
   detail: string;
   wide?: boolean;
   useCases?: string[];
+  image?: string;
 }
 
 interface FeatureModalProps {
@@ -90,40 +92,40 @@ export function FeatureModal({ feature, onClose }: FeatureModalProps) {
           </button>
         </div>
 
-        {/* Screenshot placeholder */}
-        <div
-          className="w-full flex flex-col items-center justify-center gap-3"
-          style={{
-            height: "240px",
-            backgroundColor: "rgba(255,255,255,0.015)",
-            borderBottom: "1px solid var(--color-border)",
-          }}
-        >
+        {/* Screenshot */}
+        {feature.image ? (
           <div
-            className="grid grid-cols-3 gap-1 opacity-20"
-            style={{ width: 48 }}
+            className="w-full relative"
+            style={{
+              borderBottom: "1px solid var(--color-border)",
+            }}
           >
-            {Array.from({ length: 9 }).map((_, i) => (
-              <div
-                key={i}
-                className="h-1"
-                style={{ backgroundColor: "var(--color-accent)" }}
-              />
-            ))}
+            <Image
+              src={feature.image}
+              alt={`Screenshot of ${feature.title}`}
+              width={1200}
+              height={675}
+              className="w-full h-auto"
+              style={{ display: "block" }}
+            />
           </div>
-          <span
-            className="font-mono text-xs uppercase tracking-[0.2em]"
-            style={{ color: "var(--color-muted)" }}
+        ) : (
+          <div
+            className="w-full flex flex-col items-center justify-center gap-3"
+            style={{
+              height: "240px",
+              backgroundColor: "rgba(255,255,255,0.015)",
+              borderBottom: "1px solid var(--color-border)",
+            }}
           >
-            Screenshot · {feature.title}
-          </span>
-          <span
-            className="font-mono text-xs"
-            style={{ color: "rgba(90,90,90,0.6)" }}
-          >
-            Add image here
-          </span>
-        </div>
+            <span
+              className="font-mono text-xs uppercase tracking-[0.2em]"
+              style={{ color: "var(--color-muted)" }}
+            >
+              Screenshot · {feature.title}
+            </span>
+          </div>
+        )}
 
         {/* Body */}
         <div className="p-6 space-y-6">
