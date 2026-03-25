@@ -1457,7 +1457,7 @@ export async function getDeleteImpact(
     }
 
     const accountImpacts: AccountDeleteImpact[] = [];
-    let overallEarliestDate = new Date();
+    let overallEarliestDate = new Date(8640000000000000); // max-date sentinel for min-reduction
 
     for (const [accountId, { account, amountSum, earliestDate }] of byAccount) {
       const currentBalance = parseFloat(account.functionalBalance || "0");
@@ -1482,7 +1482,9 @@ export async function getDeleteImpact(
         accountId,
         accountName: account.name,
         currency: account.currency ?? "EUR",
-        amountChange: -amountSum, // negative = balance decreases when credits deleted, positive when debits deleted
+        // Debits are stored as negative amounts; credits as positive (schema convention).
+        // Deleting a debit raises the balance (+), deleting a credit lowers it (-).
+        amountChange: -amountSum,
         currentBalance,
         projectedBalance,
         balanceIsAnchored: account.balanceIsAnchored ?? false,
@@ -1512,7 +1514,7 @@ export async function getDeleteImpact(
  */
 export async function deleteTransactions(
   transactionIds: string[]
-): Promise<{ success: boolean; error?: string; affectedAccountIds?: string[] }> {
+): Promise<{ success: boolean; error?: string; affectedAccountIds?: string[]; deletedCount?: number }> {
   const session = await getAuthenticatedSession();
   const userId = session?.user?.id ?? null;
   if (!userId) return { success: false, error: "Not authenticated" };
@@ -1532,9 +1534,8 @@ export async function deleteTransactions(
     });
 
     if (!txRows.length) return { success: false, error: "Transactions not found" };
-    if (txRows.length !== transactionIds.length) {
-      return { success: false, error: "One or more transactions not found or do not belong to you" };
-    }
+    // No strict length equality check: the DELETE is already user-scoped (userId in WHERE),
+    // so foreign or concurrently-deleted IDs are safely ignored rather than aborting the batch.
 
     // Build per-account: earliest bookedAt for recalculation range
     const accountData = new Map<string, { startingBalance: number; earliestDate: Date }>();
@@ -1565,7 +1566,7 @@ export async function deleteTransactions(
       const balanceResult = await db
         .select({ total: sql<string>`COALESCE(SUM(${transactions.amount}), 0)` })
         .from(transactions)
-        .where(eq(transactions.accountId, accountId));
+        .where(and(eq(transactions.accountId, accountId), eq(transactions.userId, userId)));
 
       const transactionSum = parseFloat(balanceResult[0]?.total || "0");
       const newFunctionalBalance = startingBalance + transactionSum;
@@ -1585,7 +1586,7 @@ export async function deleteTransactions(
     revalidatePath("/assets");
     revalidatePath("/subscriptions");
 
-    return { success: true, affectedAccountIds };
+    return { success: true, affectedAccountIds, deletedCount: txRows.length };
   } catch (error) {
     console.error("Failed to delete transactions:", error);
     return { success: false, error: "Failed to delete transactions" };

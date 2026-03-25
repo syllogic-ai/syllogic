@@ -1793,6 +1793,7 @@ export interface CsvImportWithStats {
  */
 export async function getCsvImportHistory(): Promise<CsvImportWithStats[]> {
   const userId = await requireAuth();
+  // Silent empty on auth failure — return type is CsvImportWithStats[], not a result object
   if (!userId) return [];
 
   const imports = await db.query.csvImports.findMany({
@@ -1801,33 +1802,35 @@ export async function getCsvImportHistory(): Promise<CsvImportWithStats[]> {
     with: { account: { columns: { id: true, name: true, currency: true } } },
   });
 
-  const results: CsvImportWithStats[] = [];
+  if (!imports.length) return [];
 
-  for (const imp of imports) {
-    const countResult = await db
-      .select({ count: sql<string>`COUNT(*)` })
-      .from(transactions)
-      .where(eq(transactions.csvImportId, imp.id));
+  const importIds = imports.map((i) => i.id);
 
-    const transactionCount = parseInt(countResult[0]?.count ?? "0", 10);
+  // Single aggregation query replaces the previous N+1 loop (2 queries per import).
+  // COUNT(*) FILTER is standard PostgreSQL syntax supported by Drizzle's sql`` tag.
+  const counts = await db
+    .select({
+      csvImportId: transactions.csvImportId,
+      total: sql<string>`COUNT(*)`,
+      edited: sql<string>`COUNT(*) FILTER (
+        WHERE ${transactions.categoryId} IS NOT NULL
+        AND ${transactions.categoryId} != ${transactions.categorySystemId}
+      )`,
+    })
+    .from(transactions)
+    .where(
+      and(
+        inArray(transactions.csvImportId, importIds),
+        eq(transactions.userId, userId)
+      )
+    )
+    .groupBy(transactions.csvImportId);
 
-    // Check if any linked transactions were manually re-categorized
-    let hasEditedTransactions = false;
-    if (transactionCount > 0) {
-      const editedResult = await db
-        .select({ count: sql<string>`COUNT(*)` })
-        .from(transactions)
-        .where(
-          and(
-            eq(transactions.csvImportId, imp.id),
-            sql`${transactions.categoryId} IS NOT NULL`,
-            sql`${transactions.categoryId} != ${transactions.categorySystemId}`
-          )
-        );
-      hasEditedTransactions = parseInt(editedResult[0]?.count ?? "0", 10) > 0;
-    }
+  const countMap = new Map(counts.map((r) => [r.csvImportId, r]));
 
-    results.push({
+  return imports.map((imp) => {
+    const row = countMap.get(imp.id);
+    return {
       id: imp.id,
       fileName: imp.fileName,
       status: imp.status,
@@ -1836,12 +1839,10 @@ export async function getCsvImportHistory(): Promise<CsvImportWithStats[]> {
       createdAt: imp.createdAt,
       completedAt: imp.completedAt,
       account: imp.account ?? null,
-      transactionCount,
-      hasEditedTransactions,
-    });
-  }
-
-  return results;
+      transactionCount: parseInt(row?.total ?? "0", 10),
+      hasEditedTransactions: parseInt(row?.edited ?? "0", 10) > 0,
+    };
+  });
 }
 
 /**

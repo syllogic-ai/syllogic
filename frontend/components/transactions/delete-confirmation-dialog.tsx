@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -45,6 +45,12 @@ export function DeleteConfirmationDialog({
 
   const isConfirmed = confirmInput.trim().toLowerCase() === CONFIRMATION_PHRASE;
 
+  // Keep a fresh ref to onOpenChange so async callbacks don't capture a stale closure
+  const onOpenChangeRef = useRef(onOpenChange);
+  useEffect(() => {
+    onOpenChangeRef.current = onOpenChange;
+  });
+
   useEffect(() => {
     if (!open || !transactionIds.length) {
       setImpact(null);
@@ -59,11 +65,11 @@ export function DeleteConfirmationDialog({
           setImpact(result.data);
         } else {
           toast.error(result.error ?? "Failed to compute impact");
-          onOpenChange(false);
+          onOpenChangeRef.current(false);
         }
       })
       .finally(() => setLoadingImpact(false));
-  }, [open, transactionIds.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, transactionIds.join(",")]);
 
   async function handleDelete() {
     if (!isConfirmed || deleting) return;
@@ -71,8 +77,9 @@ export function DeleteConfirmationDialog({
     try {
       const result = await deleteTransactions(transactionIds);
       if (result.success) {
+        const count = result.deletedCount ?? transactionIds.length;
         toast.success(
-          `${transactionIds.length === 1 ? "Transaction" : `${transactionIds.length} transactions`} deleted`
+          `${count === 1 ? "Transaction" : `${count} transactions`} deleted`
         );
         onSuccess(transactionIds);
         onOpenChange(false);
