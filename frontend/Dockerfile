@@ -45,6 +45,10 @@ ENV APP_URL="http://localhost:8080"
 ENV BETTER_AUTH_URL="http://localhost:8080"
 ENV BETTER_AUTH_SECRET="build-only-secret"
 
+# Build-time public flags (inlined into the JS bundle by Next.js).
+ARG NEXT_PUBLIC_DISABLE_SIGN_UPS=false
+ENV NEXT_PUBLIC_DISABLE_SIGN_UPS=$NEXT_PUBLIC_DISABLE_SIGN_UPS
+
 RUN pnpm build
 
 
