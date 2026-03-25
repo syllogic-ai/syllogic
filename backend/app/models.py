@@ -46,6 +46,7 @@ class Account(Base):
     balance_available = Column(Numeric(15, 2), nullable=True)
     starting_balance = Column(Numeric(15, 2), default=Decimal("0"))  # Starting balance for calculation
     functional_balance = Column(Numeric(15, 2), nullable=True)  # Calculated balance (sum of transactions + starting_balance)
+    balance_is_anchored = Column(Boolean, default=False)  # True when starting_balance is from verified bank data
     is_active = Column(Boolean, default=True)
     last_synced_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -135,6 +136,7 @@ class Transaction(Base):
     enrichment_data = Column(JSONB)  # Enriched merchant info, logos, etc.
     recurring_transaction_id = Column(UUID(as_uuid=True), ForeignKey("recurring_transactions.id", ondelete="SET NULL"), nullable=True, index=True)  # Link to recurring transaction label
     include_in_analytics = Column(Boolean, default=True, nullable=False)  # Whether to include in analytics (charts, KPIs, etc.)
+    csv_import_id = Column(UUID(as_uuid=True), ForeignKey("csv_imports.id", ondelete="SET NULL"), nullable=True, index=True)  # Source CSV import (null for manual/bank-synced)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -145,6 +147,7 @@ class Transaction(Base):
     category_system = relationship("Category", foreign_keys=[category_system_id], back_populates="system_transactions")
     recurring_transaction = relationship("RecurringTransaction", back_populates="linked_transactions")
     transaction_link = relationship("TransactionLink", back_populates="transaction", uselist=False)
+    csv_import = relationship("CsvImport", back_populates="transactions")
 
     # Indexes and constraints
     __table_args__ = (
@@ -154,6 +157,7 @@ class Transaction(Base):
         Index("idx_transactions_category", "category_id"),
         Index("idx_transactions_category_system", "category_system_id"),
         Index("idx_transactions_recurring", "recurring_transaction_id"),
+        Index("idx_transactions_csv_import", "csv_import_id"),
         UniqueConstraint("account_id", "external_id", name="transactions_account_external_id"),
     )
 
@@ -246,6 +250,7 @@ class CsvImport(Base):
     # Relationships
     user = relationship("User", back_populates="csv_imports")
     account = relationship("Account", back_populates="csv_imports")
+    transactions = relationship("Transaction", back_populates="csv_import")
 
     # Indexes and constraints
     __table_args__ = (

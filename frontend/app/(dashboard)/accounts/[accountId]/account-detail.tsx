@@ -85,6 +85,9 @@ export function AccountDetail({
             onUpdateTransaction={handleUpdateTransaction}
             onDeleteTransaction={handleDeleteTransaction}
             onBulkUpdate={handleBulkUpdate}
+            onBulkDelete={(deletedIds) =>
+              setTransactions((prev) => prev.filter((tx) => !deletedIds.includes(tx.id)))
+            }
           />
         )}
       </div>

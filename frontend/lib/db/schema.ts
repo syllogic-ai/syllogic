@@ -122,6 +122,7 @@ export const accounts = pgTable(
     balanceAvailable: decimal("balance_available", { precision: 15, scale: 2 }),
     startingBalance: decimal("starting_balance", { precision: 15, scale: 2 }).default("0"), // Starting balance for calculation
     functionalBalance: decimal("functional_balance", { precision: 15, scale: 2 }), // Calculated balance (sum of transactions + starting_balance)
+    balanceIsAnchored: boolean("balance_is_anchored").default(false), // True when startingBalance is derived from known bank data (CSV with verified opening/closing balance)
     isActive: boolean("is_active").default(true),
     lastSyncedAt: timestamp("last_synced_at"),
     createdAt: timestamp("created_at").defaultNow(),
@@ -167,6 +168,38 @@ export const categories = pgTable(
   ]
 );
 
+export const csvImports = pgTable(
+  "csv_imports",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    accountId: uuid("account_id")
+      .references(() => accounts.id, { onDelete: "cascade" })
+      .notNull(),
+    fileName: varchar("file_name", { length: 255 }).notNull(),
+    filePath: text("file_path"),
+    filePathCiphertext: text("file_path_ciphertext"),
+    status: varchar("status", { length: 20 }).default("pending"), // pending, mapping, previewing, importing, completed, failed
+    columnMapping: jsonb("column_mapping"),
+    totalRows: integer("total_rows"),
+    importedRows: integer("imported_rows"),
+    duplicatesFound: integer("duplicates_found"),
+    errorMessage: text("error_message"),
+    // Background worker fields
+    celeryTaskId: varchar("celery_task_id", { length: 255 }),
+    progressCount: integer("progress_count").default(0),
+    selectedIndices: jsonb("selected_indices"), // Array of row indices selected for import
+    createdAt: timestamp("created_at").defaultNow(),
+    completedAt: timestamp("completed_at"),
+  },
+  (table) => [
+    index("idx_csv_imports_user").on(table.userId),
+    index("idx_csv_imports_account").on(table.accountId),
+  ]
+);
+
 export const transactions = pgTable(
   "transactions",
   {
@@ -192,6 +225,7 @@ export const transactions = pgTable(
     enrichmentData: jsonb("enrichment_data"), // Enriched merchant info, logos, etc.
     recurringTransactionId: uuid("recurring_transaction_id").references(() => recurringTransactions.id, { onDelete: "set null" }), // Link to recurring transaction label
     includeInAnalytics: boolean("include_in_analytics").default(true).notNull(), // Whether to include in analytics (charts, KPIs, etc.)
+    csvImportId: uuid("csv_import_id").references(() => csvImports.id, { onDelete: "set null" }), // Source CSV import (null for manual/bank-synced transactions)
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },
@@ -206,6 +240,7 @@ export const transactions = pgTable(
     index("idx_transactions_user_category_system").on(table.userId, table.categorySystemId),
     index("idx_transactions_user_type_date").on(table.userId, table.transactionType, table.bookedAt),
     index("idx_transactions_merchant").on(table.merchant),
+    index("idx_transactions_csv_import").on(table.csvImportId),
     unique("transactions_account_external_id").on(table.accountId, table.externalId),
   ]
 );
@@ -251,38 +286,6 @@ export const categorizationRules = pgTable("categorization_rules", {
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });
-
-export const csvImports = pgTable(
-  "csv_imports",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    userId: text("user_id")
-      .references(() => users.id, { onDelete: "cascade" })
-      .notNull(),
-    accountId: uuid("account_id")
-      .references(() => accounts.id, { onDelete: "cascade" })
-      .notNull(),
-    fileName: varchar("file_name", { length: 255 }).notNull(),
-    filePath: text("file_path"),
-    filePathCiphertext: text("file_path_ciphertext"),
-    status: varchar("status", { length: 20 }).default("pending"), // pending, mapping, previewing, importing, completed, failed
-    columnMapping: jsonb("column_mapping"),
-    totalRows: integer("total_rows"),
-    importedRows: integer("imported_rows"),
-    duplicatesFound: integer("duplicates_found"),
-    errorMessage: text("error_message"),
-    // Background worker fields
-    celeryTaskId: varchar("celery_task_id", { length: 255 }),
-    progressCount: integer("progress_count").default(0),
-    selectedIndices: jsonb("selected_indices"), // Array of row indices selected for import
-    createdAt: timestamp("created_at").defaultNow(),
-    completedAt: timestamp("completed_at"),
-  },
-  (table) => [
-    index("idx_csv_imports_user").on(table.userId),
-    index("idx_csv_imports_account").on(table.accountId),
-  ]
-);
 
 export const properties = pgTable(
   "properties",
@@ -550,6 +553,10 @@ export const transactionsRelations = relations(transactions, ({ one }) => ({
     fields: [transactions.id],
     references: [transactionLinks.transactionId],
   }),
+  csvImport: one(csvImports, {
+    fields: [transactions.csvImportId],
+    references: [csvImports.id],
+  }),
 }));
 
 export const recurringTransactionsRelations = relations(recurringTransactions, ({ one, many }) => ({
@@ -583,7 +590,7 @@ export const categorizationRulesRelations = relations(categorizationRules, ({ on
   }),
 }));
 
-export const csvImportsRelations = relations(csvImports, ({ one }) => ({
+export const csvImportsRelations = relations(csvImports, ({ one, many }) => ({
   user: one(users, {
     fields: [csvImports.userId],
     references: [users.id],
@@ -592,6 +599,7 @@ export const csvImportsRelations = relations(csvImports, ({ one }) => ({
     fields: [csvImports.accountId],
     references: [accounts.id],
   }),
+  transactions: many(transactions),
 }));
 
 export const propertiesRelations = relations(properties, ({ one }) => ({

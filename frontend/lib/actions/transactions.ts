@@ -1,10 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq, and, desc, inArray, sql, gte, lte, gt, asc, ne, or, ilike, isNull } from "drizzle-orm";
+import { eq, and, desc, inArray, notInArray, sql, gte, lte, gt, asc, ne, or, ilike, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { transactions, accounts, categories, accountBalances } from "@/lib/db/schema";
-import { requireAuth } from "@/lib/auth-helpers";
+import { transactions, accounts, categories, accountBalances, csvImports } from "@/lib/db/schema";
+import { requireAuth, getAuthenticatedSession } from "@/lib/auth-helpers";
+import { isDemoRestrictedUserEmail, DEMO_RESTRICTED_ACTION_ERROR } from "@/lib/demo-access";
 import { getBackendBaseUrl } from "@/lib/backend-url";
 import { createInternalAuthHeaders } from "@/lib/internal-auth";
 import { resolveMissingAccountLogos } from "@/lib/actions/account-logos";
@@ -1392,5 +1393,206 @@ export async function createOrUpdateBalancingTransaction(
   } catch (error) {
     console.error("Failed to create/update balancing transaction:", error);
     return { success: false, error: "Failed to update balance" };
+  }
+}
+
+// ============================================================================
+// Deletion Flows
+// ============================================================================
+
+export interface AccountDeleteImpact {
+  accountId: string;
+  accountName: string;
+  currency: string;
+  amountChange: number;
+  currentBalance: number;
+  projectedBalance: number;
+  balanceIsAnchored: boolean;
+}
+
+export interface DeleteImpact {
+  accountImpacts: AccountDeleteImpact[];
+  totalTransactions: number;
+  earliestDate: Date;
+}
+
+/**
+ * Computes the balance impact of deleting a set of transactions without modifying any data.
+ * Used to populate the delete confirmation dialog before the user confirms.
+ */
+export async function getDeleteImpact(
+  transactionIds: string[]
+): Promise<{ success: true; data: DeleteImpact } | { success: false; error: string }> {
+  const userId = await requireAuth();
+  if (!userId) return { success: false, error: "Not authenticated" };
+  if (!transactionIds.length) return { success: false, error: "No transactions selected" };
+
+  try {
+    const txRows = await db.query.transactions.findMany({
+      where: and(
+        inArray(transactions.id, transactionIds),
+        eq(transactions.userId, userId)
+      ),
+      with: { account: true },
+    });
+
+    if (!txRows.length) return { success: false, error: "Transactions not found" };
+
+    // Group by account
+    const byAccount = new Map<
+      string,
+      { account: NonNullable<(typeof txRows)[0]["account"]>; amountSum: number; earliestDate: Date }
+    >();
+
+    for (const tx of txRows) {
+      if (!tx.account) continue;
+      const amount = parseFloat(tx.amount);
+      const existing = byAccount.get(tx.accountId);
+      if (existing) {
+        existing.amountSum += amount;
+        if (tx.bookedAt < existing.earliestDate) existing.earliestDate = tx.bookedAt;
+      } else {
+        byAccount.set(tx.accountId, { account: tx.account, amountSum: amount, earliestDate: tx.bookedAt });
+      }
+    }
+
+    const accountImpacts: AccountDeleteImpact[] = [];
+    let overallEarliestDate = new Date(8640000000000000); // max-date sentinel for min-reduction
+
+    // Single grouped query replaces the previous per-account SUM inside the loop (N queries → 1).
+    const accountIds = Array.from(byAccount.keys());
+    const remainingSums = await db
+      .select({
+        accountId: transactions.accountId,
+        sum: sql<string>`COALESCE(SUM(${transactions.amount}), 0)`,
+      })
+      .from(transactions)
+      .where(
+        and(
+          inArray(transactions.accountId, accountIds),
+          eq(transactions.userId, userId),
+          notInArray(transactions.id, transactionIds)
+        )
+      )
+      .groupBy(transactions.accountId);
+    const remainingSumMap = new Map(remainingSums.map((r) => [r.accountId, r.sum]));
+
+    for (const [accountId, { account, amountSum, earliestDate }] of byAccount) {
+      const currentBalance = parseFloat(account.functionalBalance || "0");
+      const startingBalance = parseFloat(account.startingBalance || "0");
+      const projectedBalance = startingBalance + parseFloat(remainingSumMap.get(accountId) ?? "0");
+
+      accountImpacts.push({
+        accountId,
+        accountName: account.name,
+        currency: account.currency ?? "EUR",
+        // Debits are stored as negative amounts; credits as positive (schema convention).
+        // Deleting a debit raises the balance (+), deleting a credit lowers it (-).
+        amountChange: -amountSum,
+        currentBalance,
+        projectedBalance,
+        balanceIsAnchored: account.balanceIsAnchored ?? false,
+      });
+
+      if (earliestDate < overallEarliestDate) overallEarliestDate = earliestDate;
+    }
+
+    return {
+      success: true,
+      data: {
+        accountImpacts,
+        totalTransactions: txRows.length,
+        earliestDate: overallEarliestDate,
+      },
+    };
+  } catch (error) {
+    console.error("Failed to compute delete impact:", error);
+    return { success: false, error: "Failed to compute impact" };
+  }
+}
+
+/**
+ * Permanently deletes a set of transactions and updates account balances.
+ * All transactions must belong to the authenticated user.
+ * Balance recalculation runs after deletion.
+ */
+export async function deleteTransactions(
+  transactionIds: string[]
+): Promise<{ success: boolean; error?: string; affectedAccountIds?: string[]; deletedCount?: number }> {
+  const session = await getAuthenticatedSession();
+  const userId = session?.user?.id ?? null;
+  if (!userId) return { success: false, error: "Not authenticated" };
+  if (isDemoRestrictedUserEmail(session?.user?.email)) {
+    return { success: false, error: DEMO_RESTRICTED_ACTION_ERROR };
+  }
+  if (!transactionIds.length) return { success: false, error: "No transactions selected" };
+
+  try {
+    // Fetch target transactions to get per-account data before deleting
+    const txRows = await db.query.transactions.findMany({
+      where: and(
+        inArray(transactions.id, transactionIds),
+        eq(transactions.userId, userId)
+      ),
+      with: { account: true },
+    });
+
+    if (!txRows.length) return { success: false, error: "Transactions not found" };
+    // No strict length equality check: the DELETE is already user-scoped (userId in WHERE),
+    // so foreign or concurrently-deleted IDs are safely ignored rather than aborting the batch.
+
+    // Build per-account: earliest bookedAt for recalculation range
+    const accountData = new Map<string, { startingBalance: number; earliestDate: Date }>();
+    for (const tx of txRows) {
+      if (!tx.account) continue;
+      const existing = accountData.get(tx.accountId);
+      if (existing) {
+        if (tx.bookedAt < existing.earliestDate) existing.earliestDate = tx.bookedAt;
+      } else {
+        accountData.set(tx.accountId, {
+          startingBalance: parseFloat(tx.account.startingBalance || "0"),
+          earliestDate: tx.bookedAt,
+        });
+      }
+    }
+
+    // Delete all transactions (userId filter ensures security)
+    await db
+      .delete(transactions)
+      .where(and(inArray(transactions.id, transactionIds), eq(transactions.userId, userId)));
+
+    // Update functionalBalance and recalculate daily snapshots per affected account
+    const affectedAccountIds: string[] = [];
+    for (const [accountId, { startingBalance, earliestDate }] of accountData) {
+      affectedAccountIds.push(accountId);
+
+      // Recompute functionalBalance from remaining transactions
+      const balanceResult = await db
+        .select({ total: sql<string>`COALESCE(SUM(${transactions.amount}), 0)` })
+        .from(transactions)
+        .where(and(eq(transactions.accountId, accountId), eq(transactions.userId, userId)));
+
+      const transactionSum = parseFloat(balanceResult[0]?.total || "0");
+      const newFunctionalBalance = startingBalance + transactionSum;
+
+      await db
+        .update(accounts)
+        .set({ functionalBalance: newFunctionalBalance.toFixed(2), updatedAt: new Date() })
+        .where(and(eq(accounts.id, accountId), eq(accounts.userId, userId)));
+
+      // Rebuild daily balance snapshots from the earliest deleted transaction date
+      await recalculateAccountBalancesFromDate(accountId, earliestDate, startingBalance);
+    }
+
+    revalidatePath("/transactions");
+    revalidatePath("/");
+    revalidatePath("/settings");
+    revalidatePath("/assets");
+    revalidatePath("/subscriptions");
+
+    return { success: true, affectedAccountIds, deletedCount: txRows.length };
+  } catch (error) {
+    console.error("Failed to delete transactions:", error);
+    return { success: false, error: "Failed to delete transactions" };
   }
 }

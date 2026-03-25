@@ -38,6 +38,8 @@ interface TransactionTableProps {
   onUpdateTransaction?: (id: string, updates: Partial<TransactionWithRelations>) => void;
   onDeleteTransaction?: (id: string) => void;
   onBulkUpdate?: (transactionIds: string[], categoryId: string | null) => void;
+  onBulkDelete?: (deletedIds: string[]) => void;
+  canDelete?: boolean;
   action?: React.ReactNode;
   basePath?: string;
   showToolbar?: boolean;
@@ -99,6 +101,8 @@ export function TransactionTable({
   onUpdateTransaction,
   onDeleteTransaction,
   onBulkUpdate,
+  onBulkDelete,
+  canDelete = true,
   action,
   basePath = "/transactions",
   showToolbar = true,
@@ -314,9 +318,14 @@ export function TransactionTable({
               onBulkUpdate={(categoryId) => {
                 onBulkUpdate?.(selectedIds, categoryId);
               }}
+              onBulkDelete={(deletedIds) => {
+                onBulkDelete?.(deletedIds);
+                table.resetRowSelection();
+              }}
               onLinkSuccess={() => {
                 router.refresh();
               }}
+              canDelete={canDelete}
             />
           );
         }}
@@ -354,6 +363,7 @@ export function TransactionTable({
         onUpdateTransaction={handleUpdateTransaction}
         onDeleteTransaction={onDeleteTransaction}
         categories={categories}
+        canDelete={canDelete}
       />
     </>
   );

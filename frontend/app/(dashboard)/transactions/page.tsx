@@ -20,6 +20,7 @@ export default async function TransactionsPage({ searchParams }: TransactionsPag
   const canImportCsv =
     !!process.env.OPENAI_API_KEY &&
     !isDemoRestrictedUserEmail(session?.user.email);
+  const canDelete = !isDemoRestrictedUserEmail(session?.user.email);
 
   const [pageData, categories, accounts] = await Promise.all([
     getTransactionsPage(queryState),
@@ -40,6 +41,7 @@ export default async function TransactionsPage({ searchParams }: TransactionsPag
             categories={categories}
             accounts={accounts}
             canImportCsv={canImportCsv}
+            canDelete={canDelete}
           />
         </Suspense>
       </div>

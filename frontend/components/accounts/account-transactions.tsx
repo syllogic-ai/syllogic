@@ -23,6 +23,7 @@ interface AccountTransactionsProps {
   onUpdateTransaction?: (id: string, updates: Partial<TransactionWithRelations>) => void;
   onDeleteTransaction?: (id: string) => void;
   onBulkUpdate?: (transactionIds: string[], categoryId: string | null) => void;
+  onBulkDelete?: (deletedIds: string[]) => void;
 }
 
 export function AccountTransactions({
@@ -32,6 +33,7 @@ export function AccountTransactions({
   onUpdateTransaction,
   onDeleteTransaction,
   onBulkUpdate,
+  onBulkDelete,
 }: AccountTransactionsProps) {
   const router = useRouter();
   const [selectedTransaction, setSelectedTransaction] = useState<TransactionWithRelations | null>(null);
@@ -153,6 +155,10 @@ export function AccountTransactions({
               onClearSelection={() => table.resetRowSelection()}
               onBulkUpdate={(categoryId) => {
                 onBulkUpdate?.(selectedIds, categoryId);
+              }}
+              onBulkDelete={(deletedIds) => {
+                onBulkDelete?.(deletedIds);
+                table.resetRowSelection();
               }}
               onLinkSuccess={() => {
                 router.refresh();

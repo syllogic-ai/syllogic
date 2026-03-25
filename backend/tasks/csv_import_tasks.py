@@ -3,6 +3,7 @@ Celery tasks for background CSV import processing.
 Processes transactions in batches with real-time progress updates via Redis Pub/Sub.
 """
 import logging
+import uuid
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from decimal import Decimal
@@ -68,6 +69,7 @@ def _process_transaction_batch(
     transactions_data: List[Dict[str, Any]],
     user_overrides: List[dict],
     categorization_instructions: List[str],
+    csv_import_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Process a batch of transactions: normalize, categorize and insert.
@@ -263,7 +265,8 @@ def _process_transaction_batch(
                 booked_at=booked_at,
                 category_id=category_id,
                 category_system_id=category_id if not txn_data.get("category_id") else None,
-                pending=False
+                pending=False,
+                csv_import_id=uuid.UUID(csv_import_id) if csv_import_id else None,
             )
 
             db.add(transaction)
@@ -350,6 +353,7 @@ def process_csv_import(
                 transactions_data=batch,
                 user_overrides=user_overrides,
                 categorization_instructions=categorization_instructions,
+                csv_import_id=csv_import_id,
             )
 
             total_inserted += result["inserted_count"]
@@ -392,6 +396,7 @@ def process_csv_import(
                     account = db.query(Account).filter(Account.id == account_id).first()
                     if account:
                         account.starting_balance = Decimal(str(starting_balance))
+                        account.balance_is_anchored = True
                 db.commit()
 
             # Calculate balances

@@ -31,6 +31,7 @@ import { exportTransactionsToCSV } from "@/lib/utils/csv-export";
 import type { CategoryDisplay } from "@/types";
 import type { TransactionWithRelations } from "@/lib/actions/transactions";
 import { filterSelectableCategories } from "@/lib/utils/category-utils";
+import { DeleteConfirmationDialog } from "./delete-confirmation-dialog";
 
 interface BulkActionsDockProps {
   selectedCount: number;
@@ -41,6 +42,8 @@ interface BulkActionsDockProps {
   onBulkUpdate: (categoryId: string | null) => void;
   onBulkAnalyticsUpdate?: (includeInAnalytics: boolean) => void;
   onLinkSuccess?: () => void;
+  onBulkDelete?: (deletedIds: string[]) => void;
+  canDelete?: boolean;
 }
 
 export function BulkActionsDock({
@@ -52,6 +55,8 @@ export function BulkActionsDock({
   onBulkUpdate,
   onBulkAnalyticsUpdate,
   onLinkSuccess,
+  onBulkDelete,
+  canDelete = true,
 }: BulkActionsDockProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(false);
@@ -59,6 +64,7 @@ export function BulkActionsDock({
   const [categoryPopoverOpen, setCategoryPopoverOpen] = useState(false);
   const [analyticsPopoverOpen, setAnalyticsPopoverOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   // Check if any selected transaction is already linked
   const hasLinkedTransactions = selectedTransactions.some((t) => t.transactionLink !== null);
@@ -314,6 +320,25 @@ export function BulkActionsDock({
           </Tooltip>
         )}
 
+        {/* Delete */}
+        {canDelete && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <DockIcon
+                  className="bg-muted hover:bg-destructive/20 hover:text-destructive"
+                  onClick={() => setShowDeleteDialog(true)}
+                />
+              }
+            >
+              <RiDeleteBinLine className="size-5" />
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={8}>
+              <p>Delete selected</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
+
         {/* Export */}
         <Tooltip>
           <TooltipTrigger
@@ -350,6 +375,16 @@ export function BulkActionsDock({
           </TooltipContent>
         </Tooltip>
       </Dock>
+
+      <DeleteConfirmationDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        transactionIds={selectedIds}
+        onSuccess={(deletedIds) => {
+          onBulkDelete?.(deletedIds);
+          onClearSelection();
+        }}
+      />
     </div>
   );
 }

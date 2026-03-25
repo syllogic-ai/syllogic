@@ -1,17 +1,20 @@
 "use client";
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { RiUserLine, RiFolderLine, RiKeyLine } from "@remixicon/react";
+import { RiUserLine, RiFolderLine, RiKeyLine, RiUploadLine } from "@remixicon/react";
 import { ProfileEditor } from "./profile-editor";
 import { CategoryManager } from "./category-manager";
 import { ApiKeysManager } from "./api-keys-manager";
+import { ImportHistoryManager } from "./import-history-manager";
 import type { User, Category } from "@/lib/db/schema";
+import type { CsvImportWithStats } from "@/lib/actions/csv-import";
 
 interface SettingsTabsProps {
   user: User;
   categories: Category[];
   mcpServerUrl: string;
   canCreateApiKeys: boolean;
+  canDelete?: boolean;
   apiKeys: Array<{
     id: string;
     name: string;
@@ -20,6 +23,7 @@ interface SettingsTabsProps {
     expiresAt: Date | null;
     createdAt: Date | null;
   }>;
+  csvImports: CsvImportWithStats[];
 }
 
 export function SettingsTabs({
@@ -28,6 +32,8 @@ export function SettingsTabs({
   apiKeys,
   mcpServerUrl,
   canCreateApiKeys,
+  canDelete = true,
+  csvImports,
 }: SettingsTabsProps) {
   return (
     <Tabs defaultValue="profile" className="flex-1">
@@ -43,6 +49,10 @@ export function SettingsTabs({
         <TabsTrigger value="api-keys" data-walkthrough="walkthrough-api-keys">
           <RiKeyLine className="mr-1.5 h-4 w-4" />
           API Keys
+        </TabsTrigger>
+        <TabsTrigger value="import-history" data-walkthrough="walkthrough-import-history">
+          <RiUploadLine className="mr-1.5 h-4 w-4" />
+          Import History
         </TabsTrigger>
       </TabsList>
 
@@ -60,6 +70,10 @@ export function SettingsTabs({
           mcpServerUrl={mcpServerUrl}
           canCreateApiKeys={canCreateApiKeys}
         />
+      </TabsContent>
+
+      <TabsContent value="import-history">
+        <ImportHistoryManager initialImports={csvImports} canDelete={canDelete} />
       </TabsContent>
     </Tabs>
   );

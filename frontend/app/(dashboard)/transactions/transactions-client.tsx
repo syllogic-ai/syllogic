@@ -30,6 +30,7 @@ interface TransactionsClientProps {
   categories: CategoryDisplay[];
   accounts: AccountForFilter[];
   canImportCsv: boolean;
+  canDelete?: boolean;
 }
 
 export function TransactionsClient({
@@ -40,6 +41,7 @@ export function TransactionsClient({
   categories,
   accounts,
   canImportCsv,
+  canDelete = true,
 }: TransactionsClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -293,6 +295,10 @@ export function TransactionsClient({
           onUpdateTransaction={handleUpdateTransaction}
           onDeleteTransaction={handleDeleteTransaction}
           onBulkUpdate={handleBulkUpdate}
+          onBulkDelete={(deletedIds) =>
+            setTransactions((prev) => prev.filter((tx) => !deletedIds.includes(tx.id)))
+          }
+          canDelete={canDelete}
           action={
             <div className="flex flex-row items-center gap-3">
               {importStatus === "importing" && (
