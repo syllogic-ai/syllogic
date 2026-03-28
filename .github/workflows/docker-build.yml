@@ -58,6 +58,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             NEXT_PUBLIC_DISABLE_SIGN_UPS=${{ vars.NEXT_PUBLIC_DISABLE_SIGN_UPS || 'false' }}
+            NEXT_PUBLIC_DEMO_EMAIL=${{ vars.NEXT_PUBLIC_DEMO_EMAIL || '' }}
+            NEXT_PUBLIC_DEMO_PASSWORD=${{ vars.NEXT_PUBLIC_DEMO_PASSWORD || '' }}
 
   release_bundle:
     if: startsWith(github.ref, 'refs/tags/v')

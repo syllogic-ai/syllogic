@@ -119,6 +119,17 @@ function LoginPageContent() {
                 {error}
               </div>
             )}
+            {demoModeRequested && demoEmail && demoPassword && (
+              <div className="bg-muted border border-border p-3 text-sm space-y-1">
+                <p className="font-medium text-foreground">Demo account credentials</p>
+                <p className="text-muted-foreground">
+                  Email: <span className="text-foreground font-mono">{demoEmail}</span>
+                </p>
+                <p className="text-muted-foreground">
+                  Password: <span className="text-foreground font-mono">{demoPassword}</span>
+                </p>
+              </div>
+            )}
             {demoModeRequested && !demoPassword && (
               <div className="bg-muted p-3 text-sm">
                 Demo mode link detected, but demo credentials are not configured
