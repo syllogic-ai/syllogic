@@ -215,16 +215,19 @@ export function BankConnectionsManager({ connections }: BankConnectionsManagerPr
                   </Button>
                 )}
                 <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={disconnectingIds.has(connection.id)}
-                    >
-                      <RiLinkUnlinkM className="mr-1.5 h-4 w-4" />
-                      Disconnect
-                    </Button>
-                  </AlertDialogTrigger>
+                  <AlertDialogTrigger
+                    disabled={disconnectingIds.has(connection.id)}
+                    render={
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={disconnectingIds.has(connection.id)}
+                      >
+                        <RiLinkUnlinkM className="mr-1.5 h-4 w-4" />
+                        Disconnect
+                      </Button>
+                    }
+                  />
                   <AlertDialogContent>
                     <AlertDialogHeader>
                       <AlertDialogTitle>Disconnect {connection.aspspName}?</AlertDialogTitle>
