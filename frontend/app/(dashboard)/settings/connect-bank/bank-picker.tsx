@@ -140,7 +140,7 @@ export function BankPicker() {
 
       {/* Filters */}
       <div className="flex items-center gap-3">
-        <Select value={country} onValueChange={setCountry}>
+        <Select value={country} onValueChange={(v) => v && setCountry(v)}>
           <SelectTrigger className="w-[200px]">
             <SelectValue placeholder="Select country" />
           </SelectTrigger>
