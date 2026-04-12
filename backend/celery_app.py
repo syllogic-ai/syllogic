@@ -13,7 +13,7 @@ celery_app = Celery(
     "finance_tasks",
     broker=REDIS_URL,
     backend=REDIS_URL,
-    include=["tasks.csv_import_tasks", "tasks.demo_tasks"],
+    include=["tasks.csv_import_tasks", "tasks.demo_tasks", "tasks.enable_banking_tasks"],
 )
 
 
@@ -60,6 +60,16 @@ def _build_beat_schedule() -> dict:
             "task": "tasks.demo_tasks.append_previous_day_demo_transactions",
             "schedule": crontab(minute=demo_daily_minute_utc, hour=demo_daily_hour_utc),
         }
+
+    # Enable Banking sync schedules (always active — tasks are no-ops if no connections exist)
+    schedule["sync-all-bank-connections"] = {
+        "task": "tasks.enable_banking_tasks.sync_all_bank_connections",
+        "schedule": crontab(minute=0, hour="*/6"),
+    }
+    schedule["check-consent-expiry"] = {
+        "task": "tasks.enable_banking_tasks.check_consent_expiry",
+        "schedule": crontab(minute=0, hour=9),
+    }
 
     return schedule
 
