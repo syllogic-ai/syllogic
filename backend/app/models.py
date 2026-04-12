@@ -75,6 +75,7 @@ class Account(Base):
             unique=True,
             postgresql_where=text("external_id_hash IS NOT NULL"),
         ),
+        Index("idx_accounts_bank_connection", "bank_connection_id"),
     )
 
 
