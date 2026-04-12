@@ -24,17 +24,19 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { triggerSync, disconnectBank } from "@/lib/actions/bank-connections";
+type BankConnectionItem = {
+  id: string;
+  aspspName: string;
+  aspspCountry: string;
+  status: string;
+  lastSyncedAt: Date | null;
+  lastSyncError: string | null;
+  consentExpiresAt: Date | null;
+  createdAt: Date | null;
+};
+
 interface BankConnectionsManagerProps {
-  connections: Array<{
-    id: string;
-    aspspName: string;
-    aspspCountry: string;
-    status: string;
-    lastSyncedAt: Date | null;
-    lastSyncError: string | null;
-    consentExpiresAt: Date | null;
-    createdAt: Date | null;
-  }>;
+  connections: BankConnectionItem[];
 }
 
 export function BankConnectionsManager({ connections }: BankConnectionsManagerProps) {
@@ -76,7 +78,7 @@ export function BankConnectionsManager({ connections }: BankConnectionsManagerPr
     }
   };
 
-  const getStatusBadge = (connection: BankConnection) => {
+  const getStatusBadge = (connection: BankConnectionItem) => {
     switch (connection.status) {
       case "active":
         return <Badge variant="default">Active</Badge>;
@@ -91,7 +93,7 @@ export function BankConnectionsManager({ connections }: BankConnectionsManagerPr
     }
   };
 
-  const isConsentExpiringSoon = (connection: BankConnection) => {
+  const isConsentExpiringSoon = (connection: BankConnectionItem) => {
     if (!connection.consentExpiresAt) return false;
     const daysUntilExpiry = Math.ceil(
       (new Date(connection.consentExpiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
@@ -99,7 +101,7 @@ export function BankConnectionsManager({ connections }: BankConnectionsManagerPr
     return daysUntilExpiry <= 14 && daysUntilExpiry > 0;
   };
 
-  const daysUntilExpiry = (connection: BankConnection) => {
+  const daysUntilExpiry = (connection: BankConnectionItem) => {
     if (!connection.consentExpiresAt) return null;
     return Math.ceil(
       (new Date(connection.consentExpiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
