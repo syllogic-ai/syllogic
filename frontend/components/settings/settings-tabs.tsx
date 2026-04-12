@@ -1,12 +1,13 @@
 "use client";
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { RiUserLine, RiFolderLine, RiKeyLine, RiUploadLine } from "@remixicon/react";
+import { RiUserLine, RiFolderLine, RiKeyLine, RiUploadLine, RiBankLine } from "@remixicon/react";
 import { ProfileEditor } from "./profile-editor";
 import { CategoryManager } from "./category-manager";
 import { ApiKeysManager } from "./api-keys-manager";
 import { ImportHistoryManager } from "./import-history-manager";
-import type { User, Category } from "@/lib/db/schema";
+import { BankConnectionsManager } from "./bank-connections-manager";
+import type { User, Category, BankConnection } from "@/lib/db/schema";
 import type { CsvImportWithStats } from "@/lib/actions/csv-import";
 
 interface SettingsTabsProps {
@@ -24,6 +25,7 @@ interface SettingsTabsProps {
     createdAt: Date | null;
   }>;
   csvImports: CsvImportWithStats[];
+  bankConnections: BankConnection[];
 }
 
 export function SettingsTabs({
@@ -34,6 +36,7 @@ export function SettingsTabs({
   canCreateApiKeys,
   canDelete = true,
   csvImports,
+  bankConnections,
 }: SettingsTabsProps) {
   return (
     <Tabs defaultValue="profile" className="flex-1">
@@ -53,6 +56,10 @@ export function SettingsTabs({
         <TabsTrigger value="import-history" data-walkthrough="walkthrough-import-history">
           <RiUploadLine className="mr-1.5 h-4 w-4" />
           Import History
+        </TabsTrigger>
+        <TabsTrigger value="bank-connections">
+          <RiBankLine className="mr-1.5 h-4 w-4" />
+          Bank Connections
         </TabsTrigger>
       </TabsList>
 
@@ -74,6 +81,10 @@ export function SettingsTabs({
 
       <TabsContent value="import-history">
         <ImportHistoryManager initialImports={csvImports} canDelete={canDelete} />
+      </TabsContent>
+
+      <TabsContent value="bank-connections">
+        <BankConnectionsManager connections={bankConnections} />
       </TabsContent>
     </Tabs>
   );

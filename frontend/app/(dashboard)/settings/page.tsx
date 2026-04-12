@@ -5,6 +5,7 @@ import { getCurrentUserProfile } from "@/lib/actions/settings";
 import { getCategories } from "@/lib/actions/categories";
 import { listApiKeys } from "@/lib/actions/api-keys";
 import { getCsvImportHistory } from "@/lib/actions/csv-import";
+import { getBankConnections } from "@/lib/actions/bank-connections";
 import { resolveMcpServerUrlForSnippet } from "@/lib/mcp/server-url";
 import { isDemoRestrictedUserEmail } from "@/lib/demo-access";
 
@@ -15,10 +16,11 @@ export default async function SettingsPage() {
     redirect("/login");
   }
 
-  const [categories, apiKeysResult, csvImports] = await Promise.all([
+  const [categories, apiKeysResult, csvImports, bankConnections] = await Promise.all([
     getCategories(),
     listApiKeys(),
     getCsvImportHistory(),
+    getBankConnections(),
   ]);
 
   const apiKeys = apiKeysResult.success && apiKeysResult.keys ? apiKeysResult.keys : [];
@@ -42,6 +44,7 @@ export default async function SettingsPage() {
           canCreateApiKeys={canCreateApiKeys}
           canDelete={canDelete}
           csvImports={csvImports}
+          bankConnections={bankConnections}
         />
       </div>
     </>
