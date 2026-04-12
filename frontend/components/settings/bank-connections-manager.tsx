@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   RiBankLine,
@@ -117,12 +117,13 @@ export function BankConnectionsManager({ connections }: BankConnectionsManagerPr
             Connect your bank accounts via Open Banking to automatically sync transactions.
           </p>
         </div>
-        <Button asChild>
-          <Link href="/settings/connect-bank">
-            <RiAddLine className="mr-1.5 h-4 w-4" />
-            Connect Bank
-          </Link>
-        </Button>
+        <Link
+          href="/settings/connect-bank"
+          className={buttonVariants({ variant: "default", size: "default" })}
+        >
+          <RiAddLine className="mr-1.5 h-4 w-4" />
+          Connect Bank
+        </Link>
       </div>
 
       {activeConnections.length === 0 ? (

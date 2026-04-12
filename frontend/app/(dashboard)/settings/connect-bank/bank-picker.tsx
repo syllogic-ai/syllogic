@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -114,12 +114,13 @@ export function BankPicker() {
   return (
     <div className="space-y-6">
       {/* Back link */}
-      <Button variant="ghost" size="sm" asChild>
-        <Link href="/settings?tab=bank-connections">
-          <RiArrowLeftLine className="mr-1.5 h-4 w-4" />
-          Back to Settings
-        </Link>
-      </Button>
+      <Link
+        href="/settings?tab=bank-connections"
+        className={buttonVariants({ variant: "ghost", size: "sm" })}
+      >
+        <RiArrowLeftLine className="mr-1.5 h-4 w-4" />
+        Back to Settings
+      </Link>
 
       {/* Error from callback */}
       {error && (
