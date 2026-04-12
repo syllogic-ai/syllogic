@@ -119,6 +119,7 @@ export const accounts = pgTable(
     externalId: varchar("external_id", { length: 255 }), // Provider's account ID
     externalIdCiphertext: text("external_id_ciphertext"),
     externalIdHash: varchar("external_id_hash", { length: 64 }),
+    bankConnectionId: uuid("bank_connection_id").references(() => bankConnections.id, { onDelete: "set null" }),
     balanceAvailable: decimal("balance_available", { precision: 15, scale: 2 }),
     startingBalance: decimal("starting_balance", { precision: 15, scale: 2 }).default("0"), // Starting balance for calculation
     functionalBalance: decimal("functional_balance", { precision: 15, scale: 2 }), // Calculated balance (sum of transactions + starting_balance)
@@ -130,6 +131,7 @@ export const accounts = pgTable(
   },
   (table) => [
     index("idx_accounts_user").on(table.userId),
+    index("idx_accounts_bank_connection").on(table.bankConnectionId),
     unique("accounts_user_provider_external_id").on(
       table.userId,
       table.provider,
@@ -140,6 +142,35 @@ export const accounts = pgTable(
       table.provider,
       table.externalIdHash
     ),
+  ]
+);
+
+export const bankConnections = pgTable(
+  "bank_connections",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    provider: varchar("provider", { length: 50 }).notNull().default("enable_banking"),
+    sessionId: varchar("session_id", { length: 255 }).notNull(),
+    aspspName: varchar("aspsp_name", { length: 255 }).notNull(),
+    aspspCountry: char("aspsp_country", { length: 2 }).notNull(),
+    consentExpiresAt: timestamp("consent_expires_at"),
+    consentNotifiedAt: timestamp("consent_notified_at"),
+    status: varchar("status", { length: 20 }).notNull().default("active"),
+    lastSyncedAt: timestamp("last_synced_at"),
+    lastSyncError: text("last_sync_error"),
+    syncCursor: jsonb("sync_cursor"),
+    rawSessionData: jsonb("raw_session_data"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_bank_connections_user").on(table.userId),
+    index("idx_bank_connections_status").on(table.status),
+    index("idx_bank_connections_consent_expires").on(table.consentExpiresAt),
+    unique("bank_connections_user_session").on(table.userId, table.sessionId),
   ]
 );
 
@@ -465,6 +496,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   subscriptionSuggestions: many(subscriptionSuggestions),
   apiKeys: many(apiKeys),
   transactionLinks: many(transactionLinks),
+  bankConnections: many(bankConnections),
 }));
 
 export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
@@ -497,10 +529,22 @@ export const accountsRelations = relations(accounts, ({ one, many }) => ({
     fields: [accounts.logoId],
     references: [companyLogos.id],
   }),
+  bankConnection: one(bankConnections, {
+    fields: [accounts.bankConnectionId],
+    references: [bankConnections.id],
+  }),
   transactions: many(transactions),
   csvImports: many(csvImports),
   balances: many(accountBalances),
   recurringTransactions: many(recurringTransactions),
+}));
+
+export const bankConnectionsRelations = relations(bankConnections, ({ one, many }) => ({
+  user: one(users, {
+    fields: [bankConnections.userId],
+    references: [users.id],
+  }),
+  accounts: many(accounts),
 }));
 
 export const accountBalancesRelations = relations(accountBalances, ({ one }) => ({
@@ -701,3 +745,6 @@ export type NewTransactionLink = typeof transactionLinks.$inferInsert;
 
 export type CompanyLogo = typeof companyLogos.$inferSelect;
 export type NewCompanyLogo = typeof companyLogos.$inferInsert;
+
+export type BankConnection = typeof bankConnections.$inferSelect;
+export type NewBankConnection = typeof bankConnections.$inferInsert;
