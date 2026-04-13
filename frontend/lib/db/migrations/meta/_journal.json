@@ -85,6 +85,13 @@
       "when": 1744502400000,
       "tag": "0011_enable_banking_connections",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1744588800000,
+      "tag": "0012_bank_connection_initial_sync_days",
+      "breakpoints": true
     }
   ]
 }

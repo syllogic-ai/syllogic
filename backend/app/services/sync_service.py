@@ -3,6 +3,7 @@ Service for syncing bank data (accounts and transactions).
 """
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+from difflib import SequenceMatcher
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from decimal import Decimal
@@ -63,6 +64,58 @@ class SyncService:
             ).first()
         return query.filter(Account.external_id == external_id).first()
     
+    def _fuzzy_match_transaction(self, account_id, amount, booked_at, description):
+        """
+        Find an existing transaction that fuzzy-matches the incoming bank transaction.
+        Used for cross-source dedup (bank vs CSV).
+
+        Match criteria:
+        - Same account_id
+        - Exact amount (as Decimal)
+        - Exact booked_at date
+        - Description similarity >= 0.8 (SequenceMatcher on lowercased, whitespace-normalized)
+
+        Returns the matched Transaction or None.
+        """
+        import re
+
+        # Only look for transactions without an external_id (CSV-imported)
+        candidates = (
+            self.db.query(Transaction)
+            .filter(
+                Transaction.user_id == self.user_id,
+                Transaction.account_id == account_id,
+                Transaction.amount == amount,
+                Transaction.external_id.is_(None),
+            )
+            .all()
+        )
+
+        # Filter by date
+        target_date = booked_at.date() if hasattr(booked_at, 'date') else booked_at
+        candidates = [
+            c for c in candidates
+            if (c.booked_at.date() if hasattr(c.booked_at, 'date') else c.booked_at) == target_date
+        ]
+
+        if not candidates:
+            return None
+
+        # Normalize description for comparison
+        def normalize(s):
+            return re.sub(r'\s+', ' ', (s or '').lower().strip())
+
+        norm_desc = normalize(description)
+
+        for candidate in candidates:
+            ratio = SequenceMatcher(
+                None, norm_desc, normalize(candidate.description)
+            ).ratio()
+            if ratio >= 0.8:
+                return candidate
+
+        return None
+
     def sync_accounts(self, adapter: BankAdapter, provider: str) -> List[Account]:
         """
         Sync accounts from bank adapter to database.
@@ -199,6 +252,26 @@ class SyncService:
                     existing_transaction.recurring_transaction_id = matched_subscription.id
                 updated_count += 1
             else:
+                # Fuzzy match fallback for cross-source dedup (bank vs CSV-imported)
+                import logging
+                logger = logging.getLogger(__name__)
+                fuzzy_match = self._fuzzy_match_transaction(
+                    account_id=str(account.id),
+                    amount=transaction_data.amount,
+                    booked_at=transaction_data.booked_at,
+                    description=transaction_data.description or "",
+                )
+                if fuzzy_match:
+                    # Backfill the bank's external_id onto the existing CSV-imported transaction
+                    fuzzy_match.external_id = transaction_data.external_id
+                    self.db.flush()
+                    updated_count += 1
+                    logger.info(
+                        "Fuzzy matched transaction %s → existing %s, backfilled external_id",
+                        transaction_data.external_id, fuzzy_match.id,
+                    )
+                    continue
+
                 # Create new transaction
                 new_transaction = Transaction(
                     user_id=self.user_id,

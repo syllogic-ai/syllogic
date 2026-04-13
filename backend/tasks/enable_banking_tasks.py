@@ -15,6 +15,7 @@ from app.integrations.enable_banking_adapter import EnableBankingAdapter
 from app.integrations.enable_banking_auth import EnableBankingClient
 from app.services.sync_service import SyncService
 from app.security.data_encryption import decrypt_with_fallback
+from tasks.post_import_pipeline import post_import_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -45,13 +46,17 @@ def sync_bank_connection(self, connection_id: str):
             client=client,
         )
 
+        # Capture before any sync updates last_synced_at
+        is_initial_sync = connection.last_synced_at is None
+
         # Determine date range for transactions
-        if connection.last_synced_at:
-            # Incremental: fetch since last sync (with 1 day overlap for safety)
-            start_date = connection.last_synced_at - timedelta(days=1)
+        if connection.last_synced_at is None:
+            # First sync: use user-configured lookback
+            sync_days = connection.initial_sync_days or 90
+            start_date = (datetime.utcnow() - timedelta(days=sync_days)).date()
         else:
-            # Initial: fetch last 90 days
-            start_date = datetime.utcnow() - timedelta(days=90)
+            # Incremental sync: from last sync minus 1 day overlap
+            start_date = (connection.last_synced_at - timedelta(days=1)).date()
         end_date = datetime.utcnow()
 
         sync_service = SyncService(db, user_id=connection.user_id)
@@ -63,6 +68,8 @@ def sync_bank_connection(self, connection_id: str):
 
         total_created = 0
         total_updated = 0
+        all_created_ids: list[str] = []
+        synced_account_ids: list[str] = []
 
         for account in accounts:
             account_uid = decrypt_with_fallback(
@@ -88,7 +95,7 @@ def sync_bank_connection(self, connection_id: str):
 
             # Sync transactions via SyncService
             try:
-                created, updated, _ = sync_service.sync_transactions(
+                created, updated, created_ids = sync_service.sync_transactions(
                     adapter=adapter,
                     account=account,
                     start_date=start_date,
@@ -96,6 +103,8 @@ def sync_bank_connection(self, connection_id: str):
                 )
                 total_created += created
                 total_updated += updated
+                all_created_ids.extend(created_ids)
+                synced_account_ids.append(str(account.id))
             except Exception as e:
                 logger.error(f"Failed to sync transactions for account {account.id}: {e}")
                 raise
@@ -117,6 +126,15 @@ def sync_bank_connection(self, connection_id: str):
         connection.last_synced_at = datetime.utcnow()
         connection.last_sync_error = None
         db.commit()
+
+        # Chain to shared post-processing pipeline
+        if all_created_ids:
+            post_import_pipeline.delay(
+                user_id=str(connection.user_id),
+                account_ids=synced_account_ids,
+                transaction_ids=all_created_ids,
+                is_initial_sync=is_initial_sync,
+            )
 
         logger.info(
             f"Synced connection {connection_id}: "

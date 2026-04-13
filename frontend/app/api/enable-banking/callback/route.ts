@@ -82,8 +82,10 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    const data = await resp.json();
+    const connectionId = data.connection_id;
     return NextResponse.redirect(
-      `${baseUrl}/settings?tab=bank-connections&connected=true`
+      `${baseUrl}/settings/connect-bank/map-accounts?connectionId=${connectionId}`
     );
   } catch (e) {
     return NextResponse.redirect(

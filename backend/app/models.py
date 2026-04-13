@@ -98,6 +98,7 @@ class BankConnection(Base):
     last_synced_at = Column(DateTime, nullable=True)
     last_sync_error = Column(Text, nullable=True)
     sync_cursor = Column(JSONB, nullable=True)
+    initial_sync_days = Column(Integer, nullable=False, server_default="90")
     raw_session_data = Column(JSONB, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

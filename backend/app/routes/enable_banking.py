@@ -8,7 +8,7 @@ connection status, and disconnection.
 import os
 import logging
 import uuid as uuid_mod
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, timedelta
 
 import redis
@@ -63,6 +63,21 @@ class ConnectionStatusResponse(BaseModel):
 class SyncTriggerResponse(BaseModel):
     message: str
     task_id: Optional[str] = None
+
+class AccountMapping(BaseModel):
+    bank_uid: str
+    action: str  # "create" or "link"
+    name: Optional[str] = None
+    existing_account_id: Optional[str] = None
+
+class MapAccountsRequest(BaseModel):
+    mappings: List[AccountMapping]
+    initial_sync_days: int = 90
+
+class MapAccountsResponse(BaseModel):
+    connection_id: str
+    accounts_created: int
+    accounts_linked: int
 
 
 # --- Helper ---
@@ -204,7 +219,7 @@ def create_session(
     else:
         consent_expires_at = datetime.utcnow() + timedelta(days=90)
 
-    # Create bank_connections row
+    # Create bank_connections row (status=pending_setup; accounts mapped in a separate step)
     connection = BankConnection(
         user_id=user_id,
         provider="enable_banking",
@@ -212,59 +227,144 @@ def create_session(
         aspsp_name=aspsp_name,
         aspsp_country=aspsp_country,
         consent_expires_at=consent_expires_at,
-        status="active",
+        status="pending_setup",
         raw_session_data=session_data,
     )
     db.add(connection)
-    db.flush()  # Get the ID
+    db.commit()
+    db.refresh(connection)
 
-    # Upsert accounts from session response
-    accounts_data = session_data.get("accounts", [])
-    for acc_data in accounts_data:
-        account_uid = acc_data["uid"]
+    accounts_count = len(session_data.get("accounts", []))
 
-        # Check for existing account by external_id
-        existing = db.query(Account).filter(
-            Account.user_id == user_id,
-            Account.provider == "enable_banking",
-            Account.external_id == account_uid,
-        ).first()
+    return SessionResponse(
+        connection_id=str(connection.id),
+        accounts_count=accounts_count,
+    )
 
-        if existing:
-            existing.bank_connection_id = connection.id
-            existing.name = acc_data.get("account_name") or acc_data.get("iban") or existing.name
-            existing.is_active = True
-        else:
+
+@router.post("/connections/{connection_id}/map-accounts", response_model=MapAccountsResponse)
+def map_accounts(
+    connection_id: str,
+    request: MapAccountsRequest,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_user_id),
+):
+    """
+    Map bank accounts to new or existing accounts and activate the connection.
+    Called after POST /session as the second step of the account mapping wizard.
+    """
+    VALID_SYNC_DAYS = {30, 60, 90, 180, 365}
+    if request.initial_sync_days not in VALID_SYNC_DAYS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"initial_sync_days must be one of {sorted(VALID_SYNC_DAYS)}",
+        )
+
+    # Validate connection exists, belongs to user, and is pending setup
+    connection = db.query(BankConnection).filter(
+        BankConnection.id == connection_id,
+        BankConnection.user_id == user_id,
+    ).first()
+    if not connection:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    if connection.status != "pending_setup":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Connection is not in pending_setup state (current: {connection.status})",
+        )
+
+    # Index raw bank accounts by UID for quick lookup
+    raw_accounts = connection.raw_session_data.get("accounts", []) if connection.raw_session_data else []
+    raw_by_uid = {acc["uid"]: acc for acc in raw_accounts}
+
+    accounts_created = 0
+    accounts_linked = 0
+
+    for mapping in request.mappings:
+        acc_data = raw_by_uid.get(mapping.bank_uid)
+        if not acc_data:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No bank account found with uid '{mapping.bank_uid}' in session data",
+            )
+
+        if mapping.action == "create":
+            name = (
+                mapping.name
+                or acc_data.get("account_name")
+                or acc_data.get("iban")
+                or "Unknown Account"
+            )
             new_account = Account(
                 user_id=user_id,
-                name=acc_data.get("account_name") or acc_data.get("iban") or "Unknown Account",
+                name=name,
                 account_type=_ACCOUNT_TYPE_MAP.get((acc_data.get("cash_account_type") or "").upper(), "checking"),
-                institution=aspsp_name,
                 currency=acc_data.get("currency", "EUR"),
                 provider="enable_banking",
-                external_id=account_uid,
+                institution=connection.aspsp_name,
                 bank_connection_id=connection.id,
+                external_id=mapping.bank_uid,
             )
-            encrypted = encrypt_value(account_uid)
-            hashed = blind_index(account_uid)
+            encrypted = encrypt_value(mapping.bank_uid)
+            hashed = blind_index(mapping.bank_uid)
             new_account.external_id_hash = hashed
             if encrypted:
                 new_account.external_id_ciphertext = encrypted
             db.add(new_account)
+            accounts_created += 1
 
+        elif mapping.action == "link":
+            if not mapping.existing_account_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"existing_account_id is required for action 'link' (uid: {mapping.bank_uid})",
+                )
+            existing = db.query(Account).filter(
+                Account.id == mapping.existing_account_id,
+                Account.user_id == user_id,
+            ).first()
+            if not existing:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Account '{mapping.existing_account_id}' not found",
+                )
+            if existing.bank_connection_id is not None:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Account '{mapping.existing_account_id}' is already linked to a bank connection",
+                )
+            existing.bank_connection_id = connection.id
+            existing.provider = "enable_banking"
+            existing.external_id = mapping.bank_uid
+            encrypted = encrypt_value(mapping.bank_uid)
+            hashed = blind_index(mapping.bank_uid)
+            existing.external_id_hash = hashed
+            if encrypted:
+                existing.external_id_ciphertext = encrypted
+            accounts_linked += 1
+
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid action '{mapping.action}'. Must be 'create' or 'link'",
+            )
+
+    connection.initial_sync_days = request.initial_sync_days
+    connection.status = "active"
+    connection.raw_session_data = None  # Clear sensitive data now that mapping is complete
     db.commit()
-    db.refresh(connection)
 
-    # Dispatch initial sync task
+    # Trigger initial sync
     try:
         from tasks.enable_banking_tasks import sync_bank_connection
         sync_bank_connection.delay(str(connection.id))
     except Exception:
-        logger.warning("Failed to dispatch initial sync task", exc_info=True)
+        logger.warning("Failed to dispatch sync task after map-accounts", exc_info=True)
 
-    return SessionResponse(
+    return MapAccountsResponse(
         connection_id=str(connection.id),
-        accounts_count=len(accounts_data),
+        accounts_created=accounts_created,
+        accounts_linked=accounts_linked,
     )
 
 
