@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -43,16 +43,108 @@ export function BankConnectionsManager({ connections }: BankConnectionsManagerPr
   const router = useRouter();
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
   const [disconnectingIds, setDisconnectingIds] = useState<Set<string>>(new Set());
+  const [pollingIds, setPollingIds] = useState<Set<string>>(new Set());
+  const pollingTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const initialSyncTimes = useRef<Map<string, string | null>>(new Map());
+
+  // Cleanup all timers on unmount
+  useEffect(() => {
+    return () => {
+      pollingTimers.current.forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
+
+  const stopPolling = useCallback((connectionId: string) => {
+    const timer = pollingTimers.current.get(connectionId);
+    if (timer) {
+      clearTimeout(timer);
+      pollingTimers.current.delete(connectionId);
+    }
+    setPollingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(connectionId);
+      return next;
+    });
+    setSyncingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(connectionId);
+      return next;
+    });
+  }, []);
+
+  const startPolling = useCallback(
+    (connectionId: string, currentLastSyncedAt: string | null) => {
+      initialSyncTimes.current.set(connectionId, currentLastSyncedAt);
+      setPollingIds((prev) => new Set([...prev, connectionId]));
+
+      let elapsed = 0;
+      const poll = async () => {
+        elapsed += 3000;
+        if (elapsed > 60000) {
+          stopPolling(connectionId);
+          return;
+        }
+
+        try {
+          const resp = await fetch(`/api/enable-banking/status/${connectionId}`);
+          if (!resp.ok) return;
+          const data = await resp.json();
+
+          const startedAt = initialSyncTimes.current.get(connectionId);
+          if (data.last_synced_at && data.last_synced_at !== startedAt) {
+            stopPolling(connectionId);
+            router.refresh();
+            return;
+          }
+
+          if (data.last_sync_error) {
+            stopPolling(connectionId);
+            router.refresh();
+            return;
+          }
+        } catch {
+          // Network error, keep polling
+        }
+
+        const timer = setTimeout(poll, 3000);
+        pollingTimers.current.set(connectionId, timer);
+      };
+
+      const timer = setTimeout(poll, 3000);
+      pollingTimers.current.set(connectionId, timer);
+    },
+    [router, stopPolling]
+  );
+
+  // Auto-detect connections that are active but have never synced (initial sync after wizard)
+  useEffect(() => {
+    for (const conn of connections) {
+      if (conn.status === "active" && !conn.lastSyncedAt && !pollingIds.has(conn.id)) {
+        startPolling(conn.id, null);
+        setSyncingIds((prev) => new Set([...prev, conn.id]));
+      }
+    }
+  }, [connections, pollingIds, startPolling]);
 
   const handleSync = async (connectionId: string) => {
     setSyncingIds((prev) => new Set(prev).add(connectionId));
+
+    const conn = connections.find((c) => c.id === connectionId);
+    const currentLastSyncedAt = conn?.lastSyncedAt?.toISOString() || null;
+
     try {
       const result = await triggerSync(connectionId);
       if (!result.success) {
         console.error("Sync failed:", result.error);
+        setSyncingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(connectionId);
+          return next;
+        });
+        return;
       }
-      router.refresh();
-    } finally {
+      startPolling(connectionId, currentLastSyncedAt);
+    } catch {
       setSyncingIds((prev) => {
         const next = new Set(prev);
         next.delete(connectionId);
