@@ -13,7 +13,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional
 
-from celery import shared_task
+from celery_app import celery_app
 
 from app.database import SessionLocal
 from app.db_helpers import set_request_user_id, clear_request_user_id
@@ -244,7 +244,7 @@ def _run_post_import_pipeline(
 # Celery task
 # ---------------------------------------------------------------------------
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
 def post_import_pipeline(
     self,
     user_id: str,

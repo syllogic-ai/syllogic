@@ -6,9 +6,9 @@ import logging
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from celery import shared_task
 from sqlalchemy.orm import Session
 
+from celery_app import celery_app
 from app.database import SessionLocal
 from app.models import BankConnection, Account
 from app.integrations.enable_banking_adapter import EnableBankingAdapter
@@ -20,7 +20,7 @@ from tasks.post_import_pipeline import post_import_pipeline
 logger = logging.getLogger(__name__)
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
 def sync_bank_connection(self, connection_id: str):
     """
     Sync a single bank connection: fetch balances + transactions for all accounts.
@@ -169,7 +169,7 @@ def sync_bank_connection(self, connection_id: str):
         db.close()
 
 
-@shared_task
+@celery_app.task
 def sync_all_bank_connections():
     """
     Periodic task: dispatch sync for all active bank connections.
@@ -195,7 +195,7 @@ def sync_all_bank_connections():
         db.close()
 
 
-@shared_task
+@celery_app.task
 def check_consent_expiry():
     """
     Daily task: update status for connections with expired consents.
