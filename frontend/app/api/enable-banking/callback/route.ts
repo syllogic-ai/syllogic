@@ -22,7 +22,12 @@ export async function GET(req: NextRequest) {
   const state = searchParams.get("state");
   const error = searchParams.get("error");
 
-  const baseUrl = req.nextUrl.origin;
+  // Use APP_URL to avoid container-internal origins like 0.0.0.0:3000
+  const baseUrl = (
+    process.env.APP_URL ||
+    process.env.BETTER_AUTH_URL ||
+    req.nextUrl.origin
+  ).replace(/\/+$/, "");
 
   // Handle error from bank
   if (error) {
