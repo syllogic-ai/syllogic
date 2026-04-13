@@ -143,7 +143,7 @@ class SubscriptionDetector:
     def __init__(self, db: Session, user_id: Optional[str] = None):
         """Initialize the SubscriptionDetector."""
         self.db = db
-        self.user_id = get_user_id(user_id)
+        self.user_id = user_id if user_id else get_user_id(user_id)
         self.text_similarity = TextSimilarity()
         self.merchant_extractor = MerchantExtractor()
         self._existing_subscriptions: Optional[List[RecurringTransaction]] = None

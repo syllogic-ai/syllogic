@@ -125,7 +125,7 @@ class CategoryMatcher:
             auto_load_from_db: If True, automatically load category instructions and user overrides from DB
         """
         self.db = db
-        self.user_id = get_user_id(user_id)
+        self.user_id = user_id if user_id else get_user_id(user_id)
         self._category_cache: Optional[Dict[str, Category]] = None
         self._keyword_rules: Optional[Dict[str, List[str]]] = None
         self._openai_client = None

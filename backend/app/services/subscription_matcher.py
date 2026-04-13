@@ -60,7 +60,7 @@ class SubscriptionMatcher:
             user_id: User ID. If None, uses system user.
         """
         self.db = db
-        self.user_id = get_user_id(user_id)
+        self.user_id = user_id if user_id else get_user_id(user_id)
         self._subscription_cache: Dict[Optional[str], List[RecurringTransaction]] = {}
         self._text_similarity = TextSimilarity()
         self._merchant_extractor = MerchantExtractor()
