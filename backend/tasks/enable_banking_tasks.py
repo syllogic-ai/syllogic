@@ -155,8 +155,12 @@ def sync_bank_connection(self, connection_id: str):
             ).first()
             if connection:
                 error_msg = str(e)
-                # Detect expired consent
-                if "401" in error_msg or "403" in error_msg or "consent" in error_msg.lower():
+                # Detect expired consent (only from Enable Banking API errors, not internal auth)
+                is_eb_auth_error = (
+                    ("401" in error_msg or "403" in error_msg)
+                    and "enablebanking" in error_msg.lower()
+                ) or "consent" in error_msg.lower()
+                if is_eb_auth_error:
                     connection.status = "expired"
                     connection.last_sync_error = "Consent expired. Please reconnect."
                 else:

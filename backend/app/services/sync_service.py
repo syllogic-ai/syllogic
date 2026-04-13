@@ -28,7 +28,9 @@ class SyncService:
 
     def __init__(self, db: Session, user_id: Optional[str] = None, use_llm_categorization: bool = True):
         self.db = db
-        self.user_id = get_user_id(user_id)
+        # When called from Celery tasks, user_id is passed explicitly (no HTTP context).
+        # Only fall back to get_user_id() when no explicit user_id is provided.
+        self.user_id = user_id if user_id else get_user_id(user_id)
         self.category_matcher = CategoryMatcher(db, user_id=self.user_id)
         self.subscription_matcher = SubscriptionMatcher(db, user_id=self.user_id)
         self.use_llm_categorization = use_llm_categorization
