@@ -43,7 +43,7 @@ interface BankAccount {
 interface LinkableAccount {
   id: string;
   name: string;
-  currency: string;
+  currency: string | null;
   accountType: string | null;
   institution: string | null;
   bankConnectionId: string | null;
