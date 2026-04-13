@@ -43,6 +43,7 @@ class Account(Base):
     external_id = Column(String(255), nullable=True)  # Provider's account ID
     external_id_ciphertext = Column(Text, nullable=True)
     external_id_hash = Column(String(64), nullable=True, index=True)
+    bank_connection_id = Column(UUID(as_uuid=True), ForeignKey("bank_connections.id", ondelete="SET NULL"), nullable=True)
     balance_available = Column(Numeric(15, 2), nullable=True)
     starting_balance = Column(Numeric(15, 2), default=Decimal("0"))  # Starting balance for calculation
     functional_balance = Column(Numeric(15, 2), nullable=True)  # Calculated balance (sum of transactions + starting_balance)
@@ -55,6 +56,7 @@ class Account(Base):
     # Relationships
     user = relationship("User", back_populates="accounts")
     logo = relationship("CompanyLogo", back_populates="accounts")
+    bank_connection = relationship("BankConnection", back_populates="accounts")
     transactions = relationship("Transaction", back_populates="account")
     csv_imports = relationship("CsvImport", back_populates="account")
     balances = relationship("AccountBalance", back_populates="account")
@@ -73,6 +75,42 @@ class Account(Base):
             unique=True,
             postgresql_where=text("external_id_hash IS NOT NULL"),
         ),
+        Index("idx_accounts_bank_connection", "bank_connection_id"),
+    )
+
+
+class BankConnection(Base):
+    """
+    Bank connection model for Enable Banking sessions.
+    Tracks consent lifecycle and sync state.
+    """
+    __tablename__ = "bank_connections"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    provider = Column(String(50), nullable=False, default="enable_banking")
+    session_id = Column(String(255), nullable=False)
+    aspsp_name = Column(String(255), nullable=False)
+    aspsp_country = Column(String(2), nullable=False)
+    consent_expires_at = Column(DateTime, nullable=True)
+    consent_notified_at = Column(DateTime, nullable=True)
+    status = Column(String(20), nullable=False, default="active")
+    last_synced_at = Column(DateTime, nullable=True)
+    last_sync_error = Column(Text, nullable=True)
+    sync_cursor = Column(JSONB, nullable=True)
+    raw_session_data = Column(JSONB, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="bank_connections")
+    accounts = relationship("Account", back_populates="bank_connection")
+
+    __table_args__ = (
+        Index("idx_bank_connections_user", "user_id"),
+        Index("idx_bank_connections_status", "status"),
+        Index("idx_bank_connections_consent_expires", "consent_expires_at"),
+        UniqueConstraint("user_id", "session_id", name="bank_connections_user_session"),
     )
 
 
@@ -564,6 +602,7 @@ class User(Base):
     subscription_suggestions = relationship("SubscriptionSuggestion", back_populates="user", cascade="all, delete-orphan")
     api_keys = relationship("ApiKey", back_populates="user", cascade="all, delete-orphan")
     transaction_links = relationship("TransactionLink", back_populates="user", cascade="all, delete-orphan")
+    bank_connections = relationship("BankConnection", back_populates="user", cascade="all, delete-orphan")
 
 
 class ApiKey(Base):
