@@ -38,13 +38,14 @@ export async function POST(req: NextRequest) {
     }
 
     // Find user by email
-    const userRow = await db.execute(
+    // db.execute() with postgres.js returns a RowList which is array-like directly
+    const userRows = await db.execute(
       sql`SELECT id, email FROM "user" WHERE email = ${email}`
     );
-    if (!userRow.rows.length) {
+    if (!userRows.length) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
-    const userId = userRow.rows[0].id as string;
+    const userId = (userRows[0] as Record<string, unknown>).id as string;
 
     // Find matching accounts
     const matchingAccounts = await db
