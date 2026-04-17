@@ -97,9 +97,25 @@ class EnableBankingAdapter(BankAdapter):
 
     def normalize_transaction(self, raw: dict) -> TransactionData:
         """Map EB transaction to canonical format."""
+        import logging as _logging
+        _log = _logging.getLogger(__name__)
+
         amount = Decimal(str(raw["transaction_amount"]["amount"]))
         # EB uses entry_reference as primary ID; fall back to transaction_id
         external_id = raw.get("entry_reference") or raw.get("transaction_id", "")
+
+        # Log raw text fields to debug missing descriptions (TEMPORARY - remove after diagnosis)
+        _log.info(
+            "[EB_DEBUG] txn=%s amount=%s fields: riu=%r riua=%r ai=%r cn=%r dn=%r keys=%s",
+            external_id,
+            amount,
+            raw.get("remittance_information_unstructured"),
+            raw.get("remittance_information_unstructured_array"),
+            raw.get("additional_information"),
+            raw.get("creditor_name"),
+            raw.get("debtor_name"),
+            sorted(raw.keys()),
+        )
 
         # Build description from multiple possible EB fields
         description = (
