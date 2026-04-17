@@ -63,6 +63,8 @@ app = FastAPI(
 
 
 UNPROTECTED_API_PATHS = {"/api/health"}
+# Admin routes use their own Bearer-token auth (not the HMAC middleware)
+UNPROTECTED_API_PREFIXES = {"/api/admin/"}
 
 
 @app.middleware("http")
@@ -72,6 +74,7 @@ async def internal_auth_middleware(request: Request, call_next):
         request.method == "OPTIONS"
         or not path.startswith("/api/")
         or path in UNPROTECTED_API_PATHS
+        or any(path.startswith(prefix) for prefix in UNPROTECTED_API_PREFIXES)
     ):
         return await call_next(request)
 

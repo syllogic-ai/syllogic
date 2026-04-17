@@ -11,6 +11,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const UNPROTECTED_API_PATHS = new Set(["/api/health"]);
+// Admin routes use their own Bearer-token auth and don't need a user session
+const UNPROTECTED_API_PREFIXES = ["/api/admin/"];
 
 type ProxySession = {
   user?: {
@@ -40,7 +42,9 @@ function cloneRequestHeaders(req: NextRequest): Headers {
 async function proxy(req: NextRequest, pathSegments: string[]) {
   const upstreamUrl = buildUpstreamUrl(req, pathSegments);
   const method = req.method.toUpperCase();
-  const isProtectedPath = !UNPROTECTED_API_PATHS.has(upstreamUrl.pathname);
+  const isProtectedPath =
+    !UNPROTECTED_API_PATHS.has(upstreamUrl.pathname) &&
+    !UNPROTECTED_API_PREFIXES.some((prefix) => upstreamUrl.pathname.startsWith(prefix));
 
   let session: ProxySession = null;
   if (isProtectedPath) {
