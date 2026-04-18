@@ -112,8 +112,22 @@ class EnableBankingAdapter(BankAdapter):
         _log = _logging.getLogger(__name__)
 
         amount = Decimal(str(raw["transaction_amount"]["amount"]))
-        # EB uses entry_reference as primary ID; fall back to transaction_id
-        external_id = raw.get("entry_reference") or raw.get("transaction_id", "")
+        # EB uses entry_reference as primary ID; fall back to transaction_id.
+        # Some banks (e.g. ABN AMRO fee transactions) provide neither — generate a
+        # deterministic synthetic ID so Pydantic validation never fails and repeated
+        # syncs produce the same ID for the same transaction.
+        external_id = raw.get("entry_reference") or raw.get("transaction_id") or None
+        if not external_id:
+            import hashlib as _hashlib
+            _ri = raw.get("remittance_information")
+            _ri_str = "|".join(_ri) if isinstance(_ri, list) and _ri else (_ri or "")
+            _parts = "|".join([
+                raw.get("booking_date") or raw.get("value_date") or "",
+                str(raw["transaction_amount"]["amount"]),
+                raw["transaction_amount"].get("currency", ""),
+                _ri_str,
+            ])
+            external_id = "synth-" + _hashlib.sha256(_parts.encode()).hexdigest()[:16]
 
         # Log raw text fields to debug missing descriptions (TEMPORARY - remove after diagnosis)
         _log.info(
@@ -151,17 +165,34 @@ class EnableBankingAdapter(BankAdapter):
             else (remittance_info if isinstance(remittance_info, str) else None)
         )
 
-        # Build description from all possible EB text fields, most specific first
+        # Build a rich description by combining all available EB text fields.
+        # Previously used `or` (first non-null wins); now we concatenate so all
+        # structured remittance lines, additional info, and notes are preserved.
+        desc_parts: list[str] = []
+
+        riu = raw.get("remittance_information_unstructured")
+        if riu:
+            desc_parts.append(riu)
+
+        for item in (raw.get("remittance_information_unstructured_array") or []):
+            if item and item not in desc_parts:
+                desc_parts.append(item)
+
+        if remittance_info_text and remittance_info_text not in desc_parts:
+            desc_parts.append(remittance_info_text)
+
+        ai_info = raw.get("additional_information")
+        if ai_info and ai_info not in desc_parts:
+            desc_parts.append(ai_info)
+
+        note = raw.get("note")
+        if note and note not in desc_parts:
+            desc_parts.append(note)
+
         description = (
-            raw.get("remittance_information_unstructured")
-            or (raw.get("remittance_information_unstructured_array") or [""])[0]
-            or remittance_info_text
-            or raw.get("additional_information")
-            or raw.get("note")
-            or creditor_name
-            or debtor_name
-            or raw.get("reference_number")
-            or ""
+            " | ".join(desc_parts)
+            if desc_parts
+            else (creditor_name or debtor_name or raw.get("reference_number") or "")
         )
 
         merchant = creditor_name or debtor_name
@@ -180,6 +211,8 @@ class EnableBankingAdapter(BankAdapter):
             currency=raw["transaction_amount"]["currency"],
             description=description,
             merchant=merchant,
+            creditor=creditor_name,
+            debtor=debtor_name,
             booked_at=datetime.fromisoformat(_date_str) if (_date_str := (
                 raw.get("booking_date")
                 or raw.get("value_date")

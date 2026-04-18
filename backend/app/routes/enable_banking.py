@@ -499,6 +499,21 @@ def disconnect(
         logger.warning(f"Failed to revoke EB session {connection.session_id}", exc_info=True)
 
     connection.status = "disconnected"
+
+    # Unlink accounts so they can be re-linked to a new connection later
+    db.query(Account).filter(
+        Account.bank_connection_id == connection.id,
+    ).update(
+        {
+            Account.bank_connection_id: None,
+            Account.provider: None,
+            Account.external_id: None,
+            Account.external_id_ciphertext: None,
+            Account.external_id_hash: None,
+        },
+        synchronize_session=False,
+    )
+
     db.commit()
 
     return {"message": "Bank connection disconnected"}

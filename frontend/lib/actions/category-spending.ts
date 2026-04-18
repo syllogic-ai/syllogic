@@ -116,6 +116,8 @@ interface CategorySpendingTransactionRowWithRelations {
   accountId: string;
   description: string | null;
   merchant: string | null;
+  creditor: string | null;
+  debtor: string | null;
   amount: string;
   currency: string | null;
   categoryId: string | null;
@@ -426,6 +428,8 @@ function mapCategorySpendingTransactionRowsForUi(
         },
         description: tx.description,
         merchant: tx.merchant,
+        creditor: tx.creditor,
+        debtor: tx.debtor,
         amount: parseFloat(tx.amount),
         currency: tx.currency,
         categoryId: tx.categoryId,

@@ -27,6 +27,8 @@ class TransactionData(BaseModel):
     currency: str
     description: str
     merchant: Optional[str] = None
+    creditor: Optional[str] = None   # Counterparty name for debits (payee)
+    debtor: Optional[str] = None     # Counterparty name for credits (payer)
     booked_at: datetime
     transaction_type: str  # debit, credit
     pending: bool = False

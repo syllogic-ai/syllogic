@@ -249,6 +249,8 @@ export const transactions = pgTable(
     functionalAmount: decimal("functional_amount", { precision: 15, scale: 2 }), // Amount converted to user's functional currency
     description: text("description"),
     merchant: varchar("merchant", { length: 255 }),
+    creditor: varchar("creditor", { length: 255 }), // Counterparty name for debits (payee)
+    debtor: varchar("debtor", { length: 255 }), // Counterparty name for credits (payer)
     categoryId: uuid("category_id").references(() => categories.id), // User-overridden category
     categorySystemId: uuid("category_system_id").references(() => categories.id), // AI-assigned category (never updated by user)
     bookedAt: timestamp("booked_at").notNull(),

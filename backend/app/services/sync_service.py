@@ -244,6 +244,8 @@ class SyncService:
                 if transaction_data.description:
                     existing_transaction.description = transaction_data.description
                 existing_transaction.merchant = merchant or transaction_data.merchant
+                existing_transaction.creditor = transaction_data.creditor
+                existing_transaction.debtor = transaction_data.debtor
                 existing_transaction.booked_at = transaction_data.booked_at
                 existing_transaction.transaction_type = transaction_data.transaction_type
                 existing_transaction.pending = transaction_data.pending
@@ -268,6 +270,8 @@ class SyncService:
                     if transaction_data.description:
                         pending_match.description = transaction_data.description
                     pending_match.merchant = merchant or transaction_data.merchant
+                    pending_match.creditor = transaction_data.creditor
+                    pending_match.debtor = transaction_data.debtor
                     if not pending_match.category_id and not pending_match.category_system_id and category:
                         pending_match.category_system_id = category.id
                     if not pending_match.recurring_transaction_id and matched_subscription:
@@ -306,6 +310,8 @@ class SyncService:
                 currency=transaction_data.currency,
                 description=transaction_data.description,
                 merchant=merchant or transaction_data.merchant,
+                creditor=transaction_data.creditor,
+                debtor=transaction_data.debtor,
                 booked_at=transaction_data.booked_at,
                 pending=transaction_data.pending,
                 category_system_id=category.id if category else None,

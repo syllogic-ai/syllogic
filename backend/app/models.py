@@ -167,6 +167,8 @@ class Transaction(Base):
     functional_amount = Column(Numeric(15, 2), nullable=True)  # Amount converted to user's functional currency
     description = Column(Text)
     merchant = Column(String(255))
+    creditor = Column(String(255), nullable=True)   # Counterparty name for debits (payee)
+    debtor = Column(String(255), nullable=True)     # Counterparty name for credits (payer)
     category_id = Column(UUID(as_uuid=True), ForeignKey("categories.id"), nullable=True, index=True)  # User-overridden category
     category_system_id = Column(UUID(as_uuid=True), ForeignKey("categories.id"), nullable=True, index=True)  # AI-assigned category
     booked_at = Column(DateTime, nullable=False, index=True)

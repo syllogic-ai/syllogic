@@ -92,6 +92,13 @@
       "when": 1744588800000,
       "tag": "0012_bank_connection_initial_sync_days",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1776470400000,
+      "tag": "0013_transaction_creditor_debtor",
+      "breakpoints": true
     }
   ]
 }

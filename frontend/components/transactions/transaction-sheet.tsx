@@ -344,6 +344,18 @@ export function TransactionSheet({
                 <span className="text-muted-foreground">Merchant</span>
                 <span>{transaction.merchant || "-"}</span>
               </div>
+              {transaction.creditor && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Creditor</span>
+                  <span className="text-right max-w-[60%] break-words">{transaction.creditor}</span>
+                </div>
+              )}
+              {transaction.debtor && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Debtor</span>
+                  <span className="text-right max-w-[60%] break-words">{transaction.debtor}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Account</span>
                 <span>{transaction.account?.name || "Unknown"}</span>
