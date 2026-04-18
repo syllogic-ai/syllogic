@@ -170,6 +170,7 @@ def sync_bank_connection(self, connection_id: str):
                 _txn_sum = Decimal(str(_txn_sum_result)) if _txn_sum_result else Decimal("0")
                 _balance_av = Decimal(str(account.balance_available))
                 account.starting_balance = _balance_av - _txn_sum
+                account.functional_balance = _balance_av
 
         connection.last_synced_at = datetime.now(timezone.utc)
         connection.last_sync_error = None

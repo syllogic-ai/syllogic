@@ -99,9 +99,9 @@ class EnableBankingAdapter(BankAdapter):
             if not continuation_key:
                 break
         else:
-            logger.warning(
-                f"[EB] Pagination guard hit for account {account_external_id} "
-                f"after {max_pages} pages — stopping early"
+            raise RuntimeError(
+                f"[EB] Pagination guard hit for account {account_external_id} after {max_pages} pages; "
+                f"aborting to avoid partial sync"
             )
 
         return all_transactions

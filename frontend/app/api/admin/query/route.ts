@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { users, accounts, transactions, bankConnections, accountBalances } from "@/lib/db/schema";
+import { users, accounts, transactions, bankConnections, accountBalances, recurringTransactions, subscriptionSuggestions } from "@/lib/db/schema";
 import { eq, and, desc, isNull, isNotNull, inArray } from "drizzle-orm";
 
 /** Temporary admin endpoint for DB inspection and cleanup. Remove after diagnosis. */
@@ -146,7 +146,10 @@ export async function POST(req: NextRequest) {
         .where(inArray(accountBalances.accountId, accountIds));
       deletedBalances = balRows.length;
 
-      // Delete in order (transactions and accountBalances cascade from accounts, but be explicit)
+      // Delete in order: subscriptions → balances → transactions → accounts
+      // Subscriptions have ON DELETE SET NULL on account_id, so must be deleted explicitly.
+      await db.delete(subscriptionSuggestions).where(inArray(subscriptionSuggestions.accountId, accountIds));
+      await db.delete(recurringTransactions).where(inArray(recurringTransactions.accountId, accountIds));
       await db.delete(accountBalances).where(inArray(accountBalances.accountId, accountIds));
       await db.delete(transactions).where(
         and(eq(transactions.userId, userId), inArray(transactions.accountId, accountIds))

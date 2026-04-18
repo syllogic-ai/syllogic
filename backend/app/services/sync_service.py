@@ -327,20 +327,24 @@ class SyncService:
             from sqlalchemy import func as _sa_func
             # Find orphaned CSV rows (external_id IS NULL) in the sync window whose
             # (amount, date) was covered by an EB transaction.
-            if start_date is not None:
-                window_start = start_date.date() if hasattr(start_date, "date") else start_date
-            else:
-                window_start = None
+            # Scope to the sync date window so we don't scan the entire account history.
+            window_start = (
+                start_date.date() if hasattr(start_date, "date") else start_date
+            ) if start_date is not None else None
 
-            csv_orphans = (
+            orphan_query = (
                 self.db.query(Transaction)
                 .filter(
                     Transaction.user_id == self.user_id,
                     Transaction.account_id == account.id,
                     Transaction.external_id.is_(None),
                 )
-                .all()
             )
+            if window_start is not None:
+                orphan_query = orphan_query.filter(
+                    _sa_func.date(Transaction.booked_at) >= window_start
+                )
+            csv_orphans = orphan_query.all()
 
             for orphan in csv_orphans:
                 orphan_date = orphan.booked_at.date() if hasattr(orphan.booked_at, "date") else orphan.booked_at
