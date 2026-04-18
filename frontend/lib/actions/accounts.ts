@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { eq, and, lte, gte, lt, desc, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { accounts, accountBalances, transactions, type NewAccount } from "@/lib/db/schema";
+import { accounts, accountBalances, transactions, recurringTransactions, subscriptionSuggestions, type NewAccount } from "@/lib/db/schema";
 import { requireAuth } from "@/lib/auth-helpers";
 import { getBackendBaseUrl } from "@/lib/backend-url";
 import { createInternalAuthHeaders } from "@/lib/internal-auth";
@@ -175,6 +175,28 @@ export async function hardDeleteAccount(
     if (!account) {
       return { success: false, error: "Account not found" };
     }
+
+    // Delete subscriptions and suggestions linked to this account.
+    // recurringTransactions has ON DELETE SET NULL on account_id, so we must
+    // delete them explicitly; deleting them first nulls out
+    // transactions.recurring_transaction_id via the DB cascade.
+    await db
+      .delete(recurringTransactions)
+      .where(
+        and(
+          eq(recurringTransactions.accountId, accountId),
+          eq(recurringTransactions.userId, userId)
+        )
+      );
+
+    await db
+      .delete(subscriptionSuggestions)
+      .where(
+        and(
+          eq(subscriptionSuggestions.accountId, accountId),
+          eq(subscriptionSuggestions.userId, userId)
+        )
+      );
 
     // Delete associated balance records first
     const deletedBalances = await db

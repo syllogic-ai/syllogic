@@ -158,17 +158,18 @@ def sync_bank_connection(self, connection_id: str):
                 "started_at": sync_started_at,
             })
 
-        # Recompute functional_balance for all synced accounts
-        from sqlalchemy import func as sa_func
-        from app.models import Transaction
-        for account in accounts:
-            transaction_sum_result = db.query(sa_func.sum(Transaction.amount)).filter(
-                Transaction.user_id == connection.user_id,
-                Transaction.account_id == account.id,
-            ).scalar()
-            transaction_sum = Decimal(str(transaction_sum_result)) if transaction_sum_result else Decimal("0")
-            starting_balance = account.starting_balance or Decimal("0")
-            account.functional_balance = transaction_sum + starting_balance
+            # Anchor balance: back-calculate starting_balance so functional_balance = balance_available.
+            # This fixes the displayed balance for accounts that only have partial history imported.
+            if account.balance_is_anchored and account.balance_available is not None:
+                from sqlalchemy import func as _sa_func2
+                from app.models import Transaction
+                _txn_sum_result = db.query(_sa_func2.sum(Transaction.amount)).filter(
+                    Transaction.user_id == connection.user_id,
+                    Transaction.account_id == account.id,
+                ).scalar()
+                _txn_sum = Decimal(str(_txn_sum_result)) if _txn_sum_result else Decimal("0")
+                _balance_av = Decimal(str(account.balance_available))
+                account.starting_balance = _balance_av - _txn_sum
 
         connection.last_synced_at = datetime.now(timezone.utc)
         connection.last_sync_error = None

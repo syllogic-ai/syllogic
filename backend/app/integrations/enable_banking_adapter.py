@@ -7,7 +7,7 @@ Fetches accounts, transactions, and balances from the Enable Banking REST API.
 import logging
 from typing import List, Optional
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -180,7 +180,11 @@ class EnableBankingAdapter(BankAdapter):
             currency=raw["transaction_amount"]["currency"],
             description=description,
             merchant=merchant,
-            booked_at=datetime.fromisoformat(raw["booking_date"]),
+            booked_at=datetime.fromisoformat(_date_str) if (_date_str := (
+                raw.get("booking_date")
+                or raw.get("value_date")
+                or raw.get("transaction_date")
+            )) else datetime.now(timezone.utc),
             transaction_type="debit" if amount < 0 else "credit",
             pending=raw.get("status") == "PDNG",
             metadata={"raw": raw},

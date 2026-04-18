@@ -1,12 +1,14 @@
 """
 Service for syncing bank data (accounts and transactions).
 """
+import logging as _logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime
-from difflib import SequenceMatcher
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from decimal import Decimal
+
+_logger = _logging.getLogger(__name__)
 
 from app.models import Account, Transaction
 from app.integrations.base import BankAdapter, AccountData, TransactionData
@@ -66,57 +68,55 @@ class SyncService:
             ).first()
         return query.filter(Account.external_id == external_id).first()
     
-    def _fuzzy_match_transaction(self, account_id, amount, booked_at, description):
+    def _match_pending_transaction(
+        self, account_id: str, amount, booked_at
+    ) -> Optional["Transaction"]:
         """
-        Find an existing transaction that fuzzy-matches the incoming bank transaction.
-        Used for cross-source dedup (bank vs CSV).
-
-        Match criteria:
-        - Same account_id
-        - Exact amount (as Decimal)
-        - Exact booked_at date
-        - Description similarity >= 0.8 (SequenceMatcher on lowercased, whitespace-normalized)
-
-        Returns the matched Transaction or None.
+        Find an existing pending transaction that matches the incoming booked one.
+        Match criteria: same account, pending=True, external_id IS NULL,
+        exact amount, booked_at within ±7 days.
         """
-        import re
+        from datetime import timedelta
+        target_date = booked_at.date() if hasattr(booked_at, "date") else booked_at
+        date_min = target_date - timedelta(days=7)
+        date_max = target_date + timedelta(days=7)
 
-        # Only look for transactions without an external_id (CSV-imported)
-        candidates = (
+        from sqlalchemy import func as sa_func
+        return (
             self.db.query(Transaction)
             .filter(
                 Transaction.user_id == self.user_id,
                 Transaction.account_id == account_id,
-                Transaction.amount == amount,
+                Transaction.pending == True,
                 Transaction.external_id.is_(None),
+                Transaction.amount == amount,
+                sa_func.date(Transaction.booked_at) >= date_min,
+                sa_func.date(Transaction.booked_at) <= date_max,
             )
-            .all()
+            .first()
         )
 
-        # Filter by date
-        target_date = booked_at.date() if hasattr(booked_at, 'date') else booked_at
-        candidates = [
-            c for c in candidates
-            if (c.booked_at.date() if hasattr(c.booked_at, 'date') else c.booked_at) == target_date
-        ]
-
-        if not candidates:
-            return None
-
-        # Normalize description for comparison
-        def normalize(s):
-            return re.sub(r'\s+', ' ', (s or '').lower().strip())
-
-        norm_desc = normalize(description)
-
-        for candidate in candidates:
-            ratio = SequenceMatcher(
-                None, norm_desc, normalize(candidate.description)
-            ).ratio()
-            if ratio >= 0.8:
-                return candidate
-
-        return None
+    def _match_csv_transaction(
+        self, account_id: str, amount, booked_at
+    ) -> Optional["Transaction"]:
+        """
+        Find a CSV-sourced transaction that matches on amount + date only.
+        No description comparison — cross-source descriptions differ too much.
+        Match criteria: same account, external_id IS NULL, exact amount, exact date.
+        """
+        from sqlalchemy import func as sa_func
+        target_date = booked_at.date() if hasattr(booked_at, "date") else booked_at
+        return (
+            self.db.query(Transaction)
+            .filter(
+                Transaction.user_id == self.user_id,
+                Transaction.account_id == account_id,
+                Transaction.external_id.is_(None),
+                Transaction.amount == amount,
+                sa_func.date(Transaction.booked_at) == target_date,
+            )
+            .first()
+        )
 
     def sync_accounts(self, adapter: BankAdapter, provider: str) -> List[Account]:
         """
@@ -215,13 +215,6 @@ class SyncService:
                 use_llm=self.use_llm_categorization
             )
 
-            # Check if transaction already exists
-            existing_transaction = self.db.query(Transaction).filter(
-                Transaction.user_id == self.user_id,
-                Transaction.account_id == account.id,
-                Transaction.external_id == transaction_data.external_id
-            ).first()
-
             # Try to extract/improve merchant from description if empty
             merchant = transaction_data.merchant
             if not merchant and transaction_data.description:
@@ -237,66 +230,148 @@ class SyncService:
                     account_id=str(account.id),
                 )
 
+            # Step 1: exact external_id match
+            existing_transaction = self.db.query(Transaction).filter(
+                Transaction.user_id == self.user_id,
+                Transaction.account_id == account.id,
+                Transaction.external_id == transaction_data.external_id,
+            ).first()
+
             if existing_transaction:
-                # Update existing transaction
+                # Update mutable fields; preserve any existing category
                 existing_transaction.amount = transaction_data.amount
                 existing_transaction.currency = transaction_data.currency
-                # Don't overwrite a non-empty description with an empty one (bank may not always send it)
                 if transaction_data.description:
                     existing_transaction.description = transaction_data.description
                 existing_transaction.merchant = merchant or transaction_data.merchant
                 existing_transaction.booked_at = transaction_data.booked_at
                 existing_transaction.transaction_type = transaction_data.transaction_type
                 existing_transaction.pending = transaction_data.pending
-                # Only set category if neither user override nor AI category is already present.
-                # Once a transaction is categorised (by user or AI) we preserve it across syncs
-                # so that re-syncing can't silently overwrite a correct/manual category.
                 if not existing_transaction.category_id and not existing_transaction.category_system_id and category:
                     existing_transaction.category_system_id = category.id
-                # Only set subscription link if not already set (preserve manual links)
                 if not existing_transaction.recurring_transaction_id and matched_subscription:
                     existing_transaction.recurring_transaction_id = matched_subscription.id
                 updated_count += 1
-            else:
-                # Fuzzy match fallback for cross-source dedup (bank vs CSV-imported)
-                import logging
-                logger = logging.getLogger(__name__)
-                fuzzy_match = self._fuzzy_match_transaction(
+                continue
+
+            # Step 2: pending → booked transition (only when incoming is not pending)
+            if not transaction_data.pending:
+                pending_match = self._match_pending_transaction(
                     account_id=str(account.id),
                     amount=transaction_data.amount,
                     booked_at=transaction_data.booked_at,
-                    description=transaction_data.description or "",
                 )
-                if fuzzy_match:
-                    # Backfill the bank's external_id onto the existing CSV-imported transaction
-                    fuzzy_match.external_id = transaction_data.external_id
+                if pending_match:
+                    pending_match.external_id = transaction_data.external_id
+                    pending_match.pending = False
+                    pending_match.booked_at = transaction_data.booked_at
+                    if transaction_data.description:
+                        pending_match.description = transaction_data.description
+                    pending_match.merchant = merchant or transaction_data.merchant
+                    if not pending_match.category_id and not pending_match.category_system_id and category:
+                        pending_match.category_system_id = category.id
+                    if not pending_match.recurring_transaction_id and matched_subscription:
+                        pending_match.recurring_transaction_id = matched_subscription.id
                     self.db.flush()
                     updated_count += 1
-                    logger.info(
-                        "Fuzzy matched transaction %s → existing %s, backfilled external_id",
-                        transaction_data.external_id, fuzzy_match.id,
+                    _logger.info(
+                        "Pending→booked: external_id=%s matched pending row %s",
+                        transaction_data.external_id, pending_match.id,
                     )
                     continue
 
-                # Create new transaction
-                new_transaction = Transaction(
-                    user_id=self.user_id,
-                    account_id=account.id,
-                    external_id=transaction_data.external_id,
-                    transaction_type=transaction_data.transaction_type,
-                    amount=transaction_data.amount,
-                    currency=transaction_data.currency,
-                    description=transaction_data.description,
-                    merchant=merchant or transaction_data.merchant,
-                    booked_at=transaction_data.booked_at,
-                    pending=transaction_data.pending,
-                    category_system_id=category.id if category else None,  # Use category_system_id for AI-assigned
-                    recurring_transaction_id=matched_subscription.id if matched_subscription else None,
+            # Step 3: CSV overlap match (backfill external_id, preserve everything else)
+            csv_match = self._match_csv_transaction(
+                account_id=str(account.id),
+                amount=transaction_data.amount,
+                booked_at=transaction_data.booked_at,
+            )
+            if csv_match:
+                csv_match.external_id = transaction_data.external_id
+                self.db.flush()
+                updated_count += 1
+                _logger.info(
+                    "CSV overlap: external_id=%s backfilled onto existing row %s",
+                    transaction_data.external_id, csv_match.id,
                 )
-                self.db.add(new_transaction)
-                self.db.flush()  # Flush to get the ID
-                created_transaction_ids.append(str(new_transaction.id))
-                created_count += 1
+                continue
+
+            # Step 4: create new
+            new_transaction = Transaction(
+                user_id=self.user_id,
+                account_id=account.id,
+                external_id=transaction_data.external_id,
+                transaction_type=transaction_data.transaction_type,
+                amount=transaction_data.amount,
+                currency=transaction_data.currency,
+                description=transaction_data.description,
+                merchant=merchant or transaction_data.merchant,
+                booked_at=transaction_data.booked_at,
+                pending=transaction_data.pending,
+                category_system_id=category.id if category else None,
+                recurring_transaction_id=matched_subscription.id if matched_subscription else None,
+            )
+            self.db.add(new_transaction)
+            self.db.flush()
+            created_transaction_ids.append(str(new_transaction.id))
+            created_count += 1
+
+        # Post-sync cleanup: remove stale CSV duplicates for EB transactions already processed.
+        # Build set of (amount, date) tuples from all EB transactions in this sync.
+        eb_keys: set = set()
+        for td in transaction_data_list:
+            d = td.booked_at.date() if hasattr(td.booked_at, "date") else td.booked_at
+            eb_keys.add((td.amount, d))
+
+        if eb_keys:
+            from sqlalchemy import func as _sa_func
+            # Find orphaned CSV rows (external_id IS NULL) in the sync window whose
+            # (amount, date) was covered by an EB transaction.
+            if start_date is not None:
+                window_start = start_date.date() if hasattr(start_date, "date") else start_date
+            else:
+                window_start = None
+
+            csv_orphans = (
+                self.db.query(Transaction)
+                .filter(
+                    Transaction.user_id == self.user_id,
+                    Transaction.account_id == account.id,
+                    Transaction.external_id.is_(None),
+                )
+                .all()
+            )
+
+            for orphan in csv_orphans:
+                orphan_date = orphan.booked_at.date() if hasattr(orphan.booked_at, "date") else orphan.booked_at
+                if (orphan.amount, orphan_date) not in eb_keys:
+                    continue
+
+                # Before deleting, migrate category to the corresponding EB row if the EB row
+                # has no category and the orphan does.
+                if orphan.category_id or orphan.category_system_id:
+                    eb_row = (
+                        self.db.query(Transaction)
+                        .filter(
+                            Transaction.user_id == self.user_id,
+                            Transaction.account_id == account.id,
+                            Transaction.amount == orphan.amount,
+                            _sa_func.date(Transaction.booked_at) == orphan_date,
+                            Transaction.external_id.isnot(None),
+                        )
+                        .first()
+                    )
+                    if eb_row:
+                        if not eb_row.category_id and orphan.category_id:
+                            eb_row.category_id = orphan.category_id
+                        if not eb_row.category_system_id and orphan.category_system_id:
+                            eb_row.category_system_id = orphan.category_system_id
+
+                self.db.delete(orphan)
+                _logger.info(
+                    "Post-sync cleanup: deleted stale CSV duplicate row %s (amount=%s date=%s)",
+                    orphan.id, orphan.amount, orphan_date,
+                )
 
         self.db.commit()
 
