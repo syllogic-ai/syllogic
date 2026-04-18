@@ -112,8 +112,22 @@ class EnableBankingAdapter(BankAdapter):
         _log = _logging.getLogger(__name__)
 
         amount = Decimal(str(raw["transaction_amount"]["amount"]))
-        # EB uses entry_reference as primary ID; fall back to transaction_id
-        external_id = raw.get("entry_reference") or raw.get("transaction_id", "")
+        # EB uses entry_reference as primary ID; fall back to transaction_id.
+        # Some banks (e.g. ABN AMRO fee transactions) provide neither — generate a
+        # deterministic synthetic ID so Pydantic validation never fails and repeated
+        # syncs produce the same ID for the same transaction.
+        external_id = raw.get("entry_reference") or raw.get("transaction_id") or None
+        if not external_id:
+            import hashlib as _hashlib
+            _ri = raw.get("remittance_information")
+            _ri_str = (_ri[0] if isinstance(_ri, list) and _ri else _ri) or ""
+            _parts = "|".join([
+                raw.get("booking_date") or raw.get("value_date") or "",
+                str(raw["transaction_amount"]["amount"]),
+                raw["transaction_amount"].get("currency", ""),
+                _ri_str,
+            ])
+            external_id = "synth-" + _hashlib.sha256(_parts.encode()).hexdigest()[:16]
 
         # Log raw text fields to debug missing descriptions (TEMPORARY - remove after diagnosis)
         _log.info(
