@@ -120,7 +120,7 @@ class EnableBankingAdapter(BankAdapter):
         if not external_id:
             import hashlib as _hashlib
             _ri = raw.get("remittance_information")
-            _ri_str = (_ri[0] if isinstance(_ri, list) and _ri else _ri) or ""
+            _ri_str = "|".join(_ri) if isinstance(_ri, list) and _ri else (_ri or "")
             _parts = "|".join([
                 raw.get("booking_date") or raw.get("value_date") or "",
                 str(raw["transaction_amount"]["amount"]),
