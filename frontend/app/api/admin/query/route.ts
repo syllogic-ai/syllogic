@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { users, accounts, transactions } from "@/lib/db/schema";
+import { users, accounts, transactions, bankConnections, accountBalances } from "@/lib/db/schema";
 import { eq, and, desc, isNull, isNotNull, inArray } from "drizzle-orm";
 
 /** Temporary admin endpoint for DB inspection and cleanup. Remove after diagnosis. */
@@ -105,6 +105,69 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       deleted: countRows.length,
       accounts: bankAccounts.map((a) => ({ id: a.id, name: a.name })),
+    });
+  }
+
+  // Full teardown: delete everything tied to all bank connections for this user
+  // (transactions + account_balances cascade when accounts are deleted)
+  if (action === "delete_all_bank_connections") {
+    const connections = await db
+      .select({ id: bankConnections.id, aspspName: bankConnections.aspspName })
+      .from(bankConnections)
+      .where(eq(bankConnections.userId, userId));
+
+    if (connections.length === 0) {
+      return NextResponse.json({ message: "No bank connections found" });
+    }
+
+    const connectionIds = connections.map((c) => c.id);
+
+    const linkedAccounts = await db
+      .select({ id: accounts.id, name: accounts.name })
+      .from(accounts)
+      .where(and(eq(accounts.userId, userId), inArray(accounts.bankConnectionId, connectionIds)));
+
+    const accountIds = linkedAccounts.map((a) => a.id);
+
+    let deletedTransactions = 0;
+    let deletedBalances = 0;
+
+    if (accountIds.length > 0) {
+      // Count before deletion for the response
+      const txnRows = await db
+        .select({ id: transactions.id })
+        .from(transactions)
+        .where(and(eq(transactions.userId, userId), inArray(transactions.accountId, accountIds)));
+      deletedTransactions = txnRows.length;
+
+      const balRows = await db
+        .select({ id: accountBalances.id })
+        .from(accountBalances)
+        .where(inArray(accountBalances.accountId, accountIds));
+      deletedBalances = balRows.length;
+
+      // Delete in order (transactions and accountBalances cascade from accounts, but be explicit)
+      await db.delete(accountBalances).where(inArray(accountBalances.accountId, accountIds));
+      await db.delete(transactions).where(
+        and(eq(transactions.userId, userId), inArray(transactions.accountId, accountIds))
+      );
+      await db.delete(accounts).where(
+        and(eq(accounts.userId, userId), inArray(accounts.id, accountIds))
+      );
+    }
+
+    await db.delete(bankConnections).where(
+      and(eq(bankConnections.userId, userId), inArray(bankConnections.id, connectionIds))
+    );
+
+    return NextResponse.json({
+      deleted: {
+        bank_connections: connections.length,
+        accounts: linkedAccounts.length,
+        transactions: deletedTransactions,
+        account_balances: deletedBalances,
+      },
+      connections: connections.map((c) => c.aspspName),
     });
   }
 
