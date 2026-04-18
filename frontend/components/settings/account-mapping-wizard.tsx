@@ -68,7 +68,7 @@ function maskIban(iban: string): string {
   return iban.slice(0, 4) + " •••• " + iban.slice(-4);
 }
 
-const SYNC_DAY_OPTIONS = [30, 60, 90, 180, 365];
+const SYNC_DAY_OPTIONS = [30, 60, 90, 180, 365, 730];
 
 export function AccountMappingWizard({
   connectionId,
@@ -403,7 +403,7 @@ export function AccountMappingWizard({
               <SelectContent>
                 {SYNC_DAY_OPTIONS.map((days) => (
                   <SelectItem key={days} value={String(days)}>
-                    {days === 365 ? "1 year" : `${days} days`}
+                    {days === 365 ? "1 year" : days === 730 ? "2 years" : `${days} days`}
                   </SelectItem>
                 ))}
               </SelectContent>
