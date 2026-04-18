@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { users, accounts, transactions } from "@/lib/db/schema";
-import { eq, and, desc, isNull, inArray } from "drizzle-orm";
+import { eq, and, desc, isNull, isNotNull, inArray } from "drizzle-orm";
 
 /** Temporary admin endpoint for DB inspection and cleanup. Remove after diagnosis. */
 export async function POST(req: NextRequest) {
@@ -48,6 +48,35 @@ export async function POST(req: NextRequest) {
 
     await db.delete(accounts).where(inArray(accounts.id, toDelete));
     return NextResponse.json({ deleted: toDelete.length, accountIds: toDelete });
+  }
+
+  // Cleanup: clear AI-assigned categories on bank-synced transactions so next sync re-categorises
+  if (action === "clear_bank_categories") {
+    const bankAccounts = await db
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(and(eq(accounts.userId, userId), isNotNull(accounts.bankConnectionId)));
+
+    if (bankAccounts.length === 0) {
+      return NextResponse.json({ cleared: 0, message: "No bank-synced accounts found" });
+    }
+
+    const bankAccountIds = bankAccounts.map((a) => a.id);
+
+    // Only clear category_system_id where user hasn't manually overridden (category_id is null)
+    const result = await db
+      .update(transactions)
+      .set({ categorySystemId: null })
+      .where(
+        and(
+          eq(transactions.userId, userId),
+          inArray(transactions.accountId, bankAccountIds),
+          isNull(transactions.categoryId),
+          isNotNull(transactions.categorySystemId)
+        )
+      );
+
+    return NextResponse.json({ cleared: true, accountIds: bankAccountIds });
   }
 
   // Default: inspect accounts + recent transactions

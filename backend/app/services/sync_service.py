@@ -248,8 +248,10 @@ class SyncService:
                 existing_transaction.booked_at = transaction_data.booked_at
                 existing_transaction.transaction_type = transaction_data.transaction_type
                 existing_transaction.pending = transaction_data.pending
-                # Only update category_system_id if user hasn't overridden (preserve user's manual categorization)
-                if not existing_transaction.category_id and category:
+                # Only set category if neither user override nor AI category is already present.
+                # Once a transaction is categorised (by user or AI) we preserve it across syncs
+                # so that re-syncing can't silently overwrite a correct/manual category.
+                if not existing_transaction.category_id and not existing_transaction.category_system_id and category:
                     existing_transaction.category_system_id = category.id
                 # Only set subscription link if not already set (preserve manual links)
                 if not existing_transaction.recurring_transaction_id and matched_subscription:
@@ -466,8 +468,8 @@ class SyncService:
             existing_transaction.transaction_type = transaction_data.transaction_type
             existing_transaction.pending = transaction_data.pending
 
-            # Only update category_system_id if user hasn't overridden
-            if not existing_transaction.category_id and category:
+            # Only set category if neither user override nor AI category is already present.
+            if not existing_transaction.category_id and not existing_transaction.category_system_id and category:
                 existing_transaction.category_system_id = category.id
 
             # Only set subscription link if not already set (preserve manual links)

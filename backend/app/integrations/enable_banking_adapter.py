@@ -155,6 +155,13 @@ class EnableBankingAdapter(BankAdapter):
 
         merchant = creditor_name or debtor_name
 
+        # EB always returns positive transaction amounts; direction is given by
+        # credit_debit_indicator ("CRDT" = money in, "DBIT" = money out).
+        # Normalise to signed amounts so downstream categorisation works correctly.
+        credit_debit = raw.get("credit_debit_indicator", "CRDT").upper()
+        if credit_debit == "DBIT" and amount > 0:
+            amount = -amount
+
         return TransactionData(
             external_id=external_id,
             account_external_id=raw.get("account_id", ""),
