@@ -27,7 +27,7 @@ Syllogic gives self-hosters a finance app they can actually run themselves:
 ### 2. Self-host with Docker
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/syllogic-ai/syllogic/main/deploy/install/install.sh | sudo bash
+curl -fsSL https://github.com/syllogic-ai/syllogic/releases/latest/download/install.sh | sudo bash
 ```
 
 For the manual setup, use [README.md](README.md#quick-start).

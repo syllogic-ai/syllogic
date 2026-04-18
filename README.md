@@ -64,7 +64,7 @@ Syllogic is an open-source personal finance app for self-hosters who want contro
 **One-liner** (requires root, Docker, and Docker Compose):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/syllogic-ai/syllogic/main/deploy/install/install.sh | sudo bash
+curl -fsSL https://github.com/syllogic-ai/syllogic/releases/latest/download/install.sh | sudo bash
 ```
 
 **Or manually:**

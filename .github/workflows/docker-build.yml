@@ -70,6 +70,45 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Bump Railway template image pins to release tag
+        run: |
+          TAG="${{ github.ref_name }}"
+          # Validate tag format (semver v-prefix) to prevent sed injection
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
+            echo "ERROR: tag '$TAG' does not match expected semver pattern (vX.Y.Z or vX.Y.Z-suffix)"
+            exit 1
+          fi
+          sed -i "s|ghcr.io/syllogic-ai/syllogic-frontend:[^ ]*|ghcr.io/syllogic-ai/syllogic-frontend:${TAG}|g" deploy/railway/docker-compose.yml
+          sed -i "s|ghcr.io/syllogic-ai/syllogic-backend:[^ ]*|ghcr.io/syllogic-ai/syllogic-backend:${TAG}|g" deploy/railway/docker-compose.yml
+          # Fail if any :edge pins remain in the Railway file
+          if grep -qE 'ghcr.io/syllogic-ai/syllogic-(frontend|backend):edge' deploy/railway/docker-compose.yml; then
+            echo "ERROR: :edge pins remain in deploy/railway/docker-compose.yml after bump"
+            exit 1
+          fi
+          # Bump example-env APP_VERSION defaults
+          sed -i "s|^APP_VERSION=.*|APP_VERSION=${TAG}|g" deploy/compose/.env.example
+          sed -i "s|^APP_VERSION=.*|APP_VERSION=${TAG}|g" deploy/casaos/.env.example
+
+      - name: Commit pin bump back to repo
+        if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! git diff --quiet deploy/railway/docker-compose.yml deploy/compose/.env.example deploy/casaos/.env.example; then
+            git config user.name "syllogic-bot"
+            git config user.email "bot@syllogic.ai"
+            git checkout main
+            git pull --ff-only origin main
+            git checkout "${{ github.ref_name }}" -- deploy/railway/docker-compose.yml deploy/compose/.env.example deploy/casaos/.env.example
+            git add deploy/railway/docker-compose.yml deploy/compose/.env.example deploy/casaos/.env.example
+            git commit -m "chore: bump Railway template pins to ${{ github.ref_name }} [skip ci]"
+            git push origin main
+          else
+            echo "No pin changes to commit."
+          fi
 
       - name: Create compose bundle
         run: |

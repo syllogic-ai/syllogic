@@ -42,7 +42,7 @@ const SERVICES = [
 ];
 
 const INSTALL_CMD =
-  "curl -fsSL https://raw.githubusercontent.com/syllogic-ai/syllogic/main/deploy/install/install.sh | sudo bash";
+  "curl -fsSL https://github.com/syllogic-ai/syllogic/releases/latest/download/install.sh | sudo bash";
 
 function CopyIcon() {
   return (
