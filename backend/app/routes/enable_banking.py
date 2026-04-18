@@ -377,6 +377,61 @@ def map_accounts(
     )
 
 
+@router.post("/connections/{connection_id}/recategorize", response_model=SyncTriggerResponse)
+def recategorize_connection(
+    connection_id: str,
+    user_id: str = Depends(get_user_id),
+    db: Session = Depends(get_db),
+):
+    """
+    Re-run batch AI categorization for ALL transactions on a connection.
+
+    Useful after a categorization bug — overwrites wrong system-assigned categories
+    while preserving any user-assigned category_id overrides.
+    """
+    from app.models import Transaction
+
+    connection = db.query(BankConnection).filter(
+        BankConnection.id == connection_id,
+        BankConnection.user_id == user_id,
+    ).first()
+    if not connection:
+        raise HTTPException(status_code=404, detail="Connection not found")
+
+    account_ids = [
+        str(a.id)
+        for a in db.query(Account).filter(Account.bank_connection_id == connection.id).all()
+    ]
+    if not account_ids:
+        raise HTTPException(status_code=404, detail="No accounts found for this connection")
+
+    transaction_ids = [
+        str(t.id)
+        for t in db.query(Transaction.id).filter(
+            Transaction.user_id == user_id,
+            Transaction.account_id.in_(account_ids),
+        ).all()
+    ]
+
+    if not transaction_ids:
+        return SyncTriggerResponse(message="No transactions to re-categorize")
+
+    try:
+        from tasks.post_import_pipeline import post_import_pipeline
+        task = post_import_pipeline.delay(
+            user_id=user_id,
+            account_ids=account_ids,
+            transaction_ids=transaction_ids,
+            is_initial_sync=False,
+        )
+        return SyncTriggerResponse(
+            message=f"Re-categorization started for {len(transaction_ids)} transactions",
+            task_id=task.id,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to start re-categorization: {str(e)}")
+
+
 @router.post("/sync/{connection_id}", response_model=SyncTriggerResponse)
 def trigger_sync(
     connection_id: str,
