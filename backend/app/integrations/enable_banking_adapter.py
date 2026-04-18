@@ -76,7 +76,10 @@ class EnableBankingAdapter(BankAdapter):
             params["date_to"] = end_date.strftime("%Y-%m-%d")
 
         continuation_key = None
-        while True:
+        max_pages = 200  # guard against infinite loops from broken continuation keys
+        page = 0
+        while page < max_pages:
+            page += 1
             if continuation_key:
                 params["continuation_key"] = continuation_key
 
@@ -92,6 +95,11 @@ class EnableBankingAdapter(BankAdapter):
             continuation_key = data.get("continuation_key")
             if not continuation_key:
                 break
+        else:
+            logger.warning(
+                f"[EB] Pagination guard hit for account {account_external_id} "
+                f"after {max_pages} pages — stopping early"
+            )
 
         return all_transactions
 

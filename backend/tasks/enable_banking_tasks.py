@@ -5,7 +5,7 @@ Celery tasks for Enable Banking sync and consent management.
 import json
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import redis
@@ -81,11 +81,11 @@ def sync_bank_connection(self, connection_id: str):
         if connection.last_synced_at is None:
             # First sync: use user-configured lookback
             sync_days = connection.initial_sync_days or 90
-            start_date = (datetime.utcnow() - timedelta(days=sync_days)).date()
+            start_date = (datetime.now(timezone.utc) - timedelta(days=sync_days)).date()
         else:
             # Incremental sync: from last sync minus 1 day overlap
             start_date = (connection.last_synced_at - timedelta(days=1)).date()
-        end_date = datetime.utcnow()
+        end_date = datetime.now(timezone.utc)
 
         sync_service = SyncService(db, user_id=connection.user_id)
 
@@ -100,7 +100,7 @@ def sync_bank_connection(self, connection_id: str):
         synced_account_ids: list[str] = []
 
         accounts_total = len(accounts)
-        sync_started_at = datetime.utcnow().isoformat()
+        sync_started_at = datetime.now(timezone.utc).isoformat()
         _set_sync_progress(connection_id, {
             "stage": "syncing",
             "accounts_done": 0,
@@ -148,7 +148,7 @@ def sync_bank_connection(self, connection_id: str):
                 logger.error(f"Failed to sync transactions for account {account.id}: {e}")
                 raise
 
-            account.last_synced_at = datetime.utcnow()
+            account.last_synced_at = datetime.now(timezone.utc)
             _set_sync_progress(connection_id, {
                 "stage": "syncing",
                 "accounts_done": i + 1,
@@ -170,7 +170,7 @@ def sync_bank_connection(self, connection_id: str):
             starting_balance = account.starting_balance or Decimal("0")
             account.functional_balance = transaction_sum + starting_balance
 
-        connection.last_synced_at = datetime.utcnow()
+        connection.last_synced_at = datetime.now(timezone.utc)
         connection.last_sync_error = None
         db.commit()
         _clear_sync_progress(connection_id)
@@ -256,7 +256,7 @@ def check_consent_expiry():
     """
     db: Session = SessionLocal()
     try:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Mark expired connections
         expired = db.query(BankConnection).filter(

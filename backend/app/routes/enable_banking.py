@@ -9,7 +9,7 @@ import os
 import logging
 import uuid as uuid_mod
 from typing import Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import redis
 import json
@@ -156,7 +156,7 @@ def initiate_auth(
 
     auth_payload = {
         "access": {
-            "valid_until": (datetime.utcnow() + timedelta(days=90)).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+            "valid_until": (datetime.now(timezone.utc) + timedelta(days=90)).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
         },
         "aspsp": {
             "name": body.aspsp_name,
@@ -224,9 +224,9 @@ def create_session(
         try:
             consent_expires_at = datetime.fromisoformat(consent_valid_until.replace("Z", "+00:00"))
         except (ValueError, TypeError):
-            consent_expires_at = datetime.utcnow() + timedelta(days=90)
+            consent_expires_at = datetime.now(timezone.utc) + timedelta(days=90)
     else:
-        consent_expires_at = datetime.utcnow() + timedelta(days=90)
+        consent_expires_at = datetime.now(timezone.utc) + timedelta(days=90)
 
     # Create bank_connections row (status=pending_setup; accounts mapped in a separate step)
     connection = BankConnection(
