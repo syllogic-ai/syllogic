@@ -100,13 +100,14 @@ def sync_bank_connection(self, connection_id: str):
         synced_account_ids: list[str] = []
 
         accounts_total = len(accounts)
+        sync_started_at = datetime.utcnow().isoformat()
         _set_sync_progress(connection_id, {
             "stage": "syncing",
             "accounts_done": 0,
             "accounts_total": accounts_total,
             "transactions_created": 0,
             "transactions_updated": 0,
-            "started_at": datetime.utcnow().isoformat(),
+            "started_at": sync_started_at,
         })
 
         for i, account in enumerate(accounts):
@@ -154,7 +155,7 @@ def sync_bank_connection(self, connection_id: str):
                 "accounts_total": accounts_total,
                 "transactions_created": total_created,
                 "transactions_updated": total_updated,
-                "started_at": datetime.utcnow().isoformat(),
+                "started_at": sync_started_at,
             })
 
         # Recompute functional_balance for all synced accounts
