@@ -70,10 +70,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Bump Railway template image pins to release tag
         run: |
           TAG="${{ github.ref_name }}"
+          # Validate tag format (semver v-prefix) to prevent sed injection
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
+            echo "ERROR: tag '$TAG' does not match expected semver pattern (vX.Y.Z or vX.Y.Z-suffix)"
+            exit 1
+          fi
           sed -i "s|ghcr.io/syllogic-ai/syllogic-frontend:[^ ]*|ghcr.io/syllogic-ai/syllogic-frontend:${TAG}|g" deploy/railway/docker-compose.yml
           sed -i "s|ghcr.io/syllogic-ai/syllogic-backend:[^ ]*|ghcr.io/syllogic-ai/syllogic-backend:${TAG}|g" deploy/railway/docker-compose.yml
           # Fail if any :edge pins remain in the Railway file
@@ -94,7 +101,7 @@ jobs:
             git pull --ff-only origin main
             git checkout "${{ github.ref_name }}" -- deploy/railway/docker-compose.yml
             git add deploy/railway/docker-compose.yml
-            git commit -m "chore: bump Railway template pins to ${{ github.ref_name }}"
+            git commit -m "chore: bump Railway template pins to ${{ github.ref_name }} [skip ci]"
             git push origin main
           else
             echo "No pin changes to commit."
