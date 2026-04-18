@@ -178,7 +178,7 @@ class SyncService:
         account: Account,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
-    ) -> tuple[int, int, List[str]]:
+    ) -> tuple[int, int, List[str], List[str]]:
         """
         Sync transactions for an account.
 
@@ -204,6 +204,7 @@ class SyncService:
         created_count = 0
         updated_count = 0
         created_transaction_ids: List[str] = []
+        updated_transaction_ids: List[str] = []
 
         for transaction_data in transaction_data_list:
             # Try to auto-categorize the transaction
@@ -253,6 +254,7 @@ class SyncService:
                     existing_transaction.category_system_id = category.id
                 if not existing_transaction.recurring_transaction_id and matched_subscription:
                     existing_transaction.recurring_transaction_id = matched_subscription.id
+                updated_transaction_ids.append(str(existing_transaction.id))
                 updated_count += 1
                 continue
 
@@ -277,6 +279,7 @@ class SyncService:
                     if not pending_match.recurring_transaction_id and matched_subscription:
                         pending_match.recurring_transaction_id = matched_subscription.id
                     self.db.flush()
+                    updated_transaction_ids.append(str(pending_match.id))
                     updated_count += 1
                     _logger.info(
                         "Pending→booked: external_id=%s matched pending row %s",
@@ -293,6 +296,7 @@ class SyncService:
             if csv_match:
                 csv_match.external_id = transaction_data.external_id
                 self.db.flush()
+                updated_transaction_ids.append(str(csv_match.id))
                 updated_count += 1
                 _logger.info(
                     "CSV overlap: external_id=%s backfilled onto existing row %s",
@@ -385,7 +389,7 @@ class SyncService:
 
         self.db.commit()
 
-        return (created_count, updated_count, created_transaction_ids)
+        return (created_count, updated_count, created_transaction_ids, updated_transaction_ids)
     
     def sync_all(
         self,
@@ -439,7 +443,7 @@ class SyncService:
         all_created_ids: List[str] = []
 
         for account in accounts:
-            created, updated, created_ids = self.sync_transactions(
+            created, updated, created_ids, _updated_ids = self.sync_transactions(
                 adapter,
                 account,
                 start_date=start_date,

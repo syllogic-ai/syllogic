@@ -82,4 +82,4 @@ RUN mkdir -p /app/public/uploads && chown -R node:node /app/public/uploads
 USER node
 
 EXPOSE 3000
-CMD ["sh", "-c", "node scripts/migrate.js && node_modules/.bin/next start -p 3000 -H 0.0.0.0"]
+CMD ["sh", "-c", "node scripts/migrate.js && exec node_modules/.bin/next start -p 3000 -H 0.0.0.0"]

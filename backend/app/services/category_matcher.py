@@ -480,7 +480,12 @@ class CategoryMatcher:
             override_merchant = self._normalize_text(override.get("merchant"))
             override_amount = override.get("amount")
             override_category = override.get("category_name")
-            
+
+            # An override with no identifying fields would match every transaction —
+            # skip it to prevent catch-all false positives.
+            if not override_desc and not override_merchant:
+                continue
+
             # Match if description and merchant match (case-insensitive, normalized)
             # Skip if the transaction has no description/merchant — avoid catch-all matches
             desc_match = (not override_desc) or (normalized_desc and override_desc == normalized_desc)

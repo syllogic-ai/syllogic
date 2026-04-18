@@ -87,7 +87,8 @@ def sync_bank_connection(self, connection_id: str):
             start_date = (connection.last_synced_at - timedelta(days=1)).date()
         end_date = datetime.now(timezone.utc)
 
-        sync_service = SyncService(db, user_id=connection.user_id)
+        # Disable inline LLM during sync — batch AI categorization runs in post_import_pipeline
+        sync_service = SyncService(db, user_id=connection.user_id, use_llm_categorization=False)
 
         # Get accounts linked to this connection
         accounts = db.query(Account).filter(
@@ -97,6 +98,7 @@ def sync_bank_connection(self, connection_id: str):
         total_created = 0
         total_updated = 0
         all_created_ids: list[str] = []
+        all_updated_ids: list[str] = []
         synced_account_ids: list[str] = []
 
         accounts_total = len(accounts)
@@ -134,7 +136,7 @@ def sync_bank_connection(self, connection_id: str):
 
             # Sync transactions via SyncService
             try:
-                created, updated, created_ids = sync_service.sync_transactions(
+                created, updated, created_ids, updated_ids = sync_service.sync_transactions(
                     adapter=adapter,
                     account=account,
                     start_date=start_date,
@@ -143,6 +145,7 @@ def sync_bank_connection(self, connection_id: str):
                 total_created += created
                 total_updated += updated
                 all_created_ids.extend(created_ids)
+                all_updated_ids.extend(updated_ids)
                 synced_account_ids.append(str(account.id))
             except Exception as e:
                 logger.error(f"Failed to sync transactions for account {account.id}: {e}")
@@ -177,12 +180,15 @@ def sync_bank_connection(self, connection_id: str):
         db.commit()
         _clear_sync_progress(connection_id)
 
-        # Chain to shared post-processing pipeline (run if any transactions were touched)
-        if all_created_ids or total_updated > 0:
+        # Chain to shared post-processing pipeline (run if any transactions were touched).
+        # Pass all created + updated IDs so the pipeline can batch-categorize, compute FX
+        # rates, and run subscription detection on the full set of touched transactions.
+        all_touched_ids = list(dict.fromkeys(all_created_ids + all_updated_ids))  # dedup, preserve order
+        if all_touched_ids or total_updated > 0:
             post_import_pipeline.delay(
                 user_id=str(connection.user_id),
                 account_ids=synced_account_ids,
-                transaction_ids=all_created_ids,
+                transaction_ids=all_touched_ids,
                 is_initial_sync=is_initial_sync,
             )
 
