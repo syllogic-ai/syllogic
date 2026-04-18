@@ -4,9 +4,12 @@ Enable Banking adapter implementing the BankAdapter interface.
 Fetches accounts, transactions, and balances from the Enable Banking REST API.
 """
 
+import logging
 from typing import List, Optional
 from decimal import Decimal
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 from app.integrations.base import BankAdapter, AccountData, TransactionData
 from app.integrations.enable_banking_auth import EnableBankingClient
