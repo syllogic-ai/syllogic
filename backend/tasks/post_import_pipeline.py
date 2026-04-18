@@ -1,12 +1,13 @@
 """
 Shared post-import pipeline Celery task.
 
-Runs 5 post-processing steps in order after any transaction import (CSV or Enable Banking):
+Runs 6 post-processing steps in order after any transaction import (CSV or Enable Banking):
   1. FX rate sync
   2. Functional amount calculation
-  3. Balance calculation
-  4. Balance timeseries
-  5. Subscription detection
+  3. Batch AI categorization (for transactions without a user-assigned category)
+  4. Balance calculation
+  5. Balance timeseries
+  6. Subscription detection
 """
 import logging
 from datetime import datetime
@@ -22,6 +23,7 @@ from app.services.exchange_rate_service import ExchangeRateService
 from app.services.account_balance_service import AccountBalanceService
 from app.services.subscription_matcher import SubscriptionMatcher
 from app.services.subscription_detector import SubscriptionDetector
+from app.services.category_matcher import CategoryMatcher
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +118,67 @@ def _update_functional_amounts(db, user_id: str, transaction_ids: List[str]) -> 
             txn.functional_amount = txn.amount * rate if rate else None
 
     db.commit()
+
+
+def _batch_categorize_transactions(db, user_id: str, transaction_ids: List[str]) -> None:
+    """Batch AI categorize touched transactions that have no user-assigned category.
+
+    Overwrites any existing system-assigned category (category_system_id) so that
+    transactions wrongly auto-categorized during a previous inline pass are corrected.
+    User manual overrides (category_id) are always preserved.
+    """
+    if not transaction_ids:
+        return
+
+    transactions = (
+        db.query(Transaction)
+        .filter(
+            Transaction.id.in_(transaction_ids),
+            Transaction.user_id == user_id,
+            Transaction.category_id.is_(None),  # Preserve user-assigned categories
+        )
+        .all()
+    )
+
+    if not transactions:
+        logger.info("[POST_IMPORT_PIPELINE] No uncategorized transactions to process")
+        return
+
+    matcher = CategoryMatcher(db, user_id=user_id)
+
+    batch_input = [
+        {
+            "index": i,
+            "description": txn.description,
+            "merchant": txn.merchant,
+            "amount": float(txn.amount),
+            "transaction_type": txn.transaction_type,
+        }
+        for i, txn in enumerate(transactions)
+    ]
+
+    results, total_tokens, total_cost = matcher.match_categories_batch_llm(batch_input)
+
+    assigned = 0
+    for i, txn in enumerate(transactions):
+        if i in results:
+            category, _confidence = results[i]
+            txn.category_system_id = category.id
+            assigned += 1
+        else:
+            # Clear any stale system category if the LLM couldn't categorize
+            txn.category_system_id = None
+
+    db.commit()
+
+    logger.info(
+        "[POST_IMPORT_PIPELINE] Batch categorized %d/%d transactions "
+        "(tokens: %d, cost: $%.6f)",
+        assigned,
+        len(transactions),
+        total_tokens,
+        total_cost,
+    )
 
 
 def _calculate_balances(db, user_id: str, account_ids: List[str]) -> None:
@@ -222,13 +285,15 @@ def _run_post_import_pipeline(
         # Step 2: Functional amount calculation
         _update_functional_amounts(db, user_id, transaction_ids)
 
-        # Step 3: Balance calculation
+        # Step 3: Batch AI categorization (overwrites wrong system categories; preserves user overrides)
+        _batch_categorize_transactions(db, user_id, transaction_ids)
+
+        # Step 4: Balance calculation
         _calculate_balances(db, user_id, account_ids)
 
-        # Step 4: Balance timeseries
+        # Step 5: Balance timeseries
         _calculate_timeseries(db, user_id, account_ids)
 
-        # Step 5: Subscription detection
         # For initial sync, pass None so the detector scans ALL user transactions
         effective_txn_ids = None if is_initial_sync else transaction_ids
         _detect_subscriptions(db, user_id, effective_txn_ids, account_ids)

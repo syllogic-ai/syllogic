@@ -262,7 +262,7 @@ def map_accounts(
     Map bank accounts to new or existing accounts and activate the connection.
     Called after POST /session as the second step of the account mapping wizard.
     """
-    VALID_SYNC_DAYS = {30, 60, 90, 180, 365}
+    VALID_SYNC_DAYS = {30, 60, 90, 180, 365, 730}
     if request.initial_sync_days not in VALID_SYNC_DAYS:
         raise HTTPException(
             status_code=400,
