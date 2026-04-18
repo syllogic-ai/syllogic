@@ -12,6 +12,7 @@ import {
   RiLinkUnlinkM,
   RiAddLine,
   RiAlertLine,
+  RiPriceTag3Line,
 } from "@remixicon/react";
 import {
   AlertDialog,
@@ -24,7 +25,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { triggerSync, disconnectBank } from "@/lib/actions/bank-connections";
+import { triggerSync, disconnectBank, triggerRecategorize } from "@/lib/actions/bank-connections";
 type BankConnectionItem = {
   id: string;
   aspspName: string;
@@ -52,6 +53,7 @@ type SyncProgress = {
 export function BankConnectionsManager({ connections }: BankConnectionsManagerProps) {
   const router = useRouter();
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
+  const [recategorizingIds, setRecategorizingIds] = useState<Set<string>>(new Set());
   const [disconnectingIds, setDisconnectingIds] = useState<Set<string>>(new Set());
   const [pollingIds, setPollingIds] = useState<Set<string>>(new Set());
   const [syncProgress, setSyncProgress] = useState<Map<string, SyncProgress>>(new Map());
@@ -192,6 +194,22 @@ export function BankConnectionsManager({ connections }: BankConnectionsManagerPr
       startPolling(connectionId, currentLastSyncedAt);
     } catch {
       setSyncingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(connectionId);
+        return next;
+      });
+    }
+  };
+
+  const handleRecategorize = async (connectionId: string) => {
+    setRecategorizingIds((prev) => new Set(prev).add(connectionId));
+    try {
+      const result = await triggerRecategorize(connectionId);
+      if (!result.success) {
+        console.error("Re-categorization failed:", result.error);
+      }
+    } finally {
+      setRecategorizingIds((prev) => {
         const next = new Set(prev);
         next.delete(connectionId);
         return next;
@@ -351,6 +369,21 @@ export function BankConnectionsManager({ connections }: BankConnectionsManagerPr
                       }`}
                     />
                     {syncingIds.has(connection.id) ? "Syncing..." : "Sync Now"}
+                  </Button>
+                )}
+                {connection.status === "active" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleRecategorize(connection.id)}
+                    disabled={recategorizingIds.has(connection.id)}
+                  >
+                    <RiPriceTag3Line
+                      className={`mr-1.5 h-4 w-4 ${
+                        recategorizingIds.has(connection.id) ? "animate-spin" : ""
+                      }`}
+                    />
+                    {recategorizingIds.has(connection.id) ? "Re-categorizing..." : "Fix Categories"}
                   </Button>
                 )}
                 <AlertDialog>

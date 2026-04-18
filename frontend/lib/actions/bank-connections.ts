@@ -278,6 +278,46 @@ export async function submitAccountMappings(
   }
 }
 
+export async function triggerRecategorize(
+  connectionId: string
+): Promise<{ success: boolean; error?: string }> {
+  const session = await getAuthenticatedSession();
+  const userId = session?.user?.id;
+  if (!userId) return { success: false, error: "Not authenticated" };
+  if (isDemoRestrictedUserEmail(session.user.email)) {
+    return { success: false, error: DEMO_RESTRICTED_ACTION_ERROR };
+  }
+
+  try {
+    const backendBase = getBackendBaseUrl().replace(/\/+$/, "");
+    const pathWithQuery = `/api/enable-banking/connections/${connectionId}/recategorize`;
+    const url = `${backendBase}${pathWithQuery}`;
+
+    const signatureHeaders = createInternalAuthHeaders({
+      method: "POST",
+      pathWithQuery,
+      userId,
+    });
+
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...signatureHeaders,
+      },
+    });
+
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({ detail: "Re-categorization failed" }));
+      return { success: false, error: data.detail || "Re-categorization failed" };
+    }
+
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: "Failed to trigger re-categorization" };
+  }
+}
+
 export async function getConnectionStatus(
   connectionId: string
 ): Promise<{
