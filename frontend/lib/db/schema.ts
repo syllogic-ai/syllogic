@@ -73,7 +73,7 @@ export const authAccounts = pgTable("auth_accounts", {
 export const verificationTokens = pgTable("verification_tokens", {
   id: text("id").primaryKey(),
   identifier: text("identifier").notNull(),
-  token: text("token").unique().notNull(),
+  value: text("value").notNull(),
   expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

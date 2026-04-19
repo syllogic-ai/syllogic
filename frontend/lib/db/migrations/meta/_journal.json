@@ -120,6 +120,13 @@
       "when": 1776643200000,
       "tag": "0016_jwks_table",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1776729600000,
+      "tag": "0017_verification_value_rename",
+      "breakpoints": true
     }
   ]
 }
