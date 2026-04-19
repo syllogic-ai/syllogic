@@ -130,7 +130,7 @@ except ImportError:  # pragma: no cover
     JWTVerifier = None  # type: ignore
 
 
-AS_ISSUER = os.environ.get("MCP_OAUTH_ISSUER", "https://app.syllogic.ai")
+AS_ISSUER = os.environ.get("MCP_OAUTH_ISSUER", "https://app.syllogic.ai/api/auth")
 AS_JWKS_URI = os.environ.get(
     "MCP_OAUTH_JWKS_URI", "https://app.syllogic.ai/api/auth/jwks"
 )
