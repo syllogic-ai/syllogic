@@ -55,7 +55,7 @@ export const auth = betterAuth({
       refreshTokenExpiresIn: 60 * 60 * 24 * 30, // 30 days
       allowDynamicClientRegistration: true,
       allowUnauthenticatedClientRegistration: true,
-      loginPage: "/auth/login",
+      loginPage: "/login",
       consentPage: "/oauth/consent",
     }),
   ],
