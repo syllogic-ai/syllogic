@@ -8,6 +8,7 @@ from sqlalchemy import (
     Column,
     String,
     Boolean,
+    Date,
     DateTime,
     Numeric,
     Text,
@@ -632,4 +633,98 @@ class ApiKey(Base):
     __table_args__ = (
         Index("idx_api_keys_user", "user_id"),
         Index("idx_api_keys_hash", "key_hash"),
+    )
+
+
+class BrokerConnection(Base):
+    __tablename__ = "broker_connections"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    account_id = Column(UUID(as_uuid=True), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
+    provider = Column(String(50), nullable=False)
+    credentials_encrypted = Column(Text, nullable=False)
+    last_sync_at = Column(DateTime, nullable=True)
+    last_sync_status = Column(String(20), default="pending")
+    last_sync_error = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    account = relationship("Account")
+
+
+class Holding(Base):
+    __tablename__ = "holdings"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    account_id = Column(UUID(as_uuid=True), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
+    symbol = Column(String(64), nullable=False)
+    name = Column(String(255))
+    currency = Column(String(3), nullable=False)
+    instrument_type = Column(String(20), nullable=False)
+    quantity = Column(Numeric(28, 8), nullable=False)
+    avg_cost = Column(Numeric(28, 8), nullable=True)
+    as_of_date = Column(Date, nullable=True)
+    source = Column(String(20), nullable=False)
+    last_price_error = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    valuations = relationship("HoldingValuation", back_populates="holding", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        UniqueConstraint("account_id", "symbol", "instrument_type", name="holdings_account_symbol_type_uq"),
+        Index("idx_holdings_account", "account_id"),
+    )
+
+
+class BrokerTrade(Base):
+    __tablename__ = "broker_trades"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id = Column(UUID(as_uuid=True), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
+    symbol = Column(String(64), nullable=False)
+    trade_date = Column(Date, nullable=False)
+    side = Column(String(10), nullable=False)
+    quantity = Column(Numeric(28, 8), nullable=False)
+    price = Column(Numeric(28, 8), nullable=False)
+    currency = Column(String(3), nullable=False)
+    external_id = Column(String(128), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("account_id", "external_id", name="broker_trades_account_external_uq"),
+    )
+
+
+class PriceSnapshot(Base):
+    __tablename__ = "price_snapshots"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    symbol = Column(String(64), nullable=False)
+    currency = Column(String(3), nullable=False)
+    date = Column(Date, nullable=False)
+    close = Column(Numeric(28, 8), nullable=False)
+    provider = Column(String(20), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("symbol", "date", name="price_snapshots_symbol_date_uq"),
+    )
+
+
+class HoldingValuation(Base):
+    __tablename__ = "holding_valuations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    holding_id = Column(UUID(as_uuid=True), ForeignKey("holdings.id", ondelete="CASCADE"), nullable=False)
+    date = Column(Date, nullable=False)
+    quantity = Column(Numeric(28, 8), nullable=False)
+    price = Column(Numeric(28, 8), nullable=False)
+    value_user_currency = Column(Numeric(15, 2), nullable=False)
+    is_stale = Column(Boolean, default=False)
+
+    holding = relationship("Holding", back_populates="valuations")
+
+    __table_args__ = (
+        UniqueConstraint("holding_id", "date", name="holding_valuations_holding_date_uq"),
     )
