@@ -175,7 +175,11 @@ class Transaction(Base):
     debtor = Column(String(255), nullable=True)     # Counterparty name for credits (payer)
     counterparty_iban_ciphertext = Column(Text, nullable=True)
     counterparty_iban_hash = Column(String(64), nullable=True)
-    internal_transfer_id = Column(UUID(as_uuid=True), nullable=True)  # FK constraint added in Task 3
+    internal_transfer_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("internal_transfers.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     category_id = Column(UUID(as_uuid=True), ForeignKey("categories.id"), nullable=True, index=True)  # User-overridden category
     category_system_id = Column(UUID(as_uuid=True), ForeignKey("categories.id"), nullable=True, index=True)  # AI-assigned category
     booked_at = Column(DateTime, nullable=False, index=True)
@@ -208,6 +212,49 @@ class Transaction(Base):
         Index("idx_transactions_csv_import", "csv_import_id"),
         UniqueConstraint("account_id", "external_id", name="transactions_account_external_id"),
         Index("idx_transactions_user_counterparty_iban", "user_id", "counterparty_iban_hash"),
+    )
+
+
+class InternalTransfer(Base):
+    """
+    Internal transfer model matching Drizzle schema.
+    Links a source transaction on a synced account to a mirror transaction
+    on a manually-registered pocket account, matched by counterparty IBAN.
+    """
+    __tablename__ = "internal_transfers"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    source_txn_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("transactions.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    mirror_txn_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("transactions.id", ondelete="SET NULL"),
+        nullable=True,
+        unique=True,
+    )
+    source_account_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("accounts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    pocket_account_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("accounts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    amount = Column(Numeric(15, 2), nullable=False)
+    currency = Column(String(3), nullable=False)
+    detected_at = Column(DateTime, server_default=text("now()"))
+    created_at = Column(DateTime, server_default=text("now()"))
+
+    __table_args__ = (
+        Index("idx_internal_transfers_user", "user_id"),
+        Index("idx_internal_transfers_pocket", "pocket_account_id"),
     )
 
 
