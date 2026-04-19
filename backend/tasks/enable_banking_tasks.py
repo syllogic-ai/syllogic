@@ -46,6 +46,24 @@ def _should_skip_sync(connection) -> bool:
             return True
 
     return False
+
+
+def _account_sync_start_date(account, connection) -> "date":
+    """Return the start date for syncing a single account.
+
+    Previously-synced accounts start from last_synced_at - 1 day (incremental).
+    New accounts (never synced) use the connection's full initial_sync_days lookback.
+    """
+    from datetime import date as _date
+    if account.last_synced_at is not None:
+        last = account.last_synced_at
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        return (last - timedelta(days=1)).date()
+    sync_days = connection.initial_sync_days or 90
+    return (datetime.now(timezone.utc) - timedelta(days=sync_days)).date()
+
+
 _redis_client = None
 
 
@@ -109,14 +127,7 @@ def sync_bank_connection(self, connection_id: str):
         # Capture before any sync updates last_synced_at
         is_initial_sync = connection.last_synced_at is None
 
-        # Determine date range for transactions
-        if connection.last_synced_at is None:
-            # First sync: use user-configured lookback
-            sync_days = connection.initial_sync_days or 90
-            start_date = (datetime.now(timezone.utc) - timedelta(days=sync_days)).date()
-        else:
-            # Incremental sync: from last sync minus 1 day overlap
-            start_date = (connection.last_synced_at - timedelta(days=1)).date()
+        # end_date is shared across all accounts; start_date is computed per-account below
         end_date = datetime.now(timezone.utc)
 
         # Disable inline LLM during sync — batch AI categorization runs in post_import_pipeline
@@ -153,21 +164,42 @@ def sync_bank_connection(self, connection_id: str):
                 logger.warning(f"No external_id for account {account.id}, skipping")
                 continue
 
-            # Fetch and update balances
+            # Fetch and update balances.
+            # Priority order of ISO 20022 balance types:
+            #   CLAV/ITAV = (interim) available — most accurate "what you can spend"
+            #   CLBD      = closing booked — authoritative, excludes pending
+            #   XPCD      = expected — booked + pending
+            #   PRCD      = previously closed booked
+            #   OTHR      = bank-defined fallback
+            # ABN AMRO via Enable Banking does not return CLAV/ITAV, so fall through
+            # the priority list and finally pick the first returned balance.
             try:
                 balance_data = adapter.fetch_balances(account_uid)
                 balances = balance_data.get("balances", [])
-                for bal in balances:
-                    bal_type = bal.get("balance_type", "")
-                    if bal_type in ("CLAV", "ITAV"):  # Available balance
-                        account.balance_available = bal["balance_amount"]["amount"]
-                        account.balance_is_anchored = True
+                priority = ("CLAV", "ITAV", "CLBD", "XPCD", "PRCD", "OTHR")
+                chosen = None
+                for pref in priority:
+                    for bal in balances:
+                        if bal.get("balance_type", "").upper() == pref:
+                            chosen = bal
+                            break
+                    if chosen:
                         break
+                if chosen is None and balances:
+                    chosen = balances[0]
+                if chosen is not None:
+                    account.balance_available = chosen["balance_amount"]["amount"]
+                    account.balance_is_anchored = True
+                else:
+                    logger.warning(
+                        f"No balances returned by Enable Banking for account {account.id}"
+                    )
             except Exception as e:
                 logger.warning(f"Failed to fetch balances for account {account.id}: {e}")
 
             # Sync transactions via SyncService
             try:
+                start_date = _account_sync_start_date(account, connection)  # per-account
                 created, updated, created_ids, updated_ids = sync_service.sync_transactions(
                     adapter=adapter,
                     account=account,

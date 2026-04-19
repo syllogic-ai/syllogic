@@ -105,5 +105,38 @@ class TestSyncIdempotencyGuard(unittest.TestCase):
         self.assertFalse(self._run_task(conn))
 
 
+class TestPerAccountSyncStartDate(unittest.TestCase):
+    """Each account should use its own last_synced_at as the sync start date."""
+
+    def test_previously_synced_account_uses_account_last_synced_at(self):
+        """An account with last_synced_at gets start_date = last_synced_at - 1 day."""
+        from tasks.enable_banking_tasks import _account_sync_start_date
+
+        account = MagicMock()
+        account.last_synced_at = datetime(2026, 4, 10, 12, 0, 0, tzinfo=timezone.utc)
+
+        connection = MagicMock()
+        connection.initial_sync_days = 90
+
+        start = _account_sync_start_date(account, connection)
+        expected = datetime(2026, 4, 9, tzinfo=timezone.utc).date()
+        self.assertEqual(start, expected)
+
+    def test_new_account_uses_initial_sync_days(self):
+        """An account with no last_synced_at uses the connection's initial_sync_days."""
+        from tasks.enable_banking_tasks import _account_sync_start_date
+
+        account = MagicMock()
+        account.last_synced_at = None
+
+        connection = MagicMock()
+        connection.initial_sync_days = 30
+
+        now = datetime.now(timezone.utc)
+        start = _account_sync_start_date(account, connection)
+        expected = (now - timedelta(days=30)).date()
+        self.assertEqual(start, expected)
+
+
 if __name__ == "__main__":
     unittest.main()
