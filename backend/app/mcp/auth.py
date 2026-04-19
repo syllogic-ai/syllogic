@@ -147,6 +147,10 @@ class CompositeAuthProvider(AuthProvider):
     disjoint.
     """
 
+    # RemoteAuthProvider reads this off the wrapped token verifier when
+    # computing its own required_scopes; default to empty list.
+    required_scopes: list[str] = []
+
     def __init__(self) -> None:
         if JWTVerifier is None:
             raise RuntimeError(
