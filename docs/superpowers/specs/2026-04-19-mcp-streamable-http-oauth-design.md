@@ -154,9 +154,14 @@ class CompositeAuthProvider(AuthProvider):
         at = await self.jwt.verify_token(token)
         if at is None:
             return None
-        # Normalize: ensure claims["user_id"] is set from sub
+        # Normalize: ensure claims["user_id"] is set from sub.
+        # Reject tokens without a subject — an empty user_id would silently
+        # authenticate as no one.
         if "user_id" not in at.claims:
-            at.claims["user_id"] = at.claims.get("sub", "")
+            sub = at.claims.get("sub")
+            if not sub:
+                return None
+            at.claims["user_id"] = sub
         return at
 
 

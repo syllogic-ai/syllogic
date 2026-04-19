@@ -1,9 +1,14 @@
 """Smoke tests for the OAuth 2.0 Protected Resource Metadata endpoint."""
+import sys
+from pathlib import Path
+
 import pytest
 from starlette.testclient import TestClient
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 # mcp_server.app is the ASGI app exposed by mcp.http_app()
-from mcp_server import app
+from mcp_server import app  # noqa: E402
 
 
 @pytest.fixture

@@ -133,6 +133,7 @@ export function ApiKeysManager({
   // Created key state (shown once)
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedTarget, setCopiedTarget] = useState<string | null>(null);
 
   const handleCreateKey = async () => {
     if (!canCreateApiKeys) {
@@ -202,12 +203,16 @@ export function ApiKeysManager({
     }
   };
 
-  const copyToClipboard = async (text: string) => {
+  const copyToClipboard = async (text: string, target?: string) => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
+      setCopiedTarget(target ?? null);
       toast.success("Copied to clipboard");
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => {
+        setCopied(false);
+        setCopiedTarget(null);
+      }, 2000);
     } catch {
       toast.error("Failed to copy to clipboard");
     }
@@ -247,9 +252,9 @@ export function ApiKeysManager({
                   variant="ghost"
                   size="icon-sm"
                   className="absolute right-2 top-2"
-                  onClick={() => copyToClipboard(mcpServerUrl)}
+                  onClick={() => copyToClipboard(mcpServerUrl, "mcp-url")}
                 >
-                  {copied ? (
+                  {copied && copiedTarget === "mcp-url" ? (
                     <RiCheckLine className="h-4 w-4 text-green-500" />
                   ) : (
                     <RiFileCopyLine className="h-4 w-4" />

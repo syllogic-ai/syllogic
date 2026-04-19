@@ -452,7 +452,7 @@ Expected: a new file appears under `frontend/lib/db/migrations/` (e.g. `0012_oau
 ls -lt frontend/lib/db/migrations/ | head -3
 cat frontend/lib/db/migrations/<the-new-file>.sql
 ```
-Sanity-check: it should `CREATE TABLE` for the 4 oauth tables and nothing else (no accidental drops of existing tables).
+Sanity-check: it should `CREATE TABLE` for the 4 oauth tables (`oauth_client`, `oauth_access_token`, `oauth_refresh_token`, `oauth_consent`) plus the `jwks` table required by better-auth's `jwt` plugin (used by oauth-provider to sign JWTs). No accidental drops of existing tables.
 
 - [ ] **Step 5.4: Apply the migration to local/dev Postgres first**
 
@@ -480,14 +480,18 @@ git commit -m "feat(db): add oauth-provider tables"
 Edit `frontend/lib/auth.ts`. Add import at the top:
 
 ```ts
+import { admin, jwt } from "better-auth/plugins";
 import { oauthProvider } from "@better-auth/oauth-provider";
 ```
 
-Inside `betterAuth({ ... plugins: [admin()], ... })`, replace the plugins array:
+Inside `betterAuth({ ... plugins: [admin()], ... })`, replace the plugins array.
+The `jwt()` plugin must come before `oauthProvider()` — the OAuth plugin calls
+`getPlugin("jwt")` at init and throws `BetterAuthError("jwt_config")` if missing:
 
 ```ts
   plugins: [
     admin(),
+    jwt(),
     oauthProvider({
       issuer: resolvedBaseURL ?? "https://app.syllogic.ai",
       allowDynamicClientRegistration: true,

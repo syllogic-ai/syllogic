@@ -174,5 +174,8 @@ class CompositeAuthProvider(AuthProvider):
         if access is None:
             return None
         if "user_id" not in access.claims:
-            access.claims["user_id"] = access.claims.get("sub", "")
+            sub = access.claims.get("sub")
+            if not sub:
+                return None
+            access.claims["user_id"] = sub
         return access

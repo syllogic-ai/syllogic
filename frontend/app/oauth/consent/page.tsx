@@ -45,6 +45,7 @@ export default async function ConsentPage({
     .select({
       name: oauthClient.name,
       disabled: oauthClient.disabled,
+      scopes: oauthClient.scopes,
     })
     .from(oauthClient)
     .where(eq(oauthClient.clientId, clientId))
@@ -53,7 +54,9 @@ export default async function ConsentPage({
   if (!client || client.disabled) notFound();
 
   const clientName = client.name?.trim() || clientId;
-  const scopes = (params.scope ?? "").split(" ").filter(Boolean);
+  const allowedScopes = new Set(client.scopes ?? []);
+  const requestedScopes = (params.scope ?? "").split(" ").filter(Boolean);
+  const scopes = requestedScopes.filter((scope) => allowedScopes.has(scope));
 
   return (
     <main className="mx-auto max-w-md p-6 space-y-6">
