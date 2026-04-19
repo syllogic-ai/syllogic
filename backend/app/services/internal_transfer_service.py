@@ -65,19 +65,26 @@ class InternalTransferService:
     # Public API
     # ------------------------------------------------------------------
 
-    def detect_for_transactions(self, transaction_ids: List[UUID]) -> int:
+    def detect_for_transactions(self, transaction_ids: List[UUID]) -> dict:
         """Inspect the given transactions and, for each whose counterparty IBAN
         matches one of the user's pocket accounts, create a mirror transaction
         on the pocket and an ``internal_transfers`` link row.
 
-        Returns the number of transfers detected (newly linked).
+        Returns ``{"detected": int, "pocket_account_ids": list[UUID]}``. The
+        ``pocket_account_ids`` set is what callers need to extend their balance
+        / timeseries recalculation scope to include touched pockets.
+
+        Only transactions that are currently ``include_in_analytics=True`` are
+        considered — user-hidden rows are preserved as-is, and restoring
+        ``include_in_analytics=True`` on unlink is then the correct inverse.
         """
+        empty_result = {"detected": 0, "pocket_account_ids": []}
         if not transaction_ids:
-            return 0
+            return empty_result
 
         pocket_map = self._load_pocket_map()
         if not pocket_map:
-            return 0
+            return empty_result
 
         # Eager-load the source account so we can build a descriptive mirror
         # description without extra queries per-source.
@@ -89,6 +96,10 @@ class InternalTransferService:
                 Transaction.user_id == self.user_id,
                 Transaction.counterparty_iban_hash.isnot(None),
                 Transaction.internal_transfer_id.is_(None),
+                # Preserve user-hidden rows. Only link transactions currently
+                # in analytics — detection sets them to False, and unlink
+                # restores them to True (the correct inverse).
+                Transaction.include_in_analytics.is_(True),
             )
             .all()
         )
@@ -101,6 +112,7 @@ class InternalTransferService:
                 self.user_id,
             )
         detected = 0
+        touched_pockets: set = set()
 
         for src in sources:
             pocket = pocket_map.get(src.counterparty_iban_hash)
@@ -156,6 +168,7 @@ class InternalTransferService:
             if transfer_category_id and src.category_id is None:
                 src.category_system_id = transfer_category_id
 
+            touched_pockets.add(pocket.id)
             detected += 1
 
         if detected:
@@ -166,7 +179,10 @@ class InternalTransferService:
             detected,
             self.user_id,
         )
-        return detected
+        return {
+            "detected": detected,
+            "pocket_account_ids": list(touched_pockets),
+        }
 
     def unlink(self, internal_transfer_id: UUID) -> None:
         """Reverse a single detection: restore the source, delete the mirror,

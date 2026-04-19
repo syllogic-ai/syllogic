@@ -4,6 +4,7 @@ Tests for the post_import_pipeline Celery task.
 Run with:
     cd backend && python tests/test_post_import_pipeline.py
 """
+import base64
 import sys
 import os
 import uuid
@@ -15,9 +16,29 @@ from unittest.mock import MagicMock, patch, call
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+
+def _set_test_env() -> None:
+    """Set a deterministic encryption key before app modules are imported.
+
+    Otherwise ``blind_index()`` returns ``None`` whenever the shell lacks
+    ``DATA_ENCRYPTION_KEY_CURRENT``, which silently NULLs out the IBAN
+    hashes our integration test relies on for transfer-matching.
+    """
+    key = base64.urlsafe_b64encode(b"p" * 32).decode("utf-8").rstrip("=")
+    os.environ["DATA_ENCRYPTION_KEY_CURRENT"] = key
+    os.environ["DATA_ENCRYPTION_KEY_ID"] = "k-test-pipeline"
+    os.environ.pop("DATA_ENCRYPTION_KEY_PREVIOUS", None)
+
+
+_set_test_env()
+
 from app.database import Base, SessionLocal, engine
 from app.models import Account, Category, InternalTransfer, Transaction, User
-from app.security.data_encryption import blind_index
+from app.security.data_encryption import blind_index, reset_encryption_config_cache
+
+
+# Refresh the lru_cache so the encryption config picks up our env vars.
+reset_encryption_config_cache()
 
 
 # ---------------------------------------------------------------------------
@@ -162,7 +183,7 @@ def test_pipeline_calls_all_steps_in_order():
         mock_session_local.return_value = mock_db
         mock_token = "test-token"
         mock_set_user.return_value = mock_token
-        mock_it.return_value = 0
+        mock_it.return_value = {"detected": 0, "pocket_account_ids": []}
 
         from tasks.post_import_pipeline import _run_post_import_pipeline
 
@@ -214,7 +235,7 @@ def test_pipeline_initial_sync_passes_none_to_subscription_detector():
         mock_db = MagicMock()
         mock_session_local.return_value = mock_db
         mock_set_user.return_value = "token"
-        mock_it.return_value = 0
+        mock_it.return_value = {"detected": 0, "pocket_account_ids": []}
 
         from tasks.post_import_pipeline import _run_post_import_pipeline
 

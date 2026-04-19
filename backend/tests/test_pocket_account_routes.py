@@ -430,7 +430,11 @@ def test_unlink_internal_transfer_restores_source() -> None:
             amount=Decimal("-9.00"),
         )
         # Trigger detection so there's a link to unlink
-        assert InternalTransferService(db, user_id=user_id).detect_for_transactions([src.id]) == 1
+        assert (
+            InternalTransferService(db, user_id=user_id)
+            .detect_for_transactions([src.id])["detected"]
+            == 1
+        )
         link = db.query(InternalTransfer).filter_by(user_id=user_id).one()
 
         client = _client()
@@ -521,7 +525,7 @@ def test_delete_pocket_account_returns_404_for_other_user() -> None:
         )
         assert (
             InternalTransferService(db, user_id=user_b_id)
-            .detect_for_transactions([b_src.id])
+            .detect_for_transactions([b_src.id])["detected"]
             == 1
         )
         b_link_count_before = db.query(InternalTransfer).filter_by(user_id=user_b_id).count()

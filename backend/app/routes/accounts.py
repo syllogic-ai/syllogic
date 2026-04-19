@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 from uuid import UUID
 
@@ -104,7 +105,17 @@ def create_pocket_account(
         is_active=True,
     )
     db.add(account)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError:
+        # Race condition: two concurrent pocket-create requests slipped past the
+        # application-level SELECT check. The partial unique index
+        # `accounts_user_iban_hash_manual_uq` catches this at the DB layer.
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail="A pocket account with this IBAN is already registered",
+        )
 
     # Backfill: find existing transactions whose counterparty matches this IBAN
     candidate_ids = [
@@ -121,14 +132,14 @@ def create_pocket_account(
     # internally when it actually persists matches (detected > 0). We still
     # commit here unconditionally so the new Account row is persisted even on
     # the zero-match path. A redundant commit on a clean session is a no-op.
-    backfilled = (
-        InternalTransferService(db, user_id=user_id).detect_for_transactions(candidate_ids)
-        if candidate_ids
-        else 0
-    )
+    if candidate_ids:
+        result = InternalTransferService(db, user_id=user_id).detect_for_transactions(candidate_ids)
+        backfilled_count = result["detected"]
+    else:
+        backfilled_count = 0
     db.commit()
 
-    return CreatePocketResponse(account_id=account.id, backfilled_count=backfilled)
+    return CreatePocketResponse(account_id=account.id, backfilled_count=backfilled_count)
 
 
 # ---------------------------------------------------------------------------

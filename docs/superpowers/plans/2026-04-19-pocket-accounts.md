@@ -26,7 +26,7 @@
 | `backend/app/services/sync_service.py` | Encrypt + hash IBAN on persist |
 | `backend/app/services/internal_transfer_service.py` | NEW — detect/unlink internal transfers |
 | `backend/tasks/post_import_pipeline.py` | Add detection step; filter LLM by `include_in_analytics` |
-| `backend/app/routes/accounts.py` | NEW endpoints — create pocket, update iban, delete cleanup |
+| `backend/app/routes/accounts.py` | NEW endpoints — create pocket, unlink internal transfer, delete cleanup |
 | `frontend/lib/actions/accounts.ts` | Route IBAN ops through backend; new `unlinkInternalTransfer` |
 | `frontend/components/accounts/account-form.tsx` | IBAN input + validation |
 | `frontend/components/transactions/transaction-row-details.tsx` | Internal-transfer chip |

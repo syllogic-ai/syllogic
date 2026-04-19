@@ -11,8 +11,9 @@ import {
   jsonb,
   index,
   unique,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 // ============================================================================
 // BetterAuth Tables
@@ -145,6 +146,12 @@ export const accounts = pgTable(
       table.externalIdHash
     ),
     index("idx_accounts_user_iban_hash").on(table.userId, table.ibanHash),
+    // Prevent two concurrent create-pocket requests from racing and inserting
+    // duplicate manual IBANs. Partial index scoped to provider='manual' so a
+    // pocket and a synced-bank account can still share an IBAN.
+    uniqueIndex("accounts_user_iban_hash_manual_uq")
+      .on(table.userId, table.ibanHash)
+      .where(sql`${table.provider} = 'manual' AND ${table.ibanHash} IS NOT NULL`),
   ]
 );
 

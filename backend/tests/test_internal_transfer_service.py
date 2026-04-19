@@ -8,6 +8,7 @@ or:
 """
 from __future__ import annotations
 
+import base64
 import os
 import sys
 import uuid
@@ -18,6 +19,25 @@ from typing import Optional
 # Ensure backend/ is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+
+def _set_test_env() -> None:
+    """Make the encryption config deterministic before app modules are imported.
+
+    Without this, ``blind_index()`` returns ``None`` whenever
+    ``DATA_ENCRYPTION_KEY_CURRENT`` isn't set in the shell, which leaves the
+    pocket's ``iban_hash`` and the source transaction's
+    ``counterparty_iban_hash`` both NULL — and detection silently matches
+    nothing. Set a deterministic test key here so the tests always exercise
+    the encryption-enabled code path.
+    """
+    key = base64.urlsafe_b64encode(b"p" * 32).decode("utf-8").rstrip("=")
+    os.environ["DATA_ENCRYPTION_KEY_CURRENT"] = key
+    os.environ["DATA_ENCRYPTION_KEY_ID"] = "k-test-internal-transfer"
+    os.environ.pop("DATA_ENCRYPTION_KEY_PREVIOUS", None)
+
+
+_set_test_env()
+
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.models import (  # noqa: E402
     Account,
@@ -26,7 +46,14 @@ from app.models import (  # noqa: E402
     Transaction,
     User,
 )
-from app.security.data_encryption import blind_index  # noqa: E402
+from app.security.data_encryption import (  # noqa: E402
+    blind_index,
+    reset_encryption_config_cache,
+)
+
+
+# Refresh the lru_cache so the encryption config picks up our env vars.
+reset_encryption_config_cache()
 
 
 # ---------------------------------------------------------------------------
@@ -183,8 +210,11 @@ def test_detect_creates_mirror_and_marks_source_not_in_analytics() -> None:
         )
 
         service = InternalTransferService(db, user_id=user_id)
-        detected = service.detect_for_transactions([src.id])
-        assert detected == 1, f"Expected 1 detection, got {detected}"
+        result = service.detect_for_transactions([src.id])
+        assert result["detected"] == 1, f"Expected 1 detection, got {result}"
+        assert result["pocket_account_ids"] == [pocket.id], (
+            f"Expected pocket_account_ids=[{pocket.id}], got {result['pocket_account_ids']}"
+        )
 
         db.refresh(src)
         assert src.include_in_analytics is False
@@ -248,8 +278,9 @@ def test_detect_is_idempotent() -> None:
         first = service.detect_for_transactions([src.id])
         second = service.detect_for_transactions([src.id])
 
-        assert first == 1
-        assert second == 0, "Second detection should be a no-op"
+        assert first["detected"] == 1
+        assert second["detected"] == 0, "Second detection should be a no-op"
+        assert second["pocket_account_ids"] == []
 
         mirrors = (
             db.query(Transaction)
@@ -297,9 +328,10 @@ def test_detect_skips_when_no_matching_pocket() -> None:
         )
 
         service = InternalTransferService(db, user_id=user_id)
-        detected = service.detect_for_transactions([src.id])
+        result = service.detect_for_transactions([src.id])
 
-        assert detected == 0
+        assert result["detected"] == 0
+        assert result["pocket_account_ids"] == []
         db.refresh(src)
         assert src.include_in_analytics is True
         assert src.internal_transfer_id is None
@@ -344,7 +376,7 @@ def test_unlink_reverses_detection() -> None:
         )
 
         service = InternalTransferService(db, user_id=user_id)
-        assert service.detect_for_transactions([src.id]) == 1
+        assert service.detect_for_transactions([src.id])['detected'] == 1
 
         db.refresh(src)
         transfer_id = src.internal_transfer_id
@@ -409,7 +441,7 @@ def test_unlink_all_for_pocket_restores_sources() -> None:
         )
 
         service = InternalTransferService(db, user_id=user_id)
-        assert service.detect_for_transactions([src_a.id, src_b.id]) == 2
+        assert service.detect_for_transactions([src_a.id, src_b.id])['detected'] == 2
 
         unlinked = service.unlink_all_for_pocket(pocket.id)
         assert unlinked == 2, f"Expected 2 unlinked, got {unlinked}"
@@ -480,7 +512,7 @@ def test_detect_overwrites_stale_system_category() -> None:
 
         service = InternalTransferService(db, user_id=user_id)
         detected = service.detect_for_transactions([src.id])
-        assert detected == 1
+        assert detected["detected"] == 1
 
         db.refresh(src)
         # Detection is authoritative — category_system_id flipped to Transfer.
@@ -534,7 +566,7 @@ def test_detect_preserves_user_category_override() -> None:
         db.commit()
 
         service = InternalTransferService(db, user_id=user_id)
-        assert service.detect_for_transactions([src.id]) == 1
+        assert service.detect_for_transactions([src.id])['detected'] == 1
 
         db.refresh(src)
         # Link was still created and analytics was flipped off,
@@ -586,7 +618,7 @@ def test_detect_does_not_match_cross_user_pocket() -> None:
         )
 
         service_a = InternalTransferService(db, user_id=user_a_id)
-        assert service_a.detect_for_transactions([src_a.id]) == 0, (
+        assert service_a.detect_for_transactions([src_a.id])['detected'] == 0, (
             "User A's detection must not link to User B's pocket, "
             "even with a matching IBAN hash."
         )

@@ -122,11 +122,16 @@ def _update_functional_amounts(db, user_id: str, transaction_ids: List[str]) -> 
     db.commit()
 
 
-def _detect_internal_transfers(db, user_id: str, transaction_ids: List[str]) -> int:
+def _detect_internal_transfers(db, user_id: str, transaction_ids: List[str]) -> dict:
     """Detect counterparty-IBAN matches against the user's manual pocket accounts
-    and create mirror transactions on the pocket side. Returns count detected."""
+    and create mirror transactions on the pocket side.
+
+    Returns ``{"detected": int, "pocket_account_ids": list[UUID]}``. Callers
+    should extend their balance/timeseries account scope with
+    ``pocket_account_ids`` so mirrored pockets get recalculated.
+    """
     if not transaction_ids:
-        return 0
+        return {"detected": 0, "pocket_account_ids": []}
     service = InternalTransferService(db, user_id=user_id)
     return service.detect_for_transactions(transaction_ids)
 
@@ -309,17 +314,28 @@ def _run_post_import_pipeline(
         _update_functional_amounts(db, user_id, transaction_ids)
 
         # Step 3: Internal transfer detection (must run before LLM categorization)
-        detected = _detect_internal_transfers(db, user_id, transaction_ids)
-        logger.info("[POST_IMPORT_PIPELINE] Internal transfers detected: %d", detected)
+        detection = _detect_internal_transfers(db, user_id, transaction_ids)
+        logger.info(
+            "[POST_IMPORT_PIPELINE] Internal transfers detected: %d (touched %d pocket(s))",
+            detection["detected"],
+            len(detection["pocket_account_ids"]),
+        )
+
+        # Mirror transactions created in step 3 live on the pocket account; if
+        # that pocket isn't in the sync's original account_ids scope, its
+        # balance and timeseries won't be refreshed. Extend the recalc set to
+        # include every pocket we just mirrored into.
+        touched_pocket_ids = [str(pid) for pid in detection["pocket_account_ids"]]
+        recalc_account_ids = list({*account_ids, *touched_pocket_ids})
 
         # Step 4: Batch AI categorization (overwrites wrong system categories; preserves user overrides)
         _batch_categorize_transactions(db, user_id, transaction_ids)
 
         # Step 5: Balance calculation
-        _calculate_balances(db, user_id, account_ids)
+        _calculate_balances(db, user_id, recalc_account_ids)
 
         # Step 6: Balance timeseries
-        _calculate_timeseries(db, user_id, account_ids)
+        _calculate_timeseries(db, user_id, recalc_account_ids)
 
         # Step 7: Subscription detection
         # For initial sync, pass None so the detector scans ALL user transactions
