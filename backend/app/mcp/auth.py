@@ -134,7 +134,7 @@ AS_ISSUER = os.environ.get("MCP_OAUTH_ISSUER", "https://app.syllogic.ai")
 AS_JWKS_URI = os.environ.get(
     "MCP_OAUTH_JWKS_URI", "https://app.syllogic.ai/api/auth/jwks"
 )
-MCP_AUDIENCE = os.environ.get("MCP_OAUTH_AUDIENCE", "https://mcp.syllogic.ai")
+MCP_AUDIENCE = os.environ.get("MCP_OAUTH_AUDIENCE", "https://mcp.syllogic.ai/mcp")
 
 
 class CompositeAuthProvider(AuthProvider):
