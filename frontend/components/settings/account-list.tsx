@@ -16,6 +16,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -224,7 +225,12 @@ export function AccountList({ accounts, onAccountUpdated }: AccountListProps) {
                     className="!size-10"
                   />
                   <div>
-                    <p className="font-medium">{account.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{account.name}</p>
+                      {account.provider === "manual" && account.ibanHash ? (
+                        <Badge variant="secondary">Pocket</Badge>
+                      ) : null}
+                    </div>
                     <p className="text-sm text-muted-foreground">
                       {getAccountTypeLabel(account.accountType)}
                       {account.institution && ` • ${account.institution}`}

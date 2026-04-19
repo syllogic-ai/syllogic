@@ -11,8 +11,9 @@ import {
   jsonb,
   index,
   unique,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 // ============================================================================
 // BetterAuth Tables
@@ -215,6 +216,8 @@ export const accounts = pgTable(
     externalId: varchar("external_id", { length: 255 }), // Provider's account ID
     externalIdCiphertext: text("external_id_ciphertext"),
     externalIdHash: varchar("external_id_hash", { length: 64 }),
+    ibanCiphertext: text("iban_ciphertext"),
+    ibanHash: varchar("iban_hash", { length: 64 }),
     bankConnectionId: uuid("bank_connection_id").references(() => bankConnections.id, { onDelete: "set null" }),
     balanceAvailable: decimal("balance_available", { precision: 15, scale: 2 }),
     startingBalance: decimal("starting_balance", { precision: 15, scale: 2 }).default("0"), // Starting balance for calculation
@@ -238,6 +241,13 @@ export const accounts = pgTable(
       table.provider,
       table.externalIdHash
     ),
+    index("idx_accounts_user_iban_hash").on(table.userId, table.ibanHash),
+    // Prevent two concurrent create-pocket requests from racing and inserting
+    // duplicate manual IBANs. Partial index scoped to provider='manual' so a
+    // pocket and a synced-bank account can still share an IBAN.
+    uniqueIndex("accounts_user_iban_hash_manual_uq")
+      .on(table.userId, table.ibanHash)
+      .where(sql`${table.provider} = 'manual' AND ${table.ibanHash} IS NOT NULL`),
   ]
 );
 
@@ -348,6 +358,9 @@ export const transactions = pgTable(
     merchant: varchar("merchant", { length: 255 }),
     creditor: varchar("creditor", { length: 255 }), // Counterparty name for debits (payee)
     debtor: varchar("debtor", { length: 255 }), // Counterparty name for credits (payer)
+    counterpartyIbanCiphertext: text("counterparty_iban_ciphertext"),
+    counterpartyIbanHash: varchar("counterparty_iban_hash", { length: 64 }),
+    internalTransferId: uuid("internal_transfer_id"), // FK to internal_transfers.id (enforced at DB level in migration 0017)
     categoryId: uuid("category_id").references(() => categories.id), // User-overridden category
     categorySystemId: uuid("category_system_id").references(() => categories.id), // AI-assigned category (never updated by user)
     bookedAt: timestamp("booked_at").notNull(),
@@ -373,6 +386,38 @@ export const transactions = pgTable(
     index("idx_transactions_merchant").on(table.merchant),
     index("idx_transactions_csv_import").on(table.csvImportId),
     unique("transactions_account_external_id").on(table.accountId, table.externalId),
+    index("idx_transactions_user_counterparty_iban").on(table.userId, table.counterpartyIbanHash),
+  ]
+);
+
+export const internalTransfers = pgTable(
+  "internal_transfers",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    sourceTxnId: uuid("source_txn_id")
+      .references(() => transactions.id, { onDelete: "cascade" })
+      .notNull()
+      .unique(),
+    mirrorTxnId: uuid("mirror_txn_id")
+      .references(() => transactions.id, { onDelete: "set null" })
+      .unique(),
+    sourceAccountId: uuid("source_account_id")
+      .references(() => accounts.id, { onDelete: "cascade" })
+      .notNull(),
+    pocketAccountId: uuid("pocket_account_id")
+      .references(() => accounts.id, { onDelete: "cascade" })
+      .notNull(),
+    amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+    currency: char("currency", { length: 3 }).notNull(),
+    detectedAt: timestamp("detected_at").defaultNow(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_internal_transfers_user").on(table.userId),
+    index("idx_internal_transfers_pocket").on(table.pocketAccountId),
   ]
 );
 
@@ -701,6 +746,37 @@ export const transactionsRelations = relations(transactions, ({ one }) => ({
     fields: [transactions.csvImportId],
     references: [csvImports.id],
   }),
+  internalTransfer: one(internalTransfers, {
+    fields: [transactions.internalTransferId],
+    references: [internalTransfers.id],
+  }),
+}));
+
+export const internalTransfersRelations = relations(internalTransfers, ({ one }) => ({
+  user: one(users, {
+    fields: [internalTransfers.userId],
+    references: [users.id],
+  }),
+  sourceTxn: one(transactions, {
+    fields: [internalTransfers.sourceTxnId],
+    references: [transactions.id],
+    relationName: "internalTransferSource",
+  }),
+  mirrorTxn: one(transactions, {
+    fields: [internalTransfers.mirrorTxnId],
+    references: [transactions.id],
+    relationName: "internalTransferMirror",
+  }),
+  sourceAccount: one(accounts, {
+    fields: [internalTransfers.sourceAccountId],
+    references: [accounts.id],
+    relationName: "internalTransferSourceAccount",
+  }),
+  pocketAccount: one(accounts, {
+    fields: [internalTransfers.pocketAccountId],
+    references: [accounts.id],
+    relationName: "internalTransferPocketAccount",
+  }),
 }));
 
 export const recurringTransactionsRelations = relations(recurringTransactions, ({ one, many }) => ({
@@ -848,3 +924,6 @@ export type NewCompanyLogo = typeof companyLogos.$inferInsert;
 
 export type BankConnection = typeof bankConnections.$inferSelect;
 export type NewBankConnection = typeof bankConnections.$inferInsert;
+
+export type InternalTransfer = typeof internalTransfers.$inferSelect;
+export type NewInternalTransfer = typeof internalTransfers.$inferInsert;

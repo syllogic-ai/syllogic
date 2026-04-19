@@ -34,10 +34,11 @@ import { Separator } from "@/components/ui/separator";
 import { cn, formatDate, formatAmount } from "@/lib/utils";
 import type { TransactionWithRelations } from "@/lib/actions/transactions";
 import { updateTransactionCategory, updateTransactionIncludeInAnalytics, deleteBalancingTransaction } from "@/lib/actions/transactions";
+import { unlinkInternalTransfer } from "@/lib/actions/accounts";
 import { Switch } from "@/components/ui/switch";
 import type { CategoryDisplay } from "@/types";
 import { filterSelectableCategories } from "@/lib/utils/category-utils";
-import { RiDeleteBinLine, RiLoopRightLine } from "@remixicon/react";
+import { RiDeleteBinLine, RiExchangeLine, RiLoopRightLine } from "@remixicon/react";
 import { toast } from "sonner";
 import { SubscriptionDetectionDialog } from "./subscription-detection-dialog";
 import { SubscriptionLinkedDialog } from "./subscription-linked-dialog";
@@ -79,13 +80,35 @@ export function TransactionSheet({
   const [showLinkedSubscriptionDialog, setShowLinkedSubscriptionDialog] = useState(false);
   const [showLinkReimbursementsDialog, setShowLinkReimbursementsDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isUnlinkingTransfer, setIsUnlinkingTransfer] = useState(false);
 
   const isBalancingTransfer = transaction?.category?.name === "Balancing Transfer";
   const isExpense = transaction?.transactionType === "debit";
   const hasLinkedSubscription = !!transaction?.recurringTransactionId;
+  const pocketAccountName = transaction?.internalTransfer?.pocketAccount?.name ?? null;
+  const internalTransferId = transaction?.internalTransferId ?? null;
 
   // Track previous transaction ID to only reset state when a different transaction is opened
   const prevTransactionIdRef = useRef<string | null>(null);
+
+  const handleUnlinkInternalTransfer = async () => {
+    if (!internalTransferId) return;
+
+    setIsUnlinkingTransfer(true);
+    try {
+      const result = await unlinkInternalTransfer(internalTransferId);
+      if (result.success) {
+        toast.success("Transfer unlinked");
+        router.refresh();
+      } else {
+        toast.error(result.error || "Failed to unlink");
+      }
+    } catch {
+      toast.error("Failed to unlink");
+    } finally {
+      setIsUnlinkingTransfer(false);
+    }
+  };
 
   const handleRevertBalancingTransfer = async () => {
     if (!transaction) return;
@@ -225,6 +248,24 @@ export function TransactionSheet({
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 space-y-6 pr-1">
+          {/* Internal Transfer Chip */}
+          {internalTransferId && pocketAccountName && (
+            <div className="flex items-center gap-2 rounded border bg-muted/40 p-2 text-xs">
+              <RiExchangeLine className="h-4 w-4 shrink-0" />
+              <span className="flex-1 truncate">
+                Internal transfer — {pocketAccountName}
+              </span>
+              <button
+                type="button"
+                className="text-muted-foreground underline hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleUnlinkInternalTransfer}
+                disabled={isUnlinkingTransfer}
+              >
+                {isUnlinkingTransfer ? "Unlinking..." : "Unlink"}
+              </button>
+            </div>
+          )}
+
           {/* Category Section */}
           <div className="space-y-3">
             <Label htmlFor="category">Category</Label>

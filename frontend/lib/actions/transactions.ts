@@ -380,6 +380,14 @@ export interface TransactionWithRelations {
     groupId: string;
     linkRole: string;
   } | null;
+  internalTransferId: string | null;
+  internalTransfer: {
+    id: string;
+    pocketAccount: {
+      id: string;
+      name: string;
+    } | null;
+  } | null;
   bookedAt: Date;
   pending: boolean | null;
   transactionType: string | null;
@@ -487,6 +495,14 @@ interface TransactionRowWithRelations {
     groupId: string;
     linkRole: string;
   } | null;
+  internalTransferId: string | null;
+  internalTransfer: {
+    id: string;
+    pocketAccount: {
+      id: string;
+      name: string;
+    } | null;
+  } | null;
 }
 
 function mapTransactionRowsForUi(
@@ -556,6 +572,18 @@ function mapTransactionRowsForUi(
           ? {
               groupId: tx.transactionLink.groupId,
               linkRole: tx.transactionLink.linkRole,
+            }
+          : null,
+        internalTransferId: tx.internalTransferId,
+        internalTransfer: tx.internalTransfer
+          ? {
+              id: tx.internalTransfer.id,
+              pocketAccount: tx.internalTransfer.pocketAccount
+                ? {
+                    id: tx.internalTransfer.pocketAccount.id,
+                    name: tx.internalTransfer.pocketAccount.name,
+                  }
+                : null,
             }
           : null,
         bookedAt: tx.bookedAt,
@@ -812,6 +840,16 @@ export async function getTransactionsPage(
         categorySystem: true,
         recurringTransaction: true,
         transactionLink: true,
+        internalTransfer: {
+          with: {
+            pocketAccount: {
+              columns: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
       },
     }),
     shouldComputeFilteredTotals
@@ -884,6 +922,16 @@ export async function getTransactions(): Promise<TransactionWithRelations[]> {
         categorySystem: true,
         recurringTransaction: true,
         transactionLink: true,
+        internalTransfer: {
+          with: {
+            pocketAccount: {
+              columns: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
       },
     });
     const hydratedRows = await hydrateTransactionRowsWithResolvedAccountLogos(result);
@@ -952,6 +1000,16 @@ export async function getTransactionsForAccount(
         categorySystem: true,
         recurringTransaction: true,
         transactionLink: true,
+        internalTransfer: {
+          with: {
+            pocketAccount: {
+              columns: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
       },
     });
     const hydratedRows = await hydrateTransactionRowsWithResolvedAccountLogos(result);

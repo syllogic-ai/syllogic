@@ -90,5 +90,92 @@ class TestMapAccountType(unittest.TestCase):
         self.assertEqual(self.adapter._map_account_type(None), "checking")
 
 
+class TestCounterpartyIban(unittest.TestCase):
+    def setUp(self):
+        self.adapter = EnableBankingAdapter.__new__(EnableBankingAdapter)
+
+    def test_normalize_extracts_counterparty_iban_from_creditor_account_iban(self):
+        raw = {
+            "transaction_id": "tx-1",
+            "account_id": "acc-1",
+            "transaction_amount": {"amount": "12.50", "currency": "EUR"},
+            "credit_debit_indicator": "DBIT",
+            "booking_date": "2026-04-01",
+            "creditor_account": {"iban": "NL91 ABNA 0417 1643 00"},
+            "debtor_account": {"iban": "NL02 RABO 0123 4567 89"},
+            "creditor": {"name": "Some Merchant"},
+        }
+        txn = self.adapter.normalize_transaction(raw)
+        # Outflow (DBIT) → counterparty is the creditor IBAN, stripped of spaces and upper-cased
+        self.assertEqual(txn.counterparty_iban, "NL91ABNA0417164300")
+
+    def test_normalize_extracts_counterparty_iban_from_nested_debtor(self):
+        raw = {
+            "transaction_id": "tx-2",
+            "account_id": "acc-1",
+            "transaction_amount": {"amount": "5.00", "currency": "EUR"},
+            "credit_debit_indicator": "CRDT",
+            "booking_date": "2026-04-01",
+            "creditor_account": None,
+            "debtor_account": None,
+            "debtor": {"name": "Friend", "iban": "BE68539007547034"},
+        }
+        txn = self.adapter.normalize_transaction(raw)
+        # Inflow (CRDT) → counterparty is the debtor IBAN
+        self.assertEqual(txn.counterparty_iban, "BE68539007547034")
+
+    def test_normalize_handles_missing_iban_gracefully(self):
+        raw = {
+            "transaction_id": "tx-3",
+            "account_id": "acc-1",
+            "transaction_amount": {"amount": "5.00", "currency": "EUR"},
+            "credit_debit_indicator": "DBIT",
+            "booking_date": "2026-04-01",
+        }
+        txn = self.adapter.normalize_transaction(raw)
+        self.assertIsNone(txn.counterparty_iban)
+
+    def test_normalize_ignores_non_iban_scheme(self):
+        """BBAN / SORT and other non-IBAN schemes must NOT be extracted."""
+        raw = {
+            "transaction_id": "tx-4",
+            "account_id": "acc-1",
+            "transaction_amount": {"amount": "5.00", "currency": "EUR"},
+            "credit_debit_indicator": "DBIT",
+            "booking_date": "2026-04-01",
+            "creditor_account": {"scheme_name": "BBAN", "identification": "12345678"},
+        }
+        txn = self.adapter.normalize_transaction(raw)
+        self.assertIsNone(txn.counterparty_iban)
+
+    def test_normalize_scheme_form_missing_identification(self):
+        """``scheme_name: IBAN`` without ``identification`` must return None, not raise."""
+        raw = {
+            "transaction_id": "tx-5",
+            "account_id": "acc-1",
+            "transaction_amount": {"amount": "5.00", "currency": "EUR"},
+            "credit_debit_indicator": "DBIT",
+            "booking_date": "2026-04-01",
+            "creditor_account": {"scheme_name": "IBAN"},
+        }
+        txn = self.adapter.normalize_transaction(raw)
+        self.assertIsNone(txn.counterparty_iban)
+
+    def test_normalize_creditor_account_takes_precedence_over_nested_creditor(self):
+        """When both ``creditor_account`` and ``creditor`` carry an IBAN, the account
+        object wins — it is authoritative."""
+        raw = {
+            "transaction_id": "tx-6",
+            "account_id": "acc-1",
+            "transaction_amount": {"amount": "5.00", "currency": "EUR"},
+            "credit_debit_indicator": "DBIT",
+            "booking_date": "2026-04-01",
+            "creditor_account": {"iban": "NL91ABNA0417164300"},
+            "creditor": {"name": "Some Merchant", "iban": "DE89370400440532013000"},
+        }
+        txn = self.adapter.normalize_transaction(raw)
+        self.assertEqual(txn.counterparty_iban, "NL91ABNA0417164300")
+
+
 if __name__ == "__main__":
     unittest.main()

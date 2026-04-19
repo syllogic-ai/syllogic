@@ -15,6 +15,26 @@ from app.integrations.base import BankAdapter, AccountData, TransactionData
 from app.integrations.enable_banking_auth import EnableBankingClient
 
 
+def _extract_iban(account_obj: Optional[dict]) -> Optional[str]:
+    """Extract a normalized IBAN string from an EB account object.
+
+    EB returns counterparty accounts either flat as ``{"iban": "..."}`` or in
+    scheme form as ``{"scheme_name": "IBAN", "identification": "..."}``.
+    Non-IBAN schemes (BBAN, SORT, etc.) and partial objects return None.
+    Returns the IBAN with spaces removed and upper-cased, or None.
+    """
+    if not isinstance(account_obj, dict):
+        return None
+    iban = account_obj.get("iban")
+    if isinstance(iban, str) and iban:
+        return iban.replace(" ", "").upper()
+    if (account_obj.get("scheme_name") or "").upper() == "IBAN":
+        ident = account_obj.get("identification")
+        if isinstance(ident, str) and ident:
+            return ident.replace(" ", "").upper()
+    return None
+
+
 # Mapping from Enable Banking cash account types to our canonical types
 _ACCOUNT_TYPE_MAP = {
     "CACC": "checking",   # Current Account
@@ -201,6 +221,19 @@ class EnableBankingAdapter(BankAdapter):
         # credit_debit_indicator ("CRDT" = money in, "DBIT" = money out).
         # Normalise to signed amounts so downstream categorisation works correctly.
         credit_debit = raw.get("credit_debit_indicator", "CRDT").upper()
+
+        # Resolve counterparty IBAN: for debits the counterparty is the creditor;
+        # for credits the counterparty is the debtor.
+        creditor_iban = (
+            _extract_iban(raw.get("creditor_account"))
+            or _extract_iban(raw.get("creditor"))
+        )
+        debtor_iban = (
+            _extract_iban(raw.get("debtor_account"))
+            or _extract_iban(raw.get("debtor"))
+        )
+        counterparty_iban = creditor_iban if credit_debit == "DBIT" else debtor_iban
+
         if credit_debit == "DBIT" and amount > 0:
             amount = -amount
 
@@ -213,6 +246,7 @@ class EnableBankingAdapter(BankAdapter):
             merchant=merchant,
             creditor=creditor_name,
             debtor=debtor_name,
+            counterparty_iban=counterparty_iban,
             booked_at=datetime.fromisoformat(_date_str) if (_date_str := (
                 raw.get("booking_date")
                 or raw.get("value_date")

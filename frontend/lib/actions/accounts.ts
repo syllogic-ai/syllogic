@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { eq, and, lte, gte, lt, desc, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { accounts, accountBalances, transactions, recurringTransactions, subscriptionSuggestions, type NewAccount } from "@/lib/db/schema";
-import { requireAuth } from "@/lib/auth-helpers";
+import { requireAuth, getAuthenticatedSession } from "@/lib/auth-helpers";
+import { isDemoRestrictedUserEmail, DEMO_RESTRICTED_ACTION_ERROR } from "@/lib/demo-access";
 import { getBackendBaseUrl } from "@/lib/backend-url";
 import { createInternalAuthHeaders } from "@/lib/internal-auth";
 import {
@@ -629,5 +630,96 @@ export async function recalculateAccountTimeseries(
   } catch (error) {
     console.error("Failed to recalculate timeseries:", error);
     return { success: false, error: "Failed to recalculate timeseries" };
+  }
+}
+
+export type CreatePocketAccountInput = {
+  name: string;
+  accountType?: string;
+  currency?: string;
+  startingBalance?: number;
+  iban: string;
+};
+
+export async function createPocketAccount(
+  input: CreatePocketAccountInput,
+): Promise<{ success: boolean; error?: string; accountId?: string; backfilledCount?: number }> {
+  const session = await getAuthenticatedSession();
+  const userId = session?.user?.id;
+  if (!userId) return { success: false, error: "Not authenticated" };
+  if (isDemoRestrictedUserEmail(session.user.email)) {
+    return { success: false, error: DEMO_RESTRICTED_ACTION_ERROR };
+  }
+
+  try {
+    const path = "/api/accounts/pocket";
+    const url = `${getBackendBaseUrl().replace(/\/+$/, "")}${path}`;
+    const headers = createInternalAuthHeaders({ method: "POST", pathWithQuery: path, userId });
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headers },
+      body: JSON.stringify({
+        name: input.name,
+        account_type: input.accountType ?? "savings",
+        currency: input.currency ?? "EUR",
+        starting_balance: String(input.startingBalance ?? 0),
+        iban: input.iban,
+      }),
+    });
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({ detail: "Failed to create pocket account" }));
+      const detail =
+        typeof data.detail === "string"
+          ? data.detail
+          : Array.isArray(data.detail) && data.detail[0]?.msg
+            ? data.detail[0].msg
+            : "Failed to create pocket account";
+      return { success: false, error: detail };
+    }
+    const data = await resp.json();
+    revalidatePath("/settings");
+    revalidatePath("/assets");
+    revalidatePath("/transactions/import");
+    return { success: true, accountId: data.account_id, backfilledCount: data.backfilled_count };
+  } catch {
+    return { success: false, error: "Failed to create pocket account" };
+  }
+}
+
+export async function unlinkInternalTransfer(
+  transferId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const session = await getAuthenticatedSession();
+  const userId = session?.user?.id;
+  if (!userId) return { success: false, error: "Not authenticated" };
+  if (isDemoRestrictedUserEmail(session.user.email)) {
+    return { success: false, error: DEMO_RESTRICTED_ACTION_ERROR };
+  }
+
+  try {
+    // URL-encode transferId so a malformed id (e.g. one with a slash) can't
+    // produce a mismatch between the signed pathWithQuery and the actual
+    // request path. UUIDs don't need it in practice, but be defensive.
+    const path = `/api/accounts/internal-transfers/${encodeURIComponent(transferId)}`;
+    const url = `${getBackendBaseUrl().replace(/\/+$/, "")}${path}`;
+    const headers = createInternalAuthHeaders({ method: "DELETE", pathWithQuery: path, userId });
+    const resp = await fetch(url, { method: "DELETE", headers });
+    if (!resp.ok) {
+      const data = await resp
+        .json()
+        .catch(() => ({ detail: "Failed to unlink internal transfer" }));
+      return {
+        success: false,
+        error:
+          typeof data.detail === "string"
+            ? data.detail
+            : "Failed to unlink internal transfer",
+      };
+    }
+    revalidatePath("/transactions");
+    revalidatePath("/assets");
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to unlink internal transfer" };
   }
 }

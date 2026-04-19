@@ -29,6 +29,7 @@ class TransactionData(BaseModel):
     merchant: Optional[str] = None
     creditor: Optional[str] = None   # Counterparty name for debits (payee)
     debtor: Optional[str] = None     # Counterparty name for credits (payer)
+    counterparty_iban: Optional[str] = None  # IBAN of the other party (stripped, upper-cased)
     booked_at: datetime
     transaction_type: str  # debit, credit
     pending: bool = False

@@ -195,18 +195,67 @@ async function main() {
       if (isPgRelationExistsError(err)) {
         console.warn("[migrate] Detected existing schema without migration tracking. Baseline mode...");
         const baselined = await baselineExistingSchema(sql, migrationsFolder);
-        if (baselined) {
-          // Now that the baseline is recorded, apply the remaining migrations.
-          await migrate(db, { migrationsFolder });
-          console.log("[migrate] Migrations complete (after baseline)");
-          return;
+        if (!baselined) {
+          // Migration tracking already had entries — the "relation exists" error
+          // is a real schema-drift failure, not a first-run baselining issue.
+          // Re-raise so it is NOT masked by the manual-migration step below.
+          throw err;
         }
+        // Baseline recorded; apply the remaining Drizzle migrations.
+        await migrate(db, { migrationsFolder });
+        console.log("[migrate] Migrations complete (after baseline)");
+      } else {
+        throw err;
       }
-
-      throw err;
     }
+
+    // Apply any ".manual.sql" migrations. These are hand-authored SQL files
+    // that are intentionally kept outside of drizzle-kit's journal (e.g.
+    // because the current journal snapshot is stale and running db:generate
+    // would produce a destructive diff). Every .manual.sql file must use
+    // idempotent DDL (IF NOT EXISTS guards or DO blocks that check
+    // pg_constraint) — we run them every time.
+    await applyManualSqlMigrations(sql, migrationsFolder);
   } finally {
     await sql.end({ timeout: 5 });
+  }
+}
+
+async function applyManualSqlMigrations(sql, migrationsFolder) {
+  const entries = fs
+    .readdirSync(migrationsFolder, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".manual.sql"))
+    .map((entry) => entry.name)
+    .sort();
+
+  if (entries.length === 0) {
+    console.log("[migrate] No .manual.sql migrations to apply");
+    return;
+  }
+
+  console.log(`[migrate] Applying ${entries.length} .manual.sql migration(s)`);
+  for (const filename of entries) {
+    const fullPath = path.join(migrationsFolder, filename);
+    const contents = fs.readFileSync(fullPath, "utf8");
+    // drizzle-kit splits multi-statement migrations on "--> statement-breakpoint".
+    // We honour the same convention for consistency — statements run in order,
+    // each inside its own implicit transaction block managed by `sql.unsafe`.
+    const statements = contents
+      .split("--> statement-breakpoint")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    for (const stmt of statements) {
+      try {
+        await sql.unsafe(stmt);
+      } catch (err) {
+        console.error(
+          `[migrate] Failed applying manual migration ${filename}:\n${stmt.slice(0, 200)}${stmt.length > 200 ? "..." : ""}`
+        );
+        throw err;
+      }
+    }
+    console.log(`[migrate]   ✓ ${filename}`);
   }
 }
 

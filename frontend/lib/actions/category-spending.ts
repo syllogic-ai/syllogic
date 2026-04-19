@@ -123,6 +123,7 @@ interface CategorySpendingTransactionRowWithRelations {
   categoryId: string | null;
   categorySystemId: string | null;
   recurringTransactionId: string | null;
+  internalTransferId: string | null;
   bookedAt: Date;
   pending: boolean | null;
   transactionType: string | null;
@@ -160,6 +161,13 @@ interface CategorySpendingTransactionRowWithRelations {
   transactionLink: {
     groupId: string;
     linkRole: string;
+  } | null;
+  internalTransfer: {
+    id: string;
+    pocketAccount: {
+      id: string;
+      name: string;
+    } | null;
   } | null;
 }
 
@@ -465,6 +473,18 @@ function mapCategorySpendingTransactionRowsForUi(
               linkRole: tx.transactionLink.linkRole,
             }
           : null,
+        internalTransferId: tx.internalTransferId,
+        internalTransfer: tx.internalTransfer
+          ? {
+              id: tx.internalTransfer.id,
+              pocketAccount: tx.internalTransfer.pocketAccount
+                ? {
+                    id: tx.internalTransfer.pocketAccount.id,
+                    name: tx.internalTransfer.pocketAccount.name,
+                  }
+                : null,
+            }
+          : null,
         bookedAt: tx.bookedAt,
         pending: tx.pending,
         transactionType: tx.transactionType,
@@ -740,6 +760,16 @@ export async function getCategorySpendingTransactionsPage(
         categorySystem: true,
         recurringTransaction: true,
         transactionLink: true,
+        internalTransfer: {
+          with: {
+            pocketAccount: {
+              columns: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
       },
     }),
   ]);
