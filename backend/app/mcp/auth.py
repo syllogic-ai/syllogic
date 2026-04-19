@@ -132,7 +132,7 @@ except ImportError:  # pragma: no cover
 
 AS_ISSUER = os.environ.get("MCP_OAUTH_ISSUER", "https://app.syllogic.ai")
 AS_JWKS_URI = os.environ.get(
-    "MCP_OAUTH_JWKS_URI", "https://app.syllogic.ai/.well-known/jwks.json"
+    "MCP_OAUTH_JWKS_URI", "https://app.syllogic.ai/api/auth/jwks"
 )
 MCP_AUDIENCE = os.environ.get("MCP_OAUTH_AUDIENCE", "https://mcp.syllogic.ai")
 
