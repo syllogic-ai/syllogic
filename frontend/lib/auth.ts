@@ -50,7 +50,11 @@ export const auth = betterAuth({
   }),
   plugins: [
     admin(),
-    jwt(),
+    jwt({
+      jwks: {
+        keyPairConfig: { alg: "RS256", modulusLength: 2048 },
+      },
+    }),
     oauthProvider({
       scopes: ["mcp:access"],
       accessTokenExpiresIn: 60 * 60, // 1 hour
@@ -63,10 +67,22 @@ export const auth = betterAuth({
       // Syllogic MCP server as the JWT audience via RFC 8707. Without this,
       // better-auth rejects the resource parameter and falls back to an
       // opaque token that the MCP JWTVerifier can't validate.
-      validAudiences: [
-        "https://mcp.syllogic.ai/mcp",
-        "https://mcp.syllogic.ai",
-      ],
+      validAudiences: Array.from(
+        new Set(
+          [
+            "https://mcp.syllogic.ai/mcp",
+            "https://mcp.syllogic.ai",
+            ...(process.env.MCP_LOCAL_AUDIENCE
+              ? [process.env.MCP_LOCAL_AUDIENCE]
+              : []),
+            ...(process.env.MCP_VALID_AUDIENCES
+              ? process.env.MCP_VALID_AUDIENCES.split(",").map((v) =>
+                  v.trim()
+                )
+              : []),
+          ].filter(Boolean)
+        )
+      ),
     }),
   ],
   emailAndPassword: {
