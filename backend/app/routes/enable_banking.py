@@ -545,8 +545,6 @@ def _build_suggested_mappings(
     raw_accounts: list,
 ) -> list:
     """For each bank account UID, check if the user has an existing account with that external_id_hash."""
-    from app.models import Account as _Account
-
     results = []
     for raw_acc in raw_accounts:
         uid = raw_acc.get("uid") or raw_acc.get("id") or ""
@@ -564,10 +562,10 @@ def _build_suggested_mappings(
 
         uid_hash = blind_index(uid)
         existing = (
-            db.query(_Account)
+            db.query(Account)
             .filter(
-                _Account.user_id == user_id,
-                _Account.external_id_hash == uid_hash,
+                Account.user_id == user_id,
+                Account.external_id_hash == uid_hash,
             )
             .first()
         )

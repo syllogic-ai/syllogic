@@ -162,11 +162,6 @@ class TestSuggestedMappings(unittest.TestCase):
             # bank-uid-1 matches existing_account hash, bank-uid-2 does not
             mock_bi.side_effect = lambda uid: "hash-abc" if uid == "bank-uid-1" else "hash-xyz"
 
-            # For bank-uid-2, first() should return None (no existing account)
-            def query_filter_first_side_effect(*args, **kwargs):
-                # Capture the hash that was passed to filter
-                return mock_db.query.return_value.filter.return_value.first.return_value
-
             # We need different first() results per UID — adjust the mock
             call_count = [0]
             def first_side_effect():
