@@ -138,5 +138,62 @@ class TestPerAccountSyncStartDate(unittest.TestCase):
         self.assertEqual(start, expected)
 
 
+class TestSuggestedMappings(unittest.TestCase):
+    """GET /connections/{id}/suggested-mappings returns link suggestion for known accounts."""
+
+    def test_returns_link_suggestion_for_known_external_id(self):
+        from app.routes.enable_banking import _build_suggested_mappings
+
+        # Simulate: one known account (blind index matches), one unknown
+        existing_account = MagicMock()
+        existing_account.id = "acc-uuid-1"
+        existing_account.name = "My Savings"
+        existing_account.external_id_hash = "hash-abc"
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = existing_account
+
+        raw_accounts = [
+            {"uid": "bank-uid-1", "account_name": "Savings Account"},
+            {"uid": "bank-uid-2", "account_name": "New Current Account"},
+        ]
+
+        with patch("app.routes.enable_banking.blind_index") as mock_bi:
+            # bank-uid-1 matches existing_account hash, bank-uid-2 does not
+            mock_bi.side_effect = lambda uid: "hash-abc" if uid == "bank-uid-1" else "hash-xyz"
+
+            # For bank-uid-2, first() should return None (no existing account)
+            def query_filter_first_side_effect(*args, **kwargs):
+                # Capture the hash that was passed to filter
+                return mock_db.query.return_value.filter.return_value.first.return_value
+
+            # We need different first() results per UID — adjust the mock
+            call_count = [0]
+            def first_side_effect():
+                call_count[0] += 1
+                if call_count[0] == 1:
+                    return existing_account  # bank-uid-1 matches
+                return None  # bank-uid-2 does not match
+
+            mock_db.query.return_value.filter.return_value.first.side_effect = first_side_effect
+
+            result = _build_suggested_mappings(
+                db=mock_db,
+                user_id="user-1",
+                raw_accounts=raw_accounts,
+            )
+
+        self.assertEqual(len(result), 2)
+        match = next(r for r in result if r["bank_uid"] == "bank-uid-1")
+        no_match = next(r for r in result if r["bank_uid"] == "bank-uid-2")
+
+        self.assertEqual(match["suggested_action"], "link")
+        self.assertEqual(match["suggested_account_id"], "acc-uuid-1")
+        self.assertEqual(match["suggested_account_name"], "My Savings")
+
+        self.assertEqual(no_match["suggested_action"], "create")
+        self.assertIsNone(no_match["suggested_account_id"])
+
+
 if __name__ == "__main__":
     unittest.main()
