@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -13,7 +14,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CURRENCIES, ACCOUNT_TYPES } from "@/lib/constants";
-import { createAccount } from "@/lib/actions/accounts";
+import { createAccount, createPocketAccount } from "@/lib/actions/accounts";
+
+const IBAN_RE = /^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/;
 
 interface AccountFormProps {
   onSuccess?: () => void;
@@ -39,6 +42,8 @@ export function AccountForm({
   const [institution, setInstitution] = useState("");
   const [currency, setCurrency] = useState("EUR");
   const [initialBalance, setInitialBalance] = useState("");
+  const [isPocket, setIsPocket] = useState(false);
+  const [iban, setIban] = useState("");
 
   const resetForm = () => {
     setName("");
@@ -46,6 +51,8 @@ export function AccountForm({
     setInstitution("");
     setCurrency("EUR");
     setInitialBalance("");
+    setIsPocket(false);
+    setIban("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -55,15 +62,29 @@ export function AccountForm({
       toast.error("Please enter an account name");
       return;
     }
-
     if (!accountType) {
       toast.error("Please select an account type");
       return;
     }
-
     if (!currency) {
       toast.error("Please select a currency");
       return;
+    }
+
+    const normalizedIban = iban.replace(/\s+/g, "").toUpperCase();
+    if (isPocket) {
+      if (!normalizedIban) {
+        toast.error("Please enter an IBAN for the pocket account");
+        return;
+      }
+      if (
+        !IBAN_RE.test(normalizedIban)
+        || normalizedIban.length < 15
+        || normalizedIban.length > 34
+      ) {
+        toast.error("Please enter a valid IBAN");
+        return;
+      }
     }
 
     setIsLoading(true);
@@ -76,16 +97,31 @@ export function AccountForm({
         return;
       }
 
-      const result = await createAccount({
-        name: name.trim(),
-        accountType,
-        institution: institution.trim() || undefined,
-        currency,
-        startingBalance: balance,
-      });
+      const result = isPocket
+        ? await createPocketAccount({
+            name: name.trim(),
+            accountType,
+            currency,
+            startingBalance: balance,
+            iban: normalizedIban,
+          })
+        : await createAccount({
+            name: name.trim(),
+            accountType,
+            institution: institution.trim() || undefined,
+            currency,
+            startingBalance: balance,
+          });
 
       if (result.success) {
-        toast.success(successMessage);
+        const backfilled =
+          isPocket && "backfilledCount" in result && typeof result.backfilledCount === "number"
+            ? result.backfilledCount
+            : 0;
+        const message = backfilled > 0
+          ? `${successMessage} — ${backfilled} existing transfer${backfilled === 1 ? "" : "s"} linked`
+          : successMessage;
+        toast.success(message);
         resetForm();
         onSuccess?.();
       } else {
@@ -132,15 +168,17 @@ export function AccountForm({
           </Select>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="account-institution">Institution (optional)</Label>
-          <Input
-            id="account-institution"
-            placeholder="e.g., Bank of America"
-            value={institution}
-            onChange={(e) => setInstitution(e.target.value)}
-          />
-        </div>
+        {!isPocket && (
+          <div className="space-y-2">
+            <Label htmlFor="account-institution">Institution (optional)</Label>
+            <Input
+              id="account-institution"
+              placeholder="e.g., Bank of America"
+              value={institution}
+              onChange={(e) => setInstitution(e.target.value)}
+            />
+          </div>
+        )}
 
         <div className="space-y-2">
           <Label htmlFor="account-currency">Currency</Label>
@@ -169,6 +207,41 @@ export function AccountForm({
             onChange={(e) => setInitialBalance(e.target.value)}
           />
         </div>
+
+        <div className="flex items-center justify-between rounded border p-3">
+          <div className="space-y-0.5">
+            <Label htmlFor="is-pocket" className="cursor-pointer">
+              Register as pocket account
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Track a savings pocket by IBAN. Transfers from your synced accounts
+              will be auto-detected and linked.
+            </p>
+          </div>
+          <Switch
+            id="is-pocket"
+            checked={isPocket}
+            onCheckedChange={setIsPocket}
+          />
+        </div>
+
+        {isPocket && (
+          <div className="space-y-2">
+            <Label htmlFor="account-iban">IBAN</Label>
+            <Input
+              id="account-iban"
+              placeholder="NL91 ABNA 0417 1643 00"
+              value={iban}
+              onChange={(e) => setIban(e.target.value)}
+              autoComplete="off"
+              autoCapitalize="characters"
+            />
+            <p className="text-xs text-muted-foreground">
+              Spaces are ignored. The IBAN is encrypted at rest and only used to
+              match transfers from your synced accounts.
+            </p>
+          </div>
+        )}
       </div>
       <div className="flex justify-end gap-2">
         {showCancel && (
