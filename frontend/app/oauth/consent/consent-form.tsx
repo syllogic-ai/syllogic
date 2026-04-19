@@ -15,10 +15,20 @@ export function ConsentForm({ params }: Props) {
     setPending(decision);
     setError(null);
     try {
+      const oauthQuery = new URLSearchParams(
+        Object.entries(params).flatMap(([k, v]) =>
+          typeof v === "string" ? [[k, v] as [string, string]] : []
+        )
+      ).toString();
+      const scope = typeof params.scope === "string" ? params.scope : undefined;
       const res = await fetch("/api/auth/oauth2/consent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...params, decision }),
+        body: JSON.stringify({
+          accept: decision === "allow",
+          ...(scope ? { scope } : {}),
+          oauth_query: oauthQuery,
+        }),
       });
       if (res.redirected) {
         window.location.assign(res.url);
