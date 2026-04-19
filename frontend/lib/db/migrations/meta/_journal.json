@@ -99,6 +99,13 @@
       "when": 1776470400000,
       "tag": "0013_transaction_creditor_debtor",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1745020800000,
+      "tag": "0014_bank_connection_sync_started_at",
+      "breakpoints": true
     }
   ]
 }

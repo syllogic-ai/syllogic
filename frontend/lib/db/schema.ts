@@ -160,6 +160,7 @@ export const bankConnections = pgTable(
     consentNotifiedAt: timestamp("consent_notified_at"),
     status: varchar("status", { length: 20 }).notNull().default("active"),
     lastSyncedAt: timestamp("last_synced_at"),
+    syncStartedAt: timestamp("sync_started_at"),
     lastSyncError: text("last_sync_error"),
     syncCursor: jsonb("sync_cursor"),
     rawSessionData: jsonb("raw_session_data"),

@@ -356,3 +356,44 @@ export async function getConnectionStatus(
     return null;
   }
 }
+
+export type SuggestedMapping = {
+  bank_uid: string;
+  bank_name: string;
+  suggested_action: "link" | "create";
+  suggested_account_id: string | null;
+  suggested_account_name: string | null;
+};
+
+export async function getSuggestedMappings(
+  connectionId: string
+): Promise<SuggestedMapping[]> {
+  const session = await getAuthenticatedSession();
+  const userId = session?.user?.id;
+  if (!userId) return [];
+
+  try {
+    const backendBase = getBackendBaseUrl().replace(/\/+$/, "");
+    const pathWithQuery = `/api/enable-banking/connections/${connectionId}/suggested-mappings`;
+    const url = `${backendBase}${pathWithQuery}`;
+
+    const signatureHeaders = createInternalAuthHeaders({
+      method: "GET",
+      pathWithQuery,
+      userId,
+    });
+
+    const resp = await fetch(url, {
+      method: "GET",
+      headers: signatureHeaders,
+    });
+
+    if (!resp.ok) {
+      console.warn(`getSuggestedMappings: backend returned ${resp.status} for ${connectionId}`);
+      return [];
+    }
+    return await resp.json();
+  } catch {
+    return [];
+  }
+}

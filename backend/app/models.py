@@ -96,6 +96,7 @@ class BankConnection(Base):
     consent_notified_at = Column(DateTime, nullable=True)
     status = Column(String(20), nullable=False, default="active")
     last_synced_at = Column(DateTime, nullable=True)
+    sync_started_at = Column(DateTime, nullable=True)
     last_sync_error = Column(Text, nullable=True)
     sync_cursor = Column(JSONB, nullable=True)
     initial_sync_days = Column(Integer, nullable=False, server_default="90")

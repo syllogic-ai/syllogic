@@ -23,6 +23,47 @@ from tasks.post_import_pipeline import post_import_pipeline
 logger = logging.getLogger(__name__)
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+SYNC_COOLDOWN_SECONDS = 300    # 5 min since last completed sync
+SYNC_IN_PROGRESS_TIMEOUT = 600  # 10 min since sync started (covers 730-day initial load)
+
+
+def _should_skip_sync(connection) -> bool:
+    """Return True if a sync should be skipped due to recency or in-progress state."""
+    now = datetime.now(timezone.utc)
+
+    if connection.last_synced_at:
+        last = connection.last_synced_at
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        if (now - last).total_seconds() < SYNC_COOLDOWN_SECONDS:
+            return True
+
+    if connection.sync_started_at:
+        started = connection.sync_started_at
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        if (now - started).total_seconds() < SYNC_IN_PROGRESS_TIMEOUT:
+            return True
+
+    return False
+
+
+def _account_sync_start_date(account, connection) -> "date":
+    """Return the start date for syncing a single account.
+
+    Previously-synced accounts start from last_synced_at - 1 day (incremental).
+    New accounts (never synced) use the connection's full initial_sync_days lookback.
+    """
+    from datetime import date as _date
+    if account.last_synced_at is not None:
+        last = account.last_synced_at
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        return (last - timedelta(days=1)).date()
+    sync_days = connection.initial_sync_days or 90
+    return (datetime.now(timezone.utc) - timedelta(days=sync_days)).date()
+
+
 _redis_client = None
 
 
@@ -68,6 +109,16 @@ def sync_bank_connection(self, connection_id: str):
             logger.info(f"Skipping sync for connection {connection_id} with status {connection.status}")
             return {"skipped": True, "reason": f"Status is {connection.status}"}
 
+        # Idempotency guard — skip if a sync ran recently or is still in progress
+        if _should_skip_sync(connection):
+            logger.info(f"[SYNC] Skipped for connection {connection_id}: too recent or in progress")
+            return {"skipped": True, "reason": "sync_too_recent"}
+
+        # Mark sync as in progress before any API calls
+        connection.sync_started_at = datetime.now(timezone.utc)
+        db.commit()
+        _sync_started_at_cleared = False  # tracks whether the success path already cleared it
+
         client = EnableBankingClient()
         adapter = EnableBankingAdapter(
             session_id=connection.session_id,
@@ -77,17 +128,14 @@ def sync_bank_connection(self, connection_id: str):
         # Capture before any sync updates last_synced_at
         is_initial_sync = connection.last_synced_at is None
 
-        # Determine date range for transactions
-        if connection.last_synced_at is None:
-            # First sync: use user-configured lookback
-            sync_days = connection.initial_sync_days or 90
-            start_date = (datetime.now(timezone.utc) - timedelta(days=sync_days)).date()
-        else:
-            # Incremental sync: from last sync minus 1 day overlap
-            start_date = (connection.last_synced_at - timedelta(days=1)).date()
+        # end_date is shared across all accounts; start_date is computed per-account below
         end_date = datetime.now(timezone.utc)
 
-        # Disable inline LLM during sync — batch AI categorization runs in post_import_pipeline
+        # LLM categorization is intentionally disabled here.
+        # Inline per-transaction LLM calls during sync waste tokens and slow the import.
+        # The post_import_pipeline (step 3) runs a single batch LLM pass over all
+        # touched transactions after sync completes — more efficient and equally accurate.
+        # Do NOT set use_llm_categorization=True here without removing the batch step.
         sync_service = SyncService(db, user_id=connection.user_id, use_llm_categorization=False)
 
         # Get accounts linked to this connection
@@ -156,6 +204,7 @@ def sync_bank_connection(self, connection_id: str):
 
             # Sync transactions via SyncService
             try:
+                start_date = _account_sync_start_date(account, connection)  # per-account
                 created, updated, created_ids, updated_ids = sync_service.sync_transactions(
                     adapter=adapter,
                     account=account,
@@ -196,8 +245,10 @@ def sync_bank_connection(self, connection_id: str):
                 account.functional_balance = _balance_av
 
         connection.last_synced_at = datetime.now(timezone.utc)
+        connection.sync_started_at = None  # clear atomically with last_synced_at
         connection.last_sync_error = None
         db.commit()
+        _sync_started_at_cleared = True
         _clear_sync_progress(connection_id)
 
         # Chain to shared post-processing pipeline (run if any transactions were touched).
@@ -247,6 +298,15 @@ def sync_bank_connection(self, connection_id: str):
         _clear_sync_progress(connection_id)
         raise self.retry(exc=e)
     finally:
+        # Clear in-progress marker if not already cleared by the success path
+        if not _sync_started_at_cleared:
+            try:
+                conn = db.query(BankConnection).filter(BankConnection.id == connection_id).first()
+                if conn:
+                    conn.sync_started_at = None
+                    db.commit()
+            except Exception:
+                pass
         db.close()
 
 

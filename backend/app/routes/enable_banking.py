@@ -88,6 +88,13 @@ class MapAccountsResponse(BaseModel):
     accounts_created: int
     accounts_linked: int
 
+class SuggestedMapping(BaseModel):
+    bank_uid: str
+    bank_name: str
+    suggested_action: str       # "link" or "create"
+    suggested_account_id: Optional[str] = None
+    suggested_account_name: Optional[str] = None
+
 
 # --- Helper ---
 
@@ -532,6 +539,91 @@ def list_connections(
     return results
 
 
+def _build_suggested_mappings(
+    db: Session,
+    user_id: str,
+    raw_accounts: list,
+) -> list:
+    """For each bank account UID, check if the user has an existing account with that external_id_hash."""
+    results = []
+    for raw_acc in raw_accounts:
+        uid = raw_acc.get("uid") or raw_acc.get("id") or ""
+        bank_name = raw_acc.get("account_name") or raw_acc.get("name") or "Bank Account"
+
+        if not uid:
+            results.append({
+                "bank_uid": uid,
+                "bank_name": bank_name,
+                "suggested_action": "create",
+                "suggested_account_id": None,
+                "suggested_account_name": None,
+            })
+            continue
+
+        uid_hash = blind_index(uid)
+        existing = (
+            db.query(Account)
+            .filter(
+                Account.user_id == user_id,
+                Account.external_id_hash == uid_hash,
+            )
+            .first()
+        )
+
+        if existing:
+            results.append({
+                "bank_uid": uid,
+                "bank_name": bank_name,
+                "suggested_action": "link",
+                "suggested_account_id": str(existing.id),
+                "suggested_account_name": existing.name,
+            })
+        else:
+            results.append({
+                "bank_uid": uid,
+                "bank_name": bank_name,
+                "suggested_action": "create",
+                "suggested_account_id": None,
+                "suggested_account_name": None,
+            })
+
+    return results
+
+
+@router.get("/connections/{connection_id}/suggested-mappings", response_model=List[SuggestedMapping])
+def get_suggested_mappings(
+    connection_id: str,
+    user_id: str = Depends(get_user_id),
+    db: Session = Depends(get_db),
+):
+    """
+    Return suggested account mappings for the map-accounts wizard.
+
+    For each bank account UID in the connection's raw session data, checks
+    whether the user already has an account with that external_id_hash and
+    suggests 'link' or 'create' accordingly. Requires connection in pending_setup status.
+    """
+    connection = db.query(BankConnection).filter(
+        BankConnection.id == connection_id,
+        BankConnection.user_id == user_id,
+    ).first()
+    if not connection:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    if connection.status != "pending_setup":
+        raise HTTPException(
+            status_code=400,
+            detail="Suggested mappings are only available for connections in pending_setup status",
+        )
+
+    raw_accounts = (connection.raw_session_data or {}).get("accounts", [])
+    suggestions = _build_suggested_mappings(
+        db=db,
+        user_id=user_id,
+        raw_accounts=raw_accounts,
+    )
+    return suggestions
+
+
 @router.delete("/{connection_id}")
 def disconnect(
     connection_id: str,
@@ -555,16 +647,15 @@ def disconnect(
 
     connection.status = "disconnected"
 
-    # Unlink accounts so they can be re-linked to a new connection later
+    # Unlink accounts so they can be re-linked to a new connection later.
+    # external_id, external_id_ciphertext, and external_id_hash are preserved
+    # so that re-auth can auto-match accounts by their stable bank UIDs.
     db.query(Account).filter(
         Account.bank_connection_id == connection.id,
     ).update(
         {
             Account.bank_connection_id: None,
             Account.provider: None,
-            Account.external_id: None,
-            Account.external_id_ciphertext: None,
-            Account.external_id_hash: None,
         },
         synchronize_session=False,
     )
