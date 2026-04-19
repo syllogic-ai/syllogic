@@ -555,16 +555,15 @@ def disconnect(
 
     connection.status = "disconnected"
 
-    # Unlink accounts so they can be re-linked to a new connection later
+    # Unlink accounts so they can be re-linked to a new connection later.
+    # external_id, external_id_ciphertext, and external_id_hash are preserved
+    # so that re-auth can auto-match accounts by their stable bank UIDs.
     db.query(Account).filter(
         Account.bank_connection_id == connection.id,
     ).update(
         {
             Account.bank_connection_id: None,
             Account.provider: None,
-            Account.external_id: None,
-            Account.external_id_ciphertext: None,
-            Account.external_id_hash: None,
         },
         synchronize_session=False,
     )
