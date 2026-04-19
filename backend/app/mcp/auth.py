@@ -3,6 +3,7 @@ API Key authentication for the MCP server.
 Validates API keys and resolves them to user IDs.
 """
 import hashlib
+import os
 import bcrypt
 from datetime import datetime
 from dataclasses import dataclass
@@ -121,3 +122,60 @@ class ApiKeyAuthProvider(AuthProvider):
             expires_at=None,
             claims={"user_id": user_id},
         )
+
+
+try:
+    from fastmcp.server.auth.providers.jwt import JWTVerifier
+except ImportError:  # pragma: no cover
+    JWTVerifier = None  # type: ignore
+
+
+AS_ISSUER = os.environ.get("MCP_OAUTH_ISSUER", "https://app.syllogic.ai")
+AS_JWKS_URI = os.environ.get(
+    "MCP_OAUTH_JWKS_URI", "https://app.syllogic.ai/.well-known/jwks.json"
+)
+MCP_AUDIENCE = os.environ.get("MCP_OAUTH_AUDIENCE", "https://mcp.syllogic.ai")
+
+
+class CompositeAuthProvider(AuthProvider):
+    """
+    Accepts either a pf_ API key (existing DB-backed) or a JWT issued by
+    the Syllogic Authorization Server (better-auth on app.syllogic.ai).
+
+    Prefix-gating: tokens starting with 'pf_' go to ApiKeyAuthProvider;
+    everything else is treated as a JWT. This keeps the two paths fully
+    disjoint.
+    """
+
+    # RemoteAuthProvider reads these off the wrapped token verifier when
+    # computing its own required_scopes / scopes_supported; default to empty.
+    required_scopes: list[str] = []
+    scopes_supported: list[str] = []
+
+    def __init__(self) -> None:
+        if JWTVerifier is None:
+            raise RuntimeError(
+                "fastmcp.server.auth.providers.jwt.JWTVerifier is required "
+                "for CompositeAuthProvider. Bump fastmcp."
+            )
+        self.api_key = ApiKeyAuthProvider()
+        self.jwt = JWTVerifier(
+            jwks_uri=AS_JWKS_URI,
+            issuer=AS_ISSUER,
+            audience=MCP_AUDIENCE,
+        )
+
+    async def verify_token(self, token: str) -> AccessToken | None:
+        if not token:
+            return None
+        if token.startswith("pf_"):
+            return await self.api_key.verify_token(token)
+        access = await self.jwt.verify_token(token)
+        if access is None:
+            return None
+        if "user_id" not in access.claims:
+            sub = access.claims.get("sub")
+            if not sub:
+                return None
+            access.claims["user_id"] = sub
+        return access

@@ -3,10 +3,18 @@ Main FastMCP server setup for Syllogic.
 Registers all tools from the tools modules.
 """
 from fastmcp import FastMCP
+from fastmcp.server.auth import RemoteAuthProvider
+from pydantic import AnyHttpUrl
 
 from app.db_helpers import get_mcp_user_id
-from app.mcp.auth import ApiKeyAuthProvider
+from app.mcp.auth import CompositeAuthProvider, AS_ISSUER, MCP_AUDIENCE
 from app.mcp.tools import accounts, categories, transactions, analytics, recurring
+
+_auth = RemoteAuthProvider(
+    token_verifier=CompositeAuthProvider(),
+    authorization_servers=[AnyHttpUrl(AS_ISSUER)],
+    base_url=MCP_AUDIENCE,
+)
 
 # Initialize FastMCP server
 mcp = FastMCP(
@@ -14,8 +22,12 @@ mcp = FastMCP(
     instructions="""
 Syllogic MCP Server - Access financial data and manage transactions.
 
-All requests require an API key:
-Authorization: Bearer pf_...
+All requests require a bearer token in the Authorization header. Two token
+types are accepted:
+- API keys (`Authorization: Bearer pf_...`) for Claude Desktop / Code and
+  other local clients.
+- OAuth 2.1 access tokens (JWTs) issued by the Syllogic authorization server
+  for Claude on the web, iOS, Android, and any other custom connector.
 
 The `user_id` parameter is optional on all tools but must match the authenticated user.
 
@@ -64,7 +76,7 @@ When using `search_transactions`, ALWAYS check `has_more` in the response.
 If true, you MUST call again with page=2, 3, etc. until has_more=false.
 The `total_count` field tells you how many total results exist.
 """,
-    auth=ApiKeyAuthProvider(),
+    auth=_auth,
 )
 
 
