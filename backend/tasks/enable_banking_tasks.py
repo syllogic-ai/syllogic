@@ -208,6 +208,7 @@ def sync_bank_connection(self, connection_id: str):
                 account.functional_balance = _balance_av
 
         connection.last_synced_at = datetime.now(timezone.utc)
+        connection.sync_started_at = None  # clear atomically with last_synced_at
         connection.last_sync_error = None
         db.commit()
         _clear_sync_progress(connection_id)
