@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { getCurrentUserProfile } from "@/lib/actions/settings";
 import { isDemoRestrictedUserEmail } from "@/lib/demo-access";
-import { getConnectionForMapping, getLinkableAccounts } from "@/lib/actions/bank-connections";
+import { getConnectionForMapping, getLinkableAccounts, getSuggestedMappings, type SuggestedMapping } from "@/lib/actions/bank-connections";
 import { AccountMappingWizard } from "@/components/settings/account-mapping-wizard";
 import { RiLoader4Line } from "@remixicon/react";
 
@@ -23,9 +23,10 @@ export default async function MapAccountsPage({ searchParams }: MapAccountsPageP
     redirect("/settings/connect-bank");
   }
 
-  const [connection, linkableAccounts] = await Promise.all([
+  const [connection, linkableAccounts, suggestedMappings] = await Promise.all([
     getConnectionForMapping(connectionId),
     getLinkableAccounts(),
+    getSuggestedMappings(connectionId),
   ]);
 
   if (!connection) {
@@ -58,6 +59,7 @@ export default async function MapAccountsPage({ searchParams }: MapAccountsPageP
             aspspName={connection.aspspName}
             bankAccounts={bankAccounts}
             linkableAccounts={linkableAccounts}
+            suggestedMappings={suggestedMappings}
           />
         </Suspense>
       </div>

@@ -31,6 +31,7 @@ import {
   RiAlertLine,
 } from "@remixicon/react";
 import { submitAccountMappings } from "@/lib/actions/bank-connections";
+import type { SuggestedMapping } from "@/lib/actions/bank-connections";
 
 interface BankAccount {
   uid: string;
@@ -61,6 +62,7 @@ interface AccountMappingWizardProps {
   aspspName: string;
   bankAccounts: BankAccount[];
   linkableAccounts: LinkableAccount[];
+  suggestedMappings?: SuggestedMapping[];
 }
 
 function maskIban(iban: string): string {
@@ -75,15 +77,31 @@ export function AccountMappingWizard({
   aspspName,
   bankAccounts,
   linkableAccounts,
+  suggestedMappings = [],
 }: AccountMappingWizardProps) {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(0);
+
+  const suggestionByUid = Object.fromEntries(
+    suggestedMappings.map((s) => [s.bank_uid, s])
+  );
+
   const [mappings, setMappings] = useState<AccountMapping[]>(
-    bankAccounts.map((account) => ({
-      bank_uid: account.uid,
-      action: "create" as const,
-      name: account.name,
-    }))
+    bankAccounts.map((account) => {
+      const suggestion = suggestionByUid[account.uid];
+      if (suggestion?.suggested_action === "link" && suggestion.suggested_account_id) {
+        return {
+          bank_uid: account.uid,
+          action: "link" as const,
+          existing_account_id: suggestion.suggested_account_id,
+        };
+      }
+      return {
+        bank_uid: account.uid,
+        action: "create" as const,
+        name: account.name,
+      };
+    })
   );
   const [initialSyncDays, setInitialSyncDays] = useState(90);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -205,6 +223,12 @@ export function AccountMappingWizard({
 
           {/* Action selection */}
           <div className="space-y-3">
+            {suggestionByUid[currentAccount.uid]?.suggested_action === "link" && (
+              <div className="mb-3 flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+                <RiCheckLine className="h-3.5 w-3.5 shrink-0 text-green-500" />
+                Previously linked — pre-selected for you. You can change this below.
+              </div>
+            )}
             <Label className="text-sm font-medium">
               What would you like to do with this account?
             </Label>
