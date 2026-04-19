@@ -71,8 +71,8 @@ def sync_investment_account(self, account_id: str) -> dict:
         return {"account_id": account_id, "status": "ok"}
     except FlexStatementNotReady:
         raise
-    except Exception as e:
-        logger.exception("Investment sync failed for %s: %s", account_id, e)
-        return {"account_id": account_id, "status": "error", "error": str(e)}
+    except Exception:
+        logger.exception("Investment sync failed for %s", account_id)
+        raise
     finally:
         db.close()

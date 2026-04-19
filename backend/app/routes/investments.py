@@ -381,18 +381,33 @@ def portfolio_summary(
 
         total_value += account_value
 
-        # Today change from the account-level balance snapshots (last two).
-        last_two = (
+        # Today change: today's snapshot vs the immediately prior snapshot.
+        # Skip if no snapshot for today (e.g. weekend, holiday, missed Celery run)
+        # so we don't surface a stale delta as "today's" movement.
+        today_iso = date.today()
+        latest_balance = (
             db.query(AccountBalance)
-            .filter(AccountBalance.account_id == account.id)
-            .order_by(desc(AccountBalance.date))
-            .limit(2)
-            .all()
-        )
-        if len(last_two) == 2:
-            today_change += Decimal(last_two[0].balance_in_functional_currency) - Decimal(
-                last_two[1].balance_in_functional_currency
+            .filter(
+                AccountBalance.account_id == account.id,
+                AccountBalance.date == today_iso,
             )
+            .order_by(desc(AccountBalance.date))
+            .first()
+        )
+        if latest_balance is not None:
+            prior_balance = (
+                db.query(AccountBalance)
+                .filter(
+                    AccountBalance.account_id == account.id,
+                    AccountBalance.date < today_iso,
+                )
+                .order_by(desc(AccountBalance.date))
+                .first()
+            )
+            if prior_balance is not None:
+                today_change += Decimal(
+                    latest_balance.balance_in_functional_currency
+                ) - Decimal(prior_balance.balance_in_functional_currency)
 
         accounts_payload.append(
             {

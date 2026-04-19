@@ -123,8 +123,7 @@ export async function getHoldingHistory(
     `/api/investments/holdings/${holdingId}/history`,
     { query: { from, to } },
   );
-  if (!resp.ok) return [];
-  return (await resp.json()) as ValuationPoint[];
+  return readJsonOrThrow<ValuationPoint[]>(resp);
 }
 
 export async function searchSymbols(q: string): Promise<SymbolSearchResult[]> {

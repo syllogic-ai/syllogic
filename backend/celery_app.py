@@ -71,7 +71,10 @@ def _build_beat_schedule() -> dict:
         "schedule": crontab(minute=0, hour=9),
     }
 
-    investment_hour = int(os.getenv("SYLLOGIC_INVESTMENT_SYNC_HOUR_UTC", "2"))
+    try:
+        investment_hour = int(os.getenv("SYLLOGIC_INVESTMENT_SYNC_HOUR_UTC", "2"))
+    except ValueError:
+        investment_hour = 2
     investment_hour = max(0, min(23, investment_hour))
     schedule["daily-investment-sync-all"] = {
         "task": "tasks.investment_tasks.daily_investment_sync_all",

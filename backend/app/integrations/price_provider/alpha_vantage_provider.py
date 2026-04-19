@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from .base import PriceProvider, PriceQuote, SymbolMatch
 from datetime import date
 

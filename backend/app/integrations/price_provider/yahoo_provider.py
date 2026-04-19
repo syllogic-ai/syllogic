@@ -60,9 +60,21 @@ class YahooPriceProvider:
         out: dict[str, PriceQuote] = {}
         if data is None or data.empty:
             return out
-        if "Close" not in data.columns.get_level_values(0):
-            return out
-        closes = data["Close"]
+        # yfinance returns a MultiIndex when multiple tickers are requested,
+        # but a flat columns Index when only one is requested.
+        is_multi = hasattr(data.columns, "get_level_values") and getattr(
+            data.columns, "nlevels", 1
+        ) > 1
+        if is_multi:
+            if "Close" not in data.columns.get_level_values(0):
+                return out
+            closes = data["Close"]
+        else:
+            if "Close" not in data.columns:
+                return out
+            # Single-symbol response: build a one-column frame keyed by the symbol.
+            import pandas as pd  # local import — already a transitive dep of yfinance
+            closes = pd.DataFrame({symbols[0]: data["Close"]})
         for sym in symbols:
             if sym not in closes.columns:
                 continue
