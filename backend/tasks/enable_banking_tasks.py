@@ -23,6 +23,29 @@ from tasks.post_import_pipeline import post_import_pipeline
 logger = logging.getLogger(__name__)
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+SYNC_COOLDOWN_SECONDS = 300    # 5 min since last completed sync
+SYNC_IN_PROGRESS_TIMEOUT = 600  # 10 min since sync started (covers 730-day initial load)
+
+
+def _should_skip_sync(connection) -> bool:
+    """Return True if a sync should be skipped due to recency or in-progress state."""
+    now = datetime.now(timezone.utc)
+
+    if connection.last_synced_at:
+        last = connection.last_synced_at
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        if (now - last).total_seconds() < SYNC_COOLDOWN_SECONDS:
+            return True
+
+    if connection.sync_started_at:
+        started = connection.sync_started_at
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        if (now - started).total_seconds() < SYNC_IN_PROGRESS_TIMEOUT:
+            return True
+
+    return False
 _redis_client = None
 
 
@@ -67,6 +90,15 @@ def sync_bank_connection(self, connection_id: str):
         if connection.status not in ("active",):
             logger.info(f"Skipping sync for connection {connection_id} with status {connection.status}")
             return {"skipped": True, "reason": f"Status is {connection.status}"}
+
+        # Idempotency guard — skip if a sync ran recently or is still in progress
+        if _should_skip_sync(connection):
+            logger.info(f"[SYNC] Skipped for connection {connection_id}: too recent or in progress")
+            return {"skipped": True, "reason": "sync_too_recent"}
+
+        # Mark sync as in progress before any API calls
+        connection.sync_started_at = datetime.now(timezone.utc)
+        db.commit()
 
         client = EnableBankingClient()
         adapter = EnableBankingAdapter(
@@ -227,6 +259,14 @@ def sync_bank_connection(self, connection_id: str):
         _clear_sync_progress(connection_id)
         raise self.retry(exc=e)
     finally:
+        # Clear in-progress marker regardless of outcome
+        try:
+            conn = db.query(BankConnection).filter(BankConnection.id == connection_id).first()
+            if conn:
+                conn.sync_started_at = None
+                db.commit()
+        except Exception:
+            pass
         db.close()
 
 

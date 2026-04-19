@@ -55,5 +55,55 @@ class TestDisconnectPreservesExternalId(unittest.TestCase):
         self.assertNotIn(Account.external_id_hash, update_dict)
 
 
+class TestSyncIdempotencyGuard(unittest.TestCase):
+    """sync_bank_connection should skip if a sync ran recently or is in progress."""
+
+    def _make_connection(self, last_synced_at=None, sync_started_at=None, status="active"):
+        conn = MagicMock()
+        conn.id = "conn-1"
+        conn.user_id = "user-1"
+        conn.status = status
+        conn.last_synced_at = last_synced_at
+        conn.sync_started_at = sync_started_at
+        conn.initial_sync_days = 90
+        conn.session_id = "sess-1"
+        return conn
+
+    def _run_task(self, connection):
+        """Run the sync guard logic extracted from the task."""
+        from tasks.enable_banking_tasks import _should_skip_sync
+        return _should_skip_sync(connection)
+
+    def test_skips_when_synced_within_5_minutes(self):
+        conn = self._make_connection(
+            last_synced_at=datetime.now(timezone.utc) - timedelta(minutes=2)
+        )
+        self.assertTrue(self._run_task(conn))
+
+    def test_does_not_skip_when_synced_6_minutes_ago(self):
+        conn = self._make_connection(
+            last_synced_at=datetime.now(timezone.utc) - timedelta(minutes=6)
+        )
+        self.assertFalse(self._run_task(conn))
+
+    def test_skips_when_sync_in_progress(self):
+        conn = self._make_connection(
+            sync_started_at=datetime.now(timezone.utc) - timedelta(minutes=3)
+        )
+        self.assertTrue(self._run_task(conn))
+
+    def test_does_not_skip_on_initial_sync(self):
+        """last_synced_at=None means first sync ever — never skip."""
+        conn = self._make_connection(last_synced_at=None, sync_started_at=None)
+        self.assertFalse(self._run_task(conn))
+
+    def test_does_not_skip_stale_sync_started_at(self):
+        """sync_started_at older than 10 min = stale/crashed, allow re-sync."""
+        conn = self._make_connection(
+            sync_started_at=datetime.now(timezone.utc) - timedelta(minutes=11)
+        )
+        self.assertFalse(self._run_task(conn))
+
+
 if __name__ == "__main__":
     unittest.main()
