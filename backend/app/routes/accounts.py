@@ -287,9 +287,10 @@ def delete_account(
     For pocket accounts (``provider="manual"``) with linked internal transfers,
     unlink the source transactions first (restoring ``include_in_analytics=True``
     and clearing ``internal_transfer_id``) so the cascade that follows doesn't
-    leave orphan sources with stale analytics flags. Mirror transactions on the
-    pocket are deleted by the ``ON DELETE CASCADE`` on ``transactions.account_id``
-    when the account row is removed.
+    leave orphan sources with stale analytics flags. Child transactions are
+    removed by the ``ON DELETE CASCADE`` on ``transactions.account_id``;
+    ``Account.transactions`` uses ``passive_deletes=True`` so SQLAlchemy defers
+    to the DB cascade instead of trying to NULL the children.
 
     For non-pocket accounts ``unlink_all_for_pocket`` is a no-op (no links point
     at them by definition).
@@ -302,25 +303,7 @@ def delete_account(
     if account is None:
         raise HTTPException(status_code=404, detail="Account not found")
 
-    # Unlink any internal transfers pointing to this account before cascade
     InternalTransferService(db, user_id=user_id).unlink_all_for_pocket(account_id)
-
-    # Explicitly delete the account's transactions. The DB has ON DELETE CASCADE
-    # on transactions.account_id, but SQLAlchemy's default relationship behavior
-    # (no passive_deletes=True on Account.transactions) tries to NULL the
-    # children first, which violates the NOT NULL constraint. Bulk-delete them
-    # ourselves to mirror what the cascade would do.
-    #
-    # NOTE: This bulk delete bypasses ORM-level `before_delete` events on
-    # Transaction. All current Transaction children (transaction_links,
-    # internal_transfers, recurring_transaction refs, csv_import refs) rely on
-    # DB-level ON DELETE CASCADE / SET NULL, so this is safe today. If anyone
-    # later adds a Python-level event listener or cascade="delete-orphan" on
-    # Transaction, this path must switch to per-row deletion.
-    db.query(Transaction).filter(
-        Transaction.user_id == user_id,
-        Transaction.account_id == account_id,
-    ).delete(synchronize_session=False)
 
     db.delete(account)
     db.commit()
@@ -336,9 +319,8 @@ def delete_revolut_default_accounts(
     Permanently delete all "Revolut default" accounts for the current user.
     This is a hard delete - use with caution.
     """
-    from app.models import Transaction
     user_id = get_user_id(user_id)
-    
+
     # Find all revolut_default accounts for this user
     default_accounts = db.query(Account).filter(
         Account.user_id == user_id,
@@ -347,18 +329,12 @@ def delete_revolut_default_accounts(
             Account.external_id_hash.in_(blind_index_candidates("revolut_default")),
         )
     ).all()
-    
+
     deleted_count = 0
     for account in default_accounts:
-        # Delete associated transactions first (due to foreign key constraint)
-        db.query(Transaction).filter(
-            Transaction.user_id == user_id,
-            Transaction.account_id == account.id
-        ).delete()
-        # Then delete the account
         db.delete(account)
         deleted_count += 1
-    
+
     db.commit()
     
     return {

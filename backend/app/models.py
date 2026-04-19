@@ -59,7 +59,12 @@ class Account(Base):
     user = relationship("User", back_populates="accounts")
     logo = relationship("CompanyLogo", back_populates="accounts")
     bank_connection = relationship("BankConnection", back_populates="accounts")
-    transactions = relationship("Transaction", back_populates="account")
+    transactions = relationship(
+        "Transaction",
+        back_populates="account",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
     csv_imports = relationship("CsvImport", back_populates="account")
     balances = relationship("AccountBalance", back_populates="account")
     recurring_transactions = relationship("RecurringTransaction", back_populates="account")
