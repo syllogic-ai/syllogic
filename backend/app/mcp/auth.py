@@ -137,6 +137,10 @@ AS_JWKS_URI = os.environ.get(
     "MCP_OAUTH_JWKS_URI", "https://app.syllogic.ai/api/auth/jwks"
 )
 MCP_AUDIENCE = os.environ.get("MCP_OAUTH_AUDIENCE", "https://mcp.syllogic.ai/mcp")
+# Public server root (no path). RemoteAuthProvider uses this as base_url and
+# appends the MCP route on top when advertising the Protected Resource.
+# Keep it separate from MCP_AUDIENCE (which is the JWT `aud` claim value).
+MCP_PUBLIC_URL = os.environ.get("MCP_PUBLIC_URL", "https://mcp.syllogic.ai")
 
 
 class CompositeAuthProvider(AuthProvider):
