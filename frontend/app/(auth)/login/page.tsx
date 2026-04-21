@@ -79,6 +79,20 @@ function LoginPageContent() {
     }
   }, [prefillEmail, prefillPassword, setValue]);
 
+  // If the user landed here because an OAuth authorize request requires
+  // authentication, better-auth's oauth-provider passes the original
+  // authorize query (plus `exp` and `sig`) along. After successful sign-in
+  // we resume the OAuth flow by re-hitting /api/auth/oauth2/authorize with
+  // those same params. Otherwise we fall back to the dashboard.
+  const oauthResumeURL = useMemo(() => {
+    const hasOauthParams =
+      searchParams.has("client_id") &&
+      searchParams.has("response_type") &&
+      searchParams.has("redirect_uri");
+    if (!hasOauthParams) return null;
+    return `/api/auth/oauth2/authorize?${searchParams.toString()}`;
+  }, [searchParams]);
+
   const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
     setError(null);
@@ -91,6 +105,13 @@ function LoginPageContent() {
 
       if (result.error) {
         setError(result.error.message || "Failed to sign in");
+        return;
+      }
+
+      if (oauthResumeURL) {
+        // Full navigation so the browser follows the authorize redirect chain
+        // (consent page → client redirect_uri with code).
+        window.location.href = oauthResumeURL;
         return;
       }
 

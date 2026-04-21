@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -38,8 +38,9 @@ const registerSchema = z
 
 type RegisterFormData = z.infer<typeof registerSchema>;
 
-export default function RegisterPage() {
+function RegisterPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -50,6 +51,17 @@ export default function RegisterPage() {
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
   });
+
+  // If the user was bounced here mid-OAuth-authorize, resume the flow after
+  // successful sign-up instead of going to the dashboard.
+  const oauthResumeURL = useMemo(() => {
+    const hasOauthParams =
+      searchParams.has("client_id") &&
+      searchParams.has("response_type") &&
+      searchParams.has("redirect_uri");
+    if (!hasOauthParams) return null;
+    return `/api/auth/oauth2/authorize?${searchParams.toString()}`;
+  }, [searchParams]);
 
   const onSubmit = async (data: RegisterFormData) => {
     setIsLoading(true);
@@ -64,6 +76,11 @@ export default function RegisterPage() {
 
       if (result.error) {
         setError(result.error.message || "Failed to create account");
+        return;
+      }
+
+      if (oauthResumeURL) {
+        window.location.href = oauthResumeURL;
         return;
       }
 
@@ -157,5 +174,25 @@ export default function RegisterPage() {
         </form>
       </CardContent>
     </Card>
+  );
+}
+
+function RegisterPageFallback() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Create an account</CardTitle>
+        <CardDescription>Loading registration form...</CardDescription>
+      </CardHeader>
+      <CardContent />
+    </Card>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<RegisterPageFallback />}>
+      <RegisterPageContent />
+    </Suspense>
   );
 }
