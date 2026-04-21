@@ -7,13 +7,16 @@ from fastmcp.server.auth import RemoteAuthProvider
 from pydantic import AnyHttpUrl
 
 from app.db_helpers import get_mcp_user_id
-from app.mcp.auth import CompositeAuthProvider, AS_ISSUER, MCP_AUDIENCE
+from app.mcp.auth import CompositeAuthProvider, AS_ISSUER, MCP_PUBLIC_URL
 from app.mcp.tools import accounts, categories, transactions, analytics, recurring
 
 _auth = RemoteAuthProvider(
     token_verifier=CompositeAuthProvider(),
     authorization_servers=[AnyHttpUrl(AS_ISSUER)],
-    base_url=MCP_AUDIENCE,
+    # Server root (no /mcp path). FastMCP appends the route itself when
+    # advertising the Protected Resource, so passing "https://mcp.syllogic.ai/mcp"
+    # here produced a broken resource URL of "https://mcp.syllogic.ai/mcp/mcp".
+    base_url=MCP_PUBLIC_URL,
 )
 
 # Initialize FastMCP server
