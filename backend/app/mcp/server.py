@@ -78,6 +78,32 @@ Use `match_mode="word"` for merchant names to avoid false positives!
 When using `search_transactions`, ALWAYS check `has_more` in the response.
 If true, you MUST call again with page=2, 3, etc. until has_more=false.
 The `total_count` field tells you how many total results exist.
+
+## Pagination & sort
+
+All list/search tools accept:
+- `cursor` (opaque string) — preferred for paging through large result sets; pass
+  `next_cursor` from the previous response.
+- `sort_by`: one of `booked_at_desc` (default), `booked_at_asc`, `amount_desc`,
+  `amount_asc`, `abs_amount_desc`.
+- `account_id` — limit to a single account.
+
+## Audit filters
+
+- `list_transactions(uncategorized=True)` — only rows with no category at all.
+- `list_transactions(category_type="expense"|"income"|"transfer")` — filter by type.
+- `get_spending_by_category(include_uncategorized=True)` — include an
+  "Uncategorized" bucket with `merchant_count`.
+- `get_top_merchants(category_id=...)` or `get_top_merchants(uncategorized=True)` —
+  audit miscategorized or unassigned merchants.
+
+## Safe bulk updates
+
+`bulk_update_transaction_categories(dry_run=True)` returns what *would* change
+(`would_update_count`, `sample_changes`) without mutating. Hard cap: 2000 IDs
+per call. Response also includes `invalid_ids`, `not_found_ids`, and
+`skipped_already_in_category_ids` so the agent can narrate exactly what
+happened.
 """,
     auth=_auth,
 )

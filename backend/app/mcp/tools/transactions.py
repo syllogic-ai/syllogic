@@ -766,7 +766,7 @@ def bulk_update_transaction_categories(
                 "amount": float(t.amount),
                 "previous_category_name": t.category.name if t.category else None,
             }
-            for t in to_change[:10]
+            for t in sorted(to_change, key=lambda t: (t.booked_at, t.id))[:10]
         ]
 
         base_response = {
