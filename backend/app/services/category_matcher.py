@@ -133,6 +133,7 @@ class CategoryMatcher:
         self._keyword_rules: Optional[Dict[str, List[str]]] = None
         self._openai_client = None
         self._category_instructions_cache: Optional[List[str]] = None
+        self._account_cache: Optional[list] = None
 
         # Initialize with provided values or empty lists
         self.user_overrides = user_overrides or []
@@ -554,6 +555,36 @@ class CategoryMatcher:
                 lines.append(f"- {cat.name} — {desc}")
             else:
                 lines.append(f"- {cat.name}")
+        return "\n".join(lines)
+
+    def _load_accounts(self) -> list:
+        if self._account_cache is not None:
+            return self._account_cache
+        from app.models import Account  # local import if global causes circularity
+        accounts = (
+            self.db.query(Account)
+            .filter(Account.user_id == self.user_id, Account.is_active == True)
+            .all()
+        )
+        self._account_cache = accounts
+        return accounts
+
+    def _build_account_context(self) -> str:
+        accounts = self._account_cache if self._account_cache is not None else self._load_accounts()
+        if not accounts:
+            return ""
+        lines = ["Your accounts (transactions referencing these are internal transfers):"]
+        for acc in accounts:
+            identifiers = []
+            ext = (getattr(acc, "external_id", None) or "").strip()
+            if ext and len(ext) >= 4:
+                identifiers.append(f"ends in {ext[-4:]}")
+            patterns = getattr(acc, "alias_patterns", None) or []
+            if patterns:
+                quoted = ", ".join(f'"{p}"' for p in patterns)
+                identifiers.append(f"patterns: {quoted}")
+            suffix = f" ({'; '.join(identifiers)})" if identifiers else ""
+            lines.append(f"- {acc.name}{suffix}")
         return "\n".join(lines)
 
     def _calculate_llm_cost(self, input_tokens: int, output_tokens: int, model: str) -> float:

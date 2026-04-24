@@ -69,3 +69,25 @@ def test_prompt_includes_category_descriptions(monkeypatch, db_session):
     )
     prompt_text = captured["messages"][1]["content"]
     assert "Side Projects — Tools like Cloudflare" in prompt_text
+
+
+def test_account_context_empty_returns_empty_string():
+    m = CategoryMatcher.__new__(CategoryMatcher)
+    m._account_cache = []
+    assert m._build_account_context() == ""
+
+
+def test_account_context_with_last_four_and_patterns():
+    m = CategoryMatcher.__new__(CategoryMatcher)
+    m._account_cache = [
+        FakeAccount("ABN AMRO checking", external_id="NL91ABNA0417164300"),
+        FakeAccount(
+            "Revolut Pro",
+            external_id=None,
+            alias_patterns=["Apple Pay Top-Up by *1234", "Revo Pro"],
+        ),
+    ]
+    ctx = m._build_account_context()
+    assert "Your accounts" in ctx
+    assert "ABN AMRO checking (ends in 4300)" in ctx
+    assert 'Revolut Pro (patterns: "Apple Pay Top-Up by *1234", "Revo Pro")' in ctx
