@@ -173,3 +173,52 @@ def test_prompt_instructions_numbered_correctly_without_accounts(monkeypatch, db
     assert "4. If the transaction matches a user override" in prompt
     assert "5. Respond with ONLY the exact category name" in prompt
     assert '6. If no category fits well, respond with "UNKNOWN"' in prompt
+
+
+# ---------------------------------------------------------------------------
+# Task 8: Prompt budget degradation
+# ---------------------------------------------------------------------------
+
+def test_prompt_budget_degrades_descriptions_first():
+    m = CategoryMatcher.__new__(CategoryMatcher)
+    # Simulate oversized input: 30 categories each with a 200-char description.
+    cats = [FakeCategory(f"Cat{i}", "x" * 200) for i in range(30)]
+    m._account_cache = [FakeAccount("Acc", alias_patterns=["p1", "p2"])]
+    category_list, account_block = m._compose_prompt_context(cats)
+    assert sum(len(x) for x in (category_list, account_block)) <= 2000
+    # Descriptions dropped, but names always present
+    assert "Cat0" in category_list
+    assert "Cat29" in category_list
+
+
+# ---------------------------------------------------------------------------
+# Task 9: Feature flag
+# ---------------------------------------------------------------------------
+
+def test_feature_flag_disabled_falls_back_to_names_only(monkeypatch, db_session):
+    import app.services.category_matcher as cm_module
+    monkeypatch.setattr(cm_module, "ENRICHED_PROMPT_ENABLED", False)
+    captured = {}
+
+    _stub_response = type("R", (), {
+        "choices": [type("X", (), {"message": type("M", (), {"content": "UNKNOWN"})()})()],
+        "usage": type("U", (), {"prompt_tokens": 1, "completion_tokens": 1})(),
+    })
+
+    class StubClient:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kwargs):
+                    captured["messages"] = kwargs["messages"]
+                    return _stub_response
+
+    m = cm_module.CategoryMatcher(db=db_session, user_id="ff-user")
+    monkeypatch.setattr(m, "_get_openai_client", lambda: StubClient())
+    monkeypatch.setattr(m, "_load_categories", lambda: {})
+    m._account_cache = [FakeAccount("Acc", alias_patterns=["p"])]
+    cats = [FakeCategory("Food", "Description here")]
+    m.match_category_llm(description="x", merchant="y", amount=-1.0, available_categories=cats)
+    prompt = captured["messages"][1]["content"]
+    assert "Description here" not in prompt
+    assert "Your accounts" not in prompt

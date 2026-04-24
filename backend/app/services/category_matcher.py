@@ -19,6 +19,10 @@ from app.db_helpers import get_user_id
 # Configure logger
 logger = logging.getLogger(__name__)
 
+# Feature flag: enrich LLM prompt with category descriptions and account context.
+# Disable by setting CATEGORIZER_ENRICHED_PROMPT=false in the environment.
+ENRICHED_PROMPT_ENABLED = os.getenv("CATEGORIZER_ENRICHED_PROMPT", "true").lower() == "true"
+
 
 @dataclass
 class CategoryMatchResult:
@@ -587,6 +591,46 @@ class CategoryMatcher:
             lines.append(f"- {acc.name}{suffix}")
         return "\n".join(lines)
 
+    PROMPT_CONTEXT_BUDGET = 2000
+
+    def _compose_prompt_context(self, relevant_categories) -> tuple[str, str]:
+        """Return (category_list, account_block) sized to fit PROMPT_CONTEXT_BUDGET.
+
+        Degradation order when over budget:
+        1. Truncate each category description to 200 chars (default).
+        2. Drop alias_patterns from accounts (keep name + ends-in).
+        3. Drop all descriptions; names only.
+        """
+        category_list = self._render_category_list(relevant_categories)
+        account_block = self._build_account_context()
+        total = len(category_list) + len(account_block)
+        if total <= self.PROMPT_CONTEXT_BUDGET:
+            return category_list, f"\n\n{account_block}\n" if account_block else ""
+
+        # Step 2: drop alias_patterns
+        if self._account_cache:
+            thin_accounts = []
+            for acc in self._account_cache:
+                identifiers = []
+                ext = (getattr(acc, "external_id", None) or "").strip()
+                if ext and len(ext) >= 4:
+                    identifiers.append(f"ends in {ext[-4:]}")
+                suffix = f" ({'; '.join(identifiers)})" if identifiers else ""
+                thin_accounts.append(f"- {acc.name}{suffix}")
+            thin_account_block = (
+                "Your accounts (transactions referencing these are internal transfers):\n"
+                + "\n".join(thin_accounts)
+            )
+        else:
+            thin_account_block = ""
+        total = len(category_list) + len(thin_account_block)
+        if total <= self.PROMPT_CONTEXT_BUDGET:
+            return category_list, f"\n\n{thin_account_block}\n" if thin_account_block else ""
+
+        # Step 3: drop all descriptions
+        name_only = "\n".join(f"- {c.name}" for c in relevant_categories)
+        return name_only, f"\n\n{thin_account_block}\n" if thin_account_block else ""
+
     def _calculate_llm_cost(self, input_tokens: int, output_tokens: int, model: str) -> float:
         """
         Calculate the cost of an LLM API call.
@@ -780,8 +824,20 @@ class CategoryMatcher:
             logger.warning(f"No relevant categories found for {transaction_type_str} transaction")
             return None
 
-        # Build category list for prompt
-        category_list = self._render_category_list(relevant_categories)
+        # Build category list and account block for prompt
+        if ENRICHED_PROMPT_ENABLED:
+            category_list, account_block = self._compose_prompt_context(relevant_categories)
+        else:
+            category_list = "\n".join(f"- {c.name}" for c in relevant_categories)
+            account_block = ""
+
+        logger.debug(
+            "categorizer.prompt_context chars: categories=%d accounts=%d total=%d",
+            len(category_list), len(account_block),
+            len(category_list) + len(account_block),
+        )
+        if len(category_list) + len(account_block) >= self.PROMPT_CONTEXT_BUDGET:
+            logger.info("categorizer.prompt_budget_hit user_id=%s", self.user_id)
 
         # Build enhanced prompt with additional instructions and user overrides
         instructions_text = ""
@@ -798,13 +854,11 @@ class CategoryMatcher:
                 overrides_text += f"- Description: '{desc}', Merchant: '{merch}' → Category: '{cat}'\n"
             overrides_text += "\n"
 
-        # Build account context block and transfer rule
-        account_context = self._build_account_context()
-        account_block = f"\n\n{account_context}\n" if account_context else ""
+        # Build transfer rule (only when account context is present)
         transfer_rule = (
             "If the transaction description, merchant, or counterparty references any of the "
             "accounts listed in \"Your accounts\", treat it as an internal transfer and pick the "
-            "transfer category." if account_context else ""
+            "transfer category." if ENRICHED_PROMPT_ENABLED and account_block else ""
         )
 
         # Build numbered instructions list dynamically so numbering is always correct
@@ -957,8 +1011,20 @@ Category name:"""
             logger.warning(f"No relevant categories found for {transaction_type_str} transaction")
             return None, 0, 0.0
 
-        # Build category list for prompt
-        category_list = self._render_category_list(relevant_categories)
+        # Build category list and account block for prompt
+        if ENRICHED_PROMPT_ENABLED:
+            category_list, account_block = self._compose_prompt_context(relevant_categories)
+        else:
+            category_list = "\n".join(f"- {c.name}" for c in relevant_categories)
+            account_block = ""
+
+        logger.debug(
+            "categorizer.prompt_context chars: categories=%d accounts=%d total=%d",
+            len(category_list), len(account_block),
+            len(category_list) + len(account_block),
+        )
+        if len(category_list) + len(account_block) >= self.PROMPT_CONTEXT_BUDGET:
+            logger.info("categorizer.prompt_budget_hit user_id=%s", self.user_id)
 
         # Build enhanced prompt with additional instructions and user overrides
         instructions_text = ""
@@ -975,13 +1041,11 @@ Category name:"""
                 overrides_text += f"- Description: '{desc}', Merchant: '{merch}' → Category: '{cat}'\n"
             overrides_text += "\n"
 
-        # Build account context block and transfer rule
-        account_context = self._build_account_context()
-        account_block = f"\n\n{account_context}\n" if account_context else ""
+        # Build transfer rule (only when account context is present)
         transfer_rule = (
             "If the transaction description, merchant, or counterparty references any of the "
             "accounts listed in \"Your accounts\", treat it as an internal transfer and pick the "
-            "transfer category." if account_context else ""
+            "transfer category." if ENRICHED_PROMPT_ENABLED and account_block else ""
         )
 
         # Build numbered instructions list dynamically so numbering is always correct
