@@ -39,6 +39,7 @@ def list_accounts(user_id: str, include_inactive: bool = False) -> list[dict]:
                 "starting_balance": float(account.starting_balance) if account.starting_balance else 0,
                 "functional_balance": float(account.functional_balance) if account.functional_balance else None,
                 "is_active": account.is_active,
+                "alias_patterns": account.alias_patterns or [],
                 "last_synced_at": account.last_synced_at.isoformat() if account.last_synced_at else None,
                 "created_at": account.created_at.isoformat() if account.created_at else None,
             }
@@ -82,6 +83,7 @@ def get_account(user_id: str, account_id: str) -> dict | None:
             "starting_balance": float(account.starting_balance) if account.starting_balance else 0,
             "functional_balance": float(account.functional_balance) if account.functional_balance else None,
             "is_active": account.is_active,
+            "alias_patterns": account.alias_patterns or [],
             "last_synced_at": account.last_synced_at.isoformat() if account.last_synced_at else None,
             "created_at": account.created_at.isoformat() if account.created_at else None,
             "updated_at": account.updated_at.isoformat() if account.updated_at else None,
