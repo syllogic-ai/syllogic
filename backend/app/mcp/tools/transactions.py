@@ -687,7 +687,8 @@ def update_transaction_category(
 def bulk_update_transaction_categories(
     user_id: str,
     category_id: str,
-    transaction_ids: list[str]
+    transaction_ids: list[str],
+    dry_run: bool = False,
 ) -> dict:
     """
     Bulk update category for multiple transactions.
@@ -695,13 +696,23 @@ def bulk_update_transaction_categories(
     Args:
         user_id: The user's ID
         category_id: The category ID to assign
-        transaction_ids: List of transaction IDs to update
+        transaction_ids: List of transaction IDs to update (max 2000)
+        dry_run: If True, preview the change without committing
 
     Returns:
-        Dict with success, updated_count, and any errors
+        Dict with success flag and:
+        - updated_count (or would_update_count if dry_run)
+        - requested_count, invalid_ids, not_found_ids,
+          skipped_already_in_category_ids, sample_changes
     """
+    MAX_IDS = 2000
     if not transaction_ids:
         return {"success": False, "error": "Must provide transaction_ids"}
+    if len(transaction_ids) > MAX_IDS:
+        return {
+            "success": False,
+            "error": f"Too many transaction_ids ({len(transaction_ids)}). Max {MAX_IDS} per call.",
+        }
 
     cat_uuid = validate_uuid(category_id)
     if not cat_uuid:
@@ -711,44 +722,79 @@ def bulk_update_transaction_categories(
         # Verify category belongs to user
         category = db.query(Category).filter(
             Category.id == cat_uuid,
-            Category.user_id == user_id
+            Category.user_id == user_id,
         ).first()
 
         if not category:
             return {"success": False, "error": "Category not found"}
 
-        try:
-            valid_uuids = []
-            invalid_ids = []
-            for tid in transaction_ids:
-                uuid = validate_uuid(tid)
-                if uuid:
-                    valid_uuids.append(uuid)
-                else:
-                    invalid_ids.append(tid)
+        valid_uuids = []
+        invalid_ids = []
+        for tid in transaction_ids:
+            u = validate_uuid(tid)
+            if u:
+                valid_uuids.append(u)
+            else:
+                invalid_ids.append(tid)
 
-            if not valid_uuids:
-                return {"success": False, "error": "No valid transaction IDs provided"}
-
-            result = db.query(Transaction).filter(
+        found = (
+            db.query(Transaction)
+            .filter(
                 Transaction.user_id == user_id,
-                Transaction.id.in_(valid_uuids)
-            ).update(
-                {Transaction.category_id: cat_uuid},
-                synchronize_session=False
+                Transaction.id.in_(valid_uuids),
             )
-            db.commit()
+            .options(joinedload(Transaction.category))
+            .all()
+        ) if valid_uuids else []
 
-            response = {
-                "success": True,
-                "updated_count": result,
-                "category_name": category.name,
-                "requested_count": len(transaction_ids)
+        found_by_id = {str(t.id): t for t in found}
+        not_found_ids = [str(u) for u in valid_uuids if str(u) not in found_by_id]
+
+        to_change = []
+        skipped_already = []
+        for t in found:
+            if t.category_id == cat_uuid:
+                skipped_already.append(str(t.id))
+            else:
+                to_change.append(t)
+
+        sample_changes = [
+            {
+                "id": str(t.id),
+                "description": t.description,
+                "merchant": t.merchant,
+                "amount": float(t.amount),
+                "previous_category_name": t.category.name if t.category else None,
             }
-            if invalid_ids:
-                response["invalid_ids"] = invalid_ids
-            return response
+            for t in to_change[:10]
+        ]
 
+        base_response = {
+            "success": True,
+            "category_name": category.name,
+            "requested_count": len(transaction_ids),
+            "invalid_ids": invalid_ids,
+            "not_found_ids": not_found_ids,
+            "skipped_already_in_category_ids": skipped_already,
+            "sample_changes": sample_changes,
+        }
+
+        if dry_run:
+            base_response["would_update_count"] = len(to_change)
+            return base_response
+
+        try:
+            change_uuids = [t.id for t in to_change]
+            updated = 0
+            if change_uuids:
+                updated = db.query(Transaction).filter(
+                    Transaction.user_id == user_id,
+                    Transaction.id.in_(change_uuids),
+                ).update({Transaction.category_id: cat_uuid}, synchronize_session=False)
+                db.commit()
         except Exception as e:
             db.rollback()
             return {"success": False, "error": f"Database error: {str(e)}"}
+
+        base_response["updated_count"] = updated
+        return base_response

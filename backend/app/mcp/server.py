@@ -399,18 +399,23 @@ def update_transaction_category(
 def bulk_update_transaction_categories(
     category_id: str,
     transaction_ids: list[str],
-    user_id: str | None = None
+    dry_run: bool = False,
+    user_id: str | None = None,
 ) -> dict:
     """
     Bulk update category for multiple transactions.
 
     Args:
         category_id: The category ID to assign to all transactions
-        transaction_ids: List of transaction IDs to update
+        transaction_ids: List of transaction IDs to update (max 2000)
+        dry_run: If True, preview what would change without committing (default: False)
         user_id: The user's ID (optional, defaults to configured user)
 
     Returns:
-        Dict with success status, updated_count, and any errors
+        Dict with success status and:
+        - updated_count (or would_update_count if dry_run=True)
+        - requested_count, invalid_ids, not_found_ids,
+          skipped_already_in_category_ids, sample_changes (up to 10)
 
     Recommended workflow using search_transactions_multi:
         # Find all grocery store transactions not yet categorized
@@ -420,14 +425,20 @@ def bulk_update_transaction_categories(
             match_mode="word",
             ids_only=True
         )
-        # Update them all at once
+        # Preview first
+        bulk_update_transaction_categories(
+            category_id="<groceries-id>",
+            transaction_ids=result["transaction_ids"],
+            dry_run=True,
+        )
+        # Then commit
         bulk_update_transaction_categories(
             category_id="<groceries-id>",
             transaction_ids=result["transaction_ids"]
         )
     """
     return transactions.bulk_update_transaction_categories(
-        get_mcp_user_id(user_id), category_id, transaction_ids
+        get_mcp_user_id(user_id), category_id, transaction_ids, dry_run
     )
 
 
