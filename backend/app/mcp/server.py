@@ -440,7 +440,8 @@ def get_spending_by_category(
     from_date: str | None = None,
     to_date: str | None = None,
     account_id: str | None = None,
-    user_id: str | None = None
+    include_uncategorized: bool = False,
+    user_id: str | None = None,
 ) -> list[dict]:
     """
     Get spending breakdown by category.
@@ -449,12 +450,17 @@ def get_spending_by_category(
         from_date: Start date in ISO format YYYY-MM-DD (optional)
         to_date: End date in ISO format YYYY-MM-DD (optional)
         account_id: Filter by account ID (optional)
+        include_uncategorized: If True, include an "Uncategorized" bucket for
+            transactions with no category assigned (default: False)
         user_id: The user's ID (optional, defaults to configured user)
 
     Returns:
-        List of categories with total spending amount and transaction count
+        List of categories with total spending amount, transaction count, and
+        merchant_count
     """
-    return analytics.get_spending_by_category(get_mcp_user_id(user_id), from_date, to_date, account_id)
+    return analytics.get_spending_by_category(
+        get_mcp_user_id(user_id), from_date, to_date, account_id, include_uncategorized
+    )
 
 
 @mcp.tool
