@@ -396,7 +396,9 @@ def get_top_merchants(
     user_id: str,
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
-    limit: int = 10
+    limit: int = 10,
+    category_id: Optional[str] = None,
+    uncategorized: bool = False,
 ) -> list[dict]:
     """
     Get top merchants by total spending.
@@ -406,10 +408,18 @@ def get_top_merchants(
         from_date: Start date in ISO format (optional)
         to_date: End date in ISO format (optional)
         limit: Max number of merchants (default: 10, max: 50)
+        category_id: Filter to transactions in this category (optional).
+            Mutually exclusive with uncategorized.
+        uncategorized: If True, return only transactions with no category.
+            Mutually exclusive with category_id.
 
     Returns:
         List of merchants with total spending and transaction count
     """
+    if category_id and uncategorized:
+        raise ValueError("category_id and uncategorized are mutually exclusive")
+
+    cat_uuid = validate_uuid(category_id) if category_id else None
     limit = min(max(1, limit), 50)
 
     # Validate parameters
@@ -428,6 +438,23 @@ def get_top_merchants(
             Transaction.merchant != "",
             Transaction.include_in_analytics == True
         )
+
+        if cat_uuid:
+            query = query.filter(
+                or_(
+                    Transaction.category_id == cat_uuid,
+                    and_(
+                        Transaction.category_id.is_(None),
+                        Transaction.category_system_id == cat_uuid,
+                    ),
+                )
+            )
+
+        if uncategorized:
+            query = query.filter(
+                Transaction.category_id.is_(None),
+                Transaction.category_system_id.is_(None),
+            )
 
         if from_dt:
             query = query.filter(Transaction.booked_at >= from_dt)

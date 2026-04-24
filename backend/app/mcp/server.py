@@ -530,7 +530,9 @@ def get_top_merchants(
     from_date: str | None = None,
     to_date: str | None = None,
     limit: int = 10,
-    user_id: str | None = None
+    category_id: str | None = None,
+    uncategorized: bool = False,
+    user_id: str | None = None,
 ) -> list[dict]:
     """
     Get top merchants by total spending.
@@ -539,12 +541,18 @@ def get_top_merchants(
         from_date: Start date in ISO format YYYY-MM-DD (optional)
         to_date: End date in ISO format YYYY-MM-DD (optional)
         limit: Max number of merchants (default: 10, max: 50)
+        category_id: Filter to transactions in this category (optional).
+            Mutually exclusive with uncategorized.
+        uncategorized: If True, return only transactions with no category.
+            Mutually exclusive with category_id.
         user_id: The user's ID (optional, defaults to configured user)
 
     Returns:
         List of merchants with total spending and transaction count
     """
-    return analytics.get_top_merchants(get_mcp_user_id(user_id), from_date, to_date, limit)
+    return analytics.get_top_merchants(
+        get_mcp_user_id(user_id), from_date, to_date, limit, category_id, uncategorized
+    )
 
 
 # ============================================================================
