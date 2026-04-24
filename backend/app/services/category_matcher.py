@@ -804,8 +804,23 @@ class CategoryMatcher:
         transfer_rule = (
             "If the transaction description, merchant, or counterparty references any of the "
             "accounts listed in \"Your accounts\", treat it as an internal transfer and pick the "
-            "transfer category.\n" if account_context else ""
+            "transfer category." if account_context else ""
         )
+
+        # Build numbered instructions list dynamically so numbering is always correct
+        instructions = [
+            "Analyze the transaction description and merchant name",
+            "Select the MOST SPECIFIC category that matches",
+        ]
+        if transfer_rule:
+            instructions.append(transfer_rule.rstrip())
+        instructions += [
+            "Follow any user-specific guidelines and override patterns provided above",
+            "If the transaction matches a user override pattern, use that category",
+            "Respond with ONLY the exact category name from the list",
+            'If no category fits well, respond with "UNKNOWN"',
+        ]
+        instructions_block = "\n".join(f"{i+1}. {step}" for i, step in enumerate(instructions))
 
         # Build enhanced prompt
         prompt = f"""Categorize this financial transaction by selecting the most appropriate category.
@@ -820,12 +835,7 @@ Available categories:
 {category_list}
 {account_block}{overrides_text}{instructions_text}
 Instructions:
-1. Analyze the transaction description and merchant name
-2. Select the MOST SPECIFIC category that matches
-3. {transfer_rule}4. Follow any user-specific guidelines and override patterns provided above
-5. If the transaction matches a user override pattern, use that category
-6. Respond with ONLY the exact category name from the list
-7. If no category fits well, respond with "UNKNOWN"
+{instructions_block}
 
 Category name:"""
 
@@ -971,8 +981,23 @@ Category name:"""
         transfer_rule = (
             "If the transaction description, merchant, or counterparty references any of the "
             "accounts listed in \"Your accounts\", treat it as an internal transfer and pick the "
-            "transfer category.\n" if account_context else ""
+            "transfer category." if account_context else ""
         )
+
+        # Build numbered instructions list dynamically so numbering is always correct
+        instructions = [
+            "Analyze the transaction description and merchant name",
+            "Select the MOST SPECIFIC category that matches",
+        ]
+        if transfer_rule:
+            instructions.append(transfer_rule.rstrip())
+        instructions += [
+            "Follow any user-specific guidelines and override patterns provided above",
+            "If the transaction matches a user override pattern, use that category",
+            "Respond with ONLY the exact category name from the list",
+            'If no category fits well, respond with "UNKNOWN"',
+        ]
+        instructions_block = "\n".join(f"{i+1}. {step}" for i, step in enumerate(instructions))
 
         # Build enhanced prompt
         prompt = f"""Categorize this financial transaction by selecting the most appropriate category.
@@ -987,12 +1012,7 @@ Available categories:
 {category_list}
 {account_block}{overrides_text}{instructions_text}
 Instructions:
-1. Analyze the transaction description and merchant name
-2. Select the MOST SPECIFIC category that matches
-3. {transfer_rule}4. Follow any user-specific guidelines and override patterns provided above
-5. If the transaction matches a user override pattern, use that category
-6. Respond with ONLY the exact category name from the list
-7. If no category fits well, respond with "UNKNOWN"
+{instructions_block}
 
 Category name:"""
 

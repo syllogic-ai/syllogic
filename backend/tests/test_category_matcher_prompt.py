@@ -127,3 +127,49 @@ def test_prompt_includes_account_context_and_transfer_rule(monkeypatch, db_sessi
     assert "Your accounts" in prompt
     assert "Apple Pay Top-Up by *1234" in prompt
     assert "internal transfer" in prompt.lower()
+
+
+def test_prompt_instructions_numbered_correctly_without_accounts(monkeypatch, db_session):
+    import app.services.category_matcher as cm_module
+    captured = {}
+
+    _stub_response = type("R", (), {
+        "choices": [type("X", (), {"message": type("M", (), {"content": "UNKNOWN"})()})()],
+        "usage": type("U", (), {"prompt_tokens": 1, "completion_tokens": 1})(),
+    })
+
+    class StubClient:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kwargs):
+                    captured["messages"] = kwargs["messages"]
+                    return _stub_response
+
+    m = cm_module.CategoryMatcher(db=db_session, user_id="no-acct-user")
+    monkeypatch.setattr(m, "_get_openai_client", lambda: StubClient())
+    monkeypatch.setattr(m, "_load_categories", lambda: {})
+    # Explicitly set no accounts so transfer_rule is empty
+    m._account_cache = []
+
+    cats = [FakeCategory("Groceries", "Food and drink", category_type="expense")]
+    m.match_category_llm(
+        description="ALBERT HEIJN 1234",
+        merchant="Albert Heijn",
+        amount=-15.0,
+        available_categories=cats,
+    )
+    prompt = captured["messages"][1]["content"]
+
+    # No account context should appear
+    assert "Your accounts" not in prompt
+
+    # The merged "3. 4." pattern must not appear anywhere
+    assert "3. 4." not in prompt
+
+    # Without accounts, the list is 6 items (no transfer rule injected)
+    # Items 3 and 4 should be the follow-up instructions, not a blank + merged line
+    assert "3. Follow any user-specific guidelines" in prompt
+    assert "4. If the transaction matches a user override" in prompt
+    assert "5. Respond with ONLY the exact category name" in prompt
+    assert '6. If no category fits well, respond with "UNKNOWN"' in prompt
