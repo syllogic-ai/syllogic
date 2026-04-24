@@ -124,3 +124,26 @@ def test_booked_at_asc_cursor_pagination_with_ties(user_with_tied_booked_at):
     assert len(collected_ids) == 7, (
         f"cursor walk skipped rows; got {len(collected_ids)}/7: {collected_ids}"
     )
+
+
+def test_list_transactions_cursor_round_trip(seeded_user):
+    user, _, _, _ = seeded_user
+    page1 = tx_tools.list_transactions(user_id=user.id, limit=4, sort_by="booked_at_desc")
+    assert len(page1["transactions"]) == 4
+    assert page1["next_cursor"] is not None
+
+    page2 = tx_tools.list_transactions(
+        user_id=user.id, limit=4, sort_by="booked_at_desc", cursor=page1["next_cursor"]
+    )
+    assert len(page2["transactions"]) == 4
+
+    ids_page1 = {t["id"] for t in page1["transactions"]}
+    ids_page2 = {t["id"] for t in page2["transactions"]}
+    assert ids_page1.isdisjoint(ids_page2), "Pages must not overlap"
+
+    page3 = tx_tools.list_transactions(
+        user_id=user.id, limit=4, sort_by="booked_at_desc", cursor=page2["next_cursor"]
+    )
+    # Total 10 rows, 4+4+2 = 10, final page returns fewer than limit → no next_cursor
+    assert len(page3["transactions"]) == 2
+    assert page3["next_cursor"] is None
