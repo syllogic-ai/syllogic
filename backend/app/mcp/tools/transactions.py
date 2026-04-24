@@ -574,6 +574,8 @@ def search_transactions_multi(
                     Transaction.user_id == user_id,
                     _build_search_filter(q_str, match_mode)
                 )
+                if account_uuid:
+                    q_filter = and_(q_filter, Transaction.account_id == account_uuid)
                 if exclude_cat_uuid:
                     q_filter = and_(
                         q_filter,
@@ -586,7 +588,7 @@ def search_transactions_multi(
 
         result = {
             "total_count": total_count,
-            "capped": len(transactions_rows) < total_count,
+            "capped": (not cursor_mode) and (len(transactions_rows) >= max_results) and (total_count > max_results),
             "query_counts": query_counts,
             "next_cursor": next_cursor,
         }
