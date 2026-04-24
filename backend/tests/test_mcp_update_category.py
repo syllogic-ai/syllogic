@@ -146,13 +146,26 @@ def test_update_category_rejects_foreign_user() -> None:
         _cleanup(cat_id)
 
 
-def test_update_category_rejects_system_category() -> None:
+def test_update_category_allows_system_category() -> None:
+    """System categories (e.g. Internal Transfer) accept description and
+    categorization_instructions updates — those fields are user-tailored
+    context, not part of the category's structural identity."""
     user_id, cat_id = _seed_category(is_system=True)
     try:
-        result = update_category(user_id, cat_id, description="x")
-        assert result["success"] is False
-        assert "system" in result["error"].lower()
-        print("✓ update_category refuses to modify system categories")
+        result = update_category(
+            user_id,
+            cat_id,
+            description="Money moved between my accounts",
+            categorization_instructions="Treat as Internal Transfer when IBAN belongs to me.",
+        )
+        assert result["success"] is True, result
+        assert result["category"]["is_system"] is True
+        assert result["category"]["description"] == "Money moved between my accounts"
+        assert (
+            result["category"]["categorization_instructions"]
+            == "Treat as Internal Transfer when IBAN belongs to me."
+        )
+        print("✓ update_category allows description/instructions on system categories")
     finally:
         _cleanup(cat_id)
 
@@ -164,5 +177,5 @@ if __name__ == "__main__":
     test_update_category_requires_at_least_one_field()
     test_update_category_rejects_invalid_uuid()
     test_update_category_rejects_foreign_user()
-    test_update_category_rejects_system_category()
+    test_update_category_allows_system_category()
     print("All update_category tests passed.")

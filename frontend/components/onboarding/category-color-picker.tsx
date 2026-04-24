@@ -12,9 +12,10 @@ import { Button } from "@/components/ui/button";
 interface CategoryColorPickerProps {
   value: string;
   onChange: (color: string) => void;
+  disabled?: boolean;
 }
 
-export function CategoryColorPicker({ value, onChange }: CategoryColorPickerProps) {
+export function CategoryColorPicker({ value, onChange, disabled = false }: CategoryColorPickerProps) {
   return (
     <Popover>
       <PopoverTrigger
@@ -23,6 +24,7 @@ export function CategoryColorPicker({ value, onChange }: CategoryColorPickerProp
             type="button"
             variant="outline"
             className="h-8 w-8 p-0"
+            disabled={disabled}
           >
             <div
               className="h-5 w-5 rounded-full"

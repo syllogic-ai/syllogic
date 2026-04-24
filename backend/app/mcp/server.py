@@ -188,7 +188,9 @@ def update_category(
     is under €5") so that future AI categorization applies the same rules.
 
     Only provided fields are written. Pass an empty string ("") to explicitly
-    clear a field. System categories cannot be updated.
+    clear a field. System categories (e.g. Internal Transfer, External
+    Transfer) are editable via this tool — description and
+    categorization_instructions are user-tailored context.
 
     Args:
         category_id: The category's ID

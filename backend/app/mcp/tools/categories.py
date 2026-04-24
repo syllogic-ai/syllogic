@@ -92,7 +92,9 @@ def update_category(
     Used by agents to persist learned categorization context so that the AI
     can apply consistent rules on future transactions. Only the provided
     fields are updated; omitted fields are left untouched. Pass an empty
-    string to explicitly clear a field.
+    string to explicitly clear a field. System categories are editable here
+    because description/instructions are user-tailored context, not
+    structural identity.
 
     Args:
         user_id: The user's ID
@@ -121,9 +123,6 @@ def update_category(
 
         if not category:
             return {"success": False, "error": "Category not found"}
-
-        if category.is_system:
-            return {"success": False, "error": "Cannot update system categories"}
 
         try:
             if description is not None:
