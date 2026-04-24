@@ -629,7 +629,15 @@ class CategoryMatcher:
 
         # Step 3: drop all descriptions
         name_only = "\n".join(f"- {c.name}" for c in relevant_categories)
-        return name_only, f"\n\n{thin_account_block}\n" if thin_account_block else ""
+        if len(name_only) + len(thin_account_block) <= self.PROMPT_CONTEXT_BUDGET:
+            return name_only, f"\n\n{thin_account_block}\n" if thin_account_block else ""
+
+        # Step 4: drop account block entirely
+        if len(name_only) <= self.PROMPT_CONTEXT_BUDGET:
+            return name_only, ""
+
+        # Step 5: category names alone still exceed budget — truncate to hard limit
+        return name_only[: self.PROMPT_CONTEXT_BUDGET], ""
 
     def _calculate_llm_cost(self, input_tokens: int, output_tokens: int, model: str) -> float:
         """
@@ -836,7 +844,7 @@ class CategoryMatcher:
             len(category_list), len(account_block),
             len(category_list) + len(account_block),
         )
-        if len(category_list) + len(account_block) >= self.PROMPT_CONTEXT_BUDGET:
+        if len(category_list) + len(account_block) > self.PROMPT_CONTEXT_BUDGET:
             logger.info("categorizer.prompt_budget_hit user_id=%s", self.user_id)
 
         # Build enhanced prompt with additional instructions and user overrides
@@ -1023,7 +1031,7 @@ Category name:"""
             len(category_list), len(account_block),
             len(category_list) + len(account_block),
         )
-        if len(category_list) + len(account_block) >= self.PROMPT_CONTEXT_BUDGET:
+        if len(category_list) + len(account_block) > self.PROMPT_CONTEXT_BUDGET:
             logger.info("categorizer.prompt_budget_hit user_id=%s", self.user_id)
 
         # Build enhanced prompt with additional instructions and user overrides

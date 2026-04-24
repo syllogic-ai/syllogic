@@ -191,6 +191,27 @@ def test_prompt_budget_degrades_descriptions_first():
     assert "Cat29" in category_list
 
 
+def test_prompt_budget_stage4_drops_account_block_when_still_oversized():
+    """Stage-4: when name_only + thin_account_block still exceeds the budget,
+    the account block must be dropped entirely so the output is always <= 2000 chars.
+    """
+    m = CategoryMatcher.__new__(CategoryMatcher)
+    # 100 categories with long names → name_only alone approaches the budget
+    cats = [FakeCategory(f"Category With A Very Long Name {i:03d}") for i in range(100)]
+    # 50 accounts → thin_account_block adds several hundred characters
+    m._account_cache = [
+        FakeAccount(f"Account Bank Name {j:02d}", external_id=f"NL91ABNA{j:08d}")
+        for j in range(50)
+    ]
+    category_list, account_block = m._compose_prompt_context(cats)
+    total = sum(len(x) for x in (category_list, account_block))
+    assert total <= 2000, (
+        f"Output exceeded budget ({total} chars); stage-4 fallback not applied"
+    )
+    # Category names must still be present
+    assert "Category With A Very Long Name 000" in category_list
+
+
 # ---------------------------------------------------------------------------
 # Task 9: Feature flag
 # ---------------------------------------------------------------------------
