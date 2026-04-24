@@ -57,8 +57,8 @@ export const auth = betterAuth({
     }),
     oauthProvider({
       scopes: ["mcp:access"],
-      accessTokenExpiresIn: 60 * 60, // 1 hour
-      refreshTokenExpiresIn: 60 * 60 * 24 * 30, // 30 days
+      accessTokenExpiresIn: 60 * 60 * 24 * 30, // 30 days
+      refreshTokenExpiresIn: 60 * 60 * 24 * 90, // 90 days
       allowDynamicClientRegistration: true,
       allowUnauthenticatedClientRegistration: true,
       loginPage: "/login",
@@ -90,8 +90,8 @@ export const auth = betterAuth({
     requireEmailVerification: false,
   },
   session: {
-    expiresIn: 60 * 60 * 24, // 24 hours - appropriate for financial app security
-    updateAge: 60 * 60, // 1 hour
+    expiresIn: 60 * 60 * 24 * 30, // 30 days — must outlive OAuth access token TTL
+    updateAge: 60 * 60 * 24, // 1 day
     cookieCache: {
       enabled: false,
       maxAge: 5 * 60, // 5 minutes
