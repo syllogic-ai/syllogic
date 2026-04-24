@@ -14,7 +14,7 @@ jobs:
     
     services:
       postgres:
-        image: postgres:16-alpine
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: financeuser
           POSTGRES_PASSWORD: financepass
