@@ -110,22 +110,28 @@ class CategoryEmbeddingService:
         client = self._get_client()
         if client is None:
             return []
+        # `dimensions` is only supported by text-embedding-3* models. Older
+        # models (e.g. text-embedding-ada-002) 400 if we pass it. We still
+        # validate vector length after the call so a mismatch can't slip into
+        # the vector(1536) column either way.
+        extra: dict = (
+            {"dimensions": EMBEDDING_DIMENSIONS}
+            if EMBEDDING_MODEL.startswith("text-embedding-3")
+            else {}
+        )
         try:
-            # Pin dimensions to the DB vector column width. Without this,
-            # swapping EMBEDDING_MODEL (e.g. to text-embedding-3-large, native
-            # 3072 dims) would produce vectors that don't fit vector(1536) and
-            # silently corrupt categorization.
             response = client.embeddings.create(
                 model=EMBEDDING_MODEL,
                 input=list(texts),
-                dimensions=EMBEDDING_DIMENSIONS,
+                **extra,
             )
             vectors = [d.embedding for d in response.data]
             for v in vectors:
                 if len(v) != EMBEDDING_DIMENSIONS:
                     logger.error(
                         f"Embedding dimension mismatch: got {len(v)}, expected "
-                        f"{EMBEDDING_DIMENSIONS}; refusing to return vectors"
+                        f"{EMBEDDING_DIMENSIONS} for model {EMBEDDING_MODEL!r}; "
+                        f"refusing to return vectors"
                     )
                     return []
             return vectors
