@@ -1,6 +1,7 @@
 """
 MCP (Model Context Protocol) server for Syllogic.
-Provides read-only access to financial data with one write operation (update transaction category).
+Provides read-only access to financial data with write operations for
+transaction categorization and category metadata.
 
 Usage:
     from app.mcp.server import mcp
@@ -15,6 +16,7 @@ Tools available:
         - list_categories
         - get_category
         - get_category_tree
+        - update_category (WRITE)
 
     Transactions:
         - list_transactions

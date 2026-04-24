@@ -36,7 +36,7 @@ The `user_id` parameter is optional on all tools but must match the authenticate
 
 ## Available functionality
 - **Accounts**: List, view, and check balance history
-- **Categories**: List, view, and get category tree structure
+- **Categories**: List, view, get tree structure, and update description/categorization_instructions
 - **Transactions**: List, search, view, and update categories
 - **Analytics**: Spending/income by category, monthly cashflow, financial summary
 - **Recurring**: List and view subscriptions/bills
@@ -171,6 +171,41 @@ def get_category(category_id: str, user_id: str | None = None) -> dict | None:
         Category dictionary or None if not found
     """
     return categories.get_category(get_mcp_user_id(user_id), category_id)
+
+
+@mcp.tool
+def update_category(
+    category_id: str,
+    description: str | None = None,
+    categorization_instructions: str | None = None,
+    user_id: str | None = None,
+) -> dict:
+    """
+    Update a category's description and/or categorization_instructions.
+
+    Use this to persist categorization context you learn during a conversation
+    (e.g. "transactions from <merchant> should be Groceries unless the amount
+    is under €5") so that future AI categorization applies the same rules.
+
+    Only provided fields are written. Pass an empty string ("") to explicitly
+    clear a field. System categories cannot be updated.
+
+    Args:
+        category_id: The category's ID
+        description: New human-readable description for this category (optional)
+        categorization_instructions: Instructions the AI should follow when
+            deciding whether a transaction belongs in this category (optional)
+        user_id: The user's ID (optional, defaults to configured user)
+
+    Returns:
+        Dict with success status and updated category, or error message
+    """
+    return categories.update_category(
+        get_mcp_user_id(user_id),
+        category_id,
+        description,
+        categorization_instructions,
+    )
 
 
 @mcp.tool
