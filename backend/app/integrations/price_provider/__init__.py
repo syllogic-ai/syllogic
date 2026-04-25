@@ -6,7 +6,7 @@ __all__ = ["PriceProvider", "PriceQuote", "SymbolMatch", "get_price_provider"]
 
 
 def get_price_provider() -> PriceProvider:
-    name = os.getenv("SYLLOGIC_PRICE_PROVIDER", "yahoo").lower()
+    name = os.getenv("SYLLOGIC_PRICE_PROVIDER", "alpha_vantage").lower()
     if name == "yahoo":
         return YahooPriceProvider()
     if name == "alpha_vantage":
