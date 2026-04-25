@@ -10,6 +10,13 @@ import {
   resolveIncomeExpenseGrouping,
   type IncomeExpenseGrouping,
 } from "@/lib/dashboard/income-expense-buckets";
+import {
+  type AssetCategoryKey,
+  ASSET_CATEGORY_LABELS,
+  ASSET_CATEGORY_COLORS,
+  ASSET_CATEGORY_ORDER,
+  getAssetCategory,
+} from "@/lib/assets/asset-category";
 
 async function getUserCurrency(userId: string): Promise<string> {
   const result = await db
@@ -745,41 +752,6 @@ export async function getSpendingByCategory(
   }
 }
 
-// Asset category types and mapping
-type AssetCategoryKey = "cash" | "investment" | "crypto" | "property" | "vehicle" | "other";
-
-const ASSET_CATEGORY_COLORS: Record<AssetCategoryKey, string> = {
-  cash: "#3B82F6",
-  investment: "#10B981",
-  crypto: "#F59E0B",
-  property: "#8B5CF6",
-  vehicle: "#EC4899",
-  other: "#6B7280",
-};
-
-const ASSET_CATEGORY_LABELS: Record<AssetCategoryKey, string> = {
-  cash: "Cash",
-  investment: "Investment",
-  crypto: "Crypto",
-  property: "Property",
-  vehicle: "Vehicle",
-  other: "Other",
-};
-
-// Map account types to asset categories
-function getAssetCategory(accountType: string): AssetCategoryKey {
-  const typeMap: Record<string, AssetCategoryKey> = {
-    checking: "cash",
-    savings: "cash",
-    credit: "other",
-    investment: "investment",
-    brokerage: "investment",
-    crypto: "crypto",
-    property: "property",
-    vehicle: "vehicle",
-  };
-  return typeMap[accountType.toLowerCase()] || "other";
-}
 
 interface AssetAccount {
   id: string;
@@ -948,7 +920,7 @@ export async function getAssetsOverview(): Promise<AssetsOverviewData> {
   }
 
   // Build categories with percentages
-  const categoryOrder: AssetCategoryKey[] = ["cash", "investment", "crypto", "property", "vehicle", "other"];
+  const categoryOrder = ASSET_CATEGORY_ORDER;
 
   const categories: AssetCategory[] = categoryOrder.map((key) => {
     const accountsInCategory = categoryMap.get(key) || [];

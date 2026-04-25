@@ -115,18 +115,25 @@ happened.
 # ============================================================================
 
 @mcp.tool
-def list_accounts(user_id: str | None = None, include_inactive: bool = False) -> list[dict]:
+def list_accounts(
+    user_id: str | None = None,
+    include_inactive: bool = False,
+    asset_class: str | None = None,
+) -> list[dict]:
     """
     List all accounts for a user.
 
     Args:
         user_id: The user's ID (optional, defaults to configured user)
         include_inactive: Whether to include inactive accounts (default: False)
+        asset_class: Optional asset-class filter, one of "cash", "savings",
+            "investment", "crypto", "property", "vehicle", "other".
 
     Returns:
-        List of account dictionaries with id, name, type, institution, currency, balance, etc.
+        List of account dictionaries with id, name, account_type, asset_class,
+        institution, currency, balance, etc.
     """
-    return accounts.list_accounts(get_mcp_user_id(user_id), include_inactive)
+    return accounts.list_accounts(get_mcp_user_id(user_id), include_inactive, asset_class)
 
 
 @mcp.tool
@@ -139,7 +146,7 @@ def get_account(account_id: str, user_id: str | None = None) -> dict | None:
         user_id: The user's ID (optional, defaults to configured user)
 
     Returns:
-        Account dictionary or None if not found
+        Account dictionary (with asset_class derived from account_type) or None if not found
     """
     return accounts.get_account(get_mcp_user_id(user_id), account_id)
 
