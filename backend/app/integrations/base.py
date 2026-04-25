@@ -15,6 +15,7 @@ class AccountData(BaseModel):
     account_type: str  # checking, savings, credit
     institution: str
     currency: str
+    iban: Optional[str] = None  # IBAN of this account (stripped, upper-cased; None if not IBAN-based)
     balance_available: Optional[Decimal] = None
     metadata: dict = {}
 
