@@ -4,20 +4,28 @@ Account tools for the MCP server.
 from typing import Optional
 
 from app.mcp.dependencies import get_db, validate_uuid, validate_date
+from app.mcp.tools._asset_class import account_type_to_asset_class
 from app.models import Account, AccountBalance
 from app.security.data_encryption import decrypt_with_fallback
 
 
-def list_accounts(user_id: str, include_inactive: bool = False) -> list[dict]:
+def list_accounts(
+    user_id: str,
+    include_inactive: bool = False,
+    asset_class: Optional[str] = None,
+) -> list[dict]:
     """
     List all accounts for a user.
 
     Args:
         user_id: The user's ID
         include_inactive: Whether to include inactive accounts (default: False)
+        asset_class: Optional asset-class filter, e.g. "cash", "savings",
+            "investment", "crypto", "property", "vehicle", "other".
 
     Returns:
-        List of account dictionaries with id, name, type, institution, currency, balance, etc.
+        List of account dictionaries with id, name, type, institution, currency,
+        balance, asset_class, etc.
     """
     with get_db() as db:
         query = db.query(Account).filter(Account.user_id == user_id)
@@ -27,11 +35,12 @@ def list_accounts(user_id: str, include_inactive: bool = False) -> list[dict]:
 
         accounts = query.order_by(Account.name).all()
 
-        return [
+        results = [
             {
                 "id": str(account.id),
                 "name": account.name,
                 "account_type": account.account_type,
+                "asset_class": account_type_to_asset_class(account.account_type),
                 "institution": account.institution,
                 "currency": account.currency,
                 "provider": account.provider,
@@ -45,6 +54,12 @@ def list_accounts(user_id: str, include_inactive: bool = False) -> list[dict]:
             }
             for account in accounts
         ]
+
+        if asset_class is not None:
+            normalized = asset_class.lower()
+            results = [r for r in results if r["asset_class"] == normalized]
+
+        return results
 
 
 def get_account(user_id: str, account_id: str) -> dict | None:
@@ -75,6 +90,7 @@ def get_account(user_id: str, account_id: str) -> dict | None:
             "id": str(account.id),
             "name": account.name,
             "account_type": account.account_type,
+            "asset_class": account_type_to_asset_class(account.account_type),
             "institution": account.institution,
             "currency": account.currency,
             "provider": account.provider,

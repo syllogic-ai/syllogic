@@ -1,4 +1,10 @@
-export type AssetCategoryKey = "cash" | "investment" | "crypto" | "property" | "vehicle" | "other";
+import type { AssetCategoryKey } from "@/lib/assets/asset-category";
+
+export type { AssetCategoryKey };
+export {
+  ASSET_CATEGORY_COLORS,
+  ASSET_CATEGORY_LABELS,
+} from "@/lib/assets/asset-category";
 
 export type AssetType = "account" | "property" | "vehicle";
 
@@ -45,21 +51,3 @@ export const VEHICLE_TYPES = [
 
 export type PropertyType = typeof PROPERTY_TYPES[number]["value"];
 export type VehicleType = typeof VEHICLE_TYPES[number]["value"];
-
-export const ASSET_CATEGORY_COLORS: Record<AssetCategoryKey, string> = {
-  cash: "#3B82F6",       // blue
-  investment: "#10B981", // green
-  crypto: "#F59E0B",     // amber
-  property: "#8B5CF6",   // purple
-  vehicle: "#EC4899",    // pink
-  other: "#6B7280",      // gray
-};
-
-export const ASSET_CATEGORY_LABELS: Record<AssetCategoryKey, string> = {
-  cash: "Cash",
-  investment: "Investment",
-  crypto: "Crypto",
-  property: "Property",
-  vehicle: "Vehicle",
-  other: "Other",
-};

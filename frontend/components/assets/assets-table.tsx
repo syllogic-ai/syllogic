@@ -12,7 +12,7 @@ interface AssetsTableProps {
 }
 
 // Asset categories that are bank accounts (navigable to account detail)
-const ACCOUNT_CATEGORY_KEYS: AssetCategoryKey[] = ["cash", "investment", "crypto"];
+const ACCOUNT_CATEGORY_KEYS: AssetCategoryKey[] = ["cash", "savings", "investment", "crypto"];
 
 function AccountRow({
   account,
