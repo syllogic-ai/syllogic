@@ -203,7 +203,12 @@ export async function updateHolding(
   holdingId: string,
   payload: { quantity?: string; avg_cost?: string; as_of_date?: string },
 ): Promise<void> {
-  await signedFetch("PATCH", `/api/investments/holdings/${holdingId}`, {
+  await getAuthenticatedSession();
+  const resp = await signedFetch("PATCH", `/api/investments/holdings/${holdingId}`, {
     body: payload,
   });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(text || `Request failed: ${resp.status}`);
+  }
 }
