@@ -99,8 +99,25 @@ export async function listHoldings(accountId?: string): Promise<Holding[]> {
 }
 
 export async function getPortfolio(): Promise<PortfolioSummary> {
-  const resp = await signedFetch("GET", "/api/investments/portfolio");
+  const resp = await signedFetch("GET", "/api/investments/portfolio/summary");
   return readJsonOrThrow<PortfolioSummary>(resp);
+}
+
+export type InvestmentAccount = {
+  id: string;
+  name: string;
+  base_currency: string;
+  source: "manual" | "ibkr_flex";
+};
+
+export async function listInvestmentAccounts(): Promise<InvestmentAccount[]> {
+  const portfolio = await getPortfolio();
+  return portfolio.accounts.map((a) => ({
+    id: a.id,
+    name: a.name,
+    base_currency: portfolio.currency,
+    source: "manual",
+  }));
 }
 
 export async function getPortfolioHistory(
