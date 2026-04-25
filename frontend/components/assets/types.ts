@@ -1,4 +1,6 @@
-export type { AssetCategoryKey } from "@/lib/assets/asset-category";
+import type { AssetCategoryKey } from "@/lib/assets/asset-category";
+
+export type { AssetCategoryKey };
 export {
   ASSET_CATEGORY_COLORS,
   ASSET_CATEGORY_LABELS,
@@ -17,7 +19,7 @@ export interface AssetAccount {
 }
 
 export interface AssetCategory {
-  key: import("@/lib/assets/asset-category").AssetCategoryKey;
+  key: AssetCategoryKey;
   label: string;
   color: string;
   value: number;
