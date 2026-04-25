@@ -143,6 +143,38 @@ def sync_bank_connection(self, connection_id: str):
             Account.bank_connection_id == connection.id,
         ).all()
 
+        # Backfill account-level IBAN on synced accounts that don't have it yet.
+        # This is independent of the per-account sync_transactions loop below;
+        # adapter.fetch_accounts() returns the IBAN exposed by EB's session
+        # data, and SyncService._set_account_iban_fields treats IBAN as
+        # immutable (no overwrite once set). Without this hook, the
+        # InternalTransferService can't recognize transfers between two
+        # synced accounts because it won't know which IBANs are the user's.
+        try:
+            account_data_list = adapter.fetch_accounts()
+            account_data_by_uid = {
+                ad.external_id: ad for ad in account_data_list
+            }
+            for acc in accounts:
+                acc_uid = decrypt_with_fallback(
+                    acc.external_id_ciphertext, acc.external_id
+                )
+                if not acc_uid:
+                    continue
+                ad = account_data_by_uid.get(acc_uid)
+                if ad is None:
+                    continue
+                sync_service._set_account_iban_fields(acc, ad.iban)
+            db.commit()
+        except Exception as e:
+            # Don't fail the sync if account-level fetch hiccups — the per-account
+            # transaction sync below has its own error handling, and IBAN backfill
+            # can retry on the next sync.
+            logger.warning(
+                f"[SYNC] IBAN backfill skipped for connection {connection_id}: {e}"
+            )
+            db.rollback()
+
         total_created = 0
         total_updated = 0
         all_created_ids: list[str] = []
