@@ -128,3 +128,23 @@
     @apply bg-background text-foreground;
   }
 }
+
+.syllogic-surface {
+  font-family: var(--font-jb-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  --app-background: oklch(1 0 0);
+  --app-foreground: oklch(0.147 0.004 49.25);
+  --app-card: oklch(1 0 0);
+  --app-primary: oklch(0.216 0.006 56.043);
+  --app-primary-foreground: oklch(0.985 0.001 106.423);
+  --app-muted: oklch(0.97 0.001 106.424);
+  --app-muted-foreground: oklch(0.553 0.013 58.071);
+  --app-border: oklch(0.923 0.003 48.717);
+  --app-positive: oklch(0.52 0.13 150);
+  --app-negative: oklch(0.577 0.245 27.325);
+  --app-stale: oklch(0.75 0.12 70);
+  --app-stale-bg: oklch(0.99 0.016 80);
+  --app-stale-border: oklch(0.85 0.08 80);
+  background: oklch(0.985 0.001 106.423);
+  color: var(--app-foreground);
+}
+.syllogic-surface * { box-sizing: border-box; }
