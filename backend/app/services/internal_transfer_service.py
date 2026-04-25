@@ -272,17 +272,22 @@ class InternalTransferService:
         self.db.commit()
 
     def unlink_all_for_pocket(self, pocket_account_id: UUID) -> int:
-        """Remove all ``internal_transfers`` rows that point at the given pocket,
-        restoring each source transaction's analytics flag.
+        """Remove all ``internal_transfers`` rows that point at the given account
+        as the destination, restoring each source transaction's analytics flag.
+
+        Works for both manual pocket accounts and synced accounts — after the
+        recognize-own-IBANs feature, synced accounts can also appear as the
+        ``pocket_account_id`` destination of a link.
 
         **IMPORTANT — call contract:** this is the pre-delete cleanup hook. The
-        caller MUST delete the pocket account itself immediately after a
-        successful return. Mirror transactions (the ones on the pocket side)
-        are NOT deleted here — they depend on the ``ON DELETE CASCADE`` from
-        ``transactions.account_id`` when the pocket row is removed. If you call
-        this method and do NOT delete the pocket, orphan mirror transactions
-        will remain on the pocket account with no linking ``internal_transfers``
-        row, and analytics will misreport the pocket's activity.
+        caller MUST delete the destination account itself immediately after a
+        successful return. For manual pockets, mirror transactions on the pocket
+        side are NOT deleted here — they depend on the ``ON DELETE CASCADE`` from
+        ``transactions.account_id`` when the pocket row is removed. For synced
+        destinations ``mirror_txn_id`` is NULL, so there is nothing to cascade.
+        If you call this method and do NOT delete the account, orphan mirror
+        transactions will remain on manual pockets with no linking
+        ``internal_transfers`` row, and analytics will misreport their activity.
 
         Returns the number of links removed.
         """

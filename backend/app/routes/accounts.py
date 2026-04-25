@@ -304,8 +304,10 @@ def delete_account(
     ``Account.transactions`` uses ``passive_deletes=True`` so SQLAlchemy defers
     to the DB cascade instead of trying to NULL the children.
 
-    For non-pocket accounts ``unlink_all_for_pocket`` is a no-op (no links point
-    at them by definition).
+    For synced accounts, ``unlink_all_for_pocket`` also handles any links where
+    the synced account is the destination (recognize-own-IBANs feature); those
+    links have ``mirror_txn_id=NULL`` so there are no mirror transactions to
+    cascade-delete on the destination side.
     """
     account = (
         db.query(Account)

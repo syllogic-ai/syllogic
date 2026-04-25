@@ -4,6 +4,7 @@ Enable Banking adapter implementing the BankAdapter interface.
 Fetches accounts, transactions, and balances from the Enable Banking REST API.
 """
 
+import hashlib
 import logging
 from typing import List, Optional
 from decimal import Decimal
@@ -129,9 +130,6 @@ class EnableBankingAdapter(BankAdapter):
 
     def normalize_transaction(self, raw: dict) -> TransactionData:
         """Map EB transaction to canonical format."""
-        import logging as _logging
-        _log = _logging.getLogger(__name__)
-
         amount = Decimal(str(raw["transaction_amount"]["amount"]))
         # EB uses entry_reference as primary ID; fall back to transaction_id.
         # Some banks (e.g. ABN AMRO fee transactions) provide neither — generate a
@@ -139,7 +137,6 @@ class EnableBankingAdapter(BankAdapter):
         # syncs produce the same ID for the same transaction.
         external_id = raw.get("entry_reference") or raw.get("transaction_id") or None
         if not external_id:
-            import hashlib as _hashlib
             _ri = raw.get("remittance_information")
             _ri_str = "|".join(_ri) if isinstance(_ri, list) and _ri else (_ri or "")
             _parts = "|".join([
@@ -148,33 +145,7 @@ class EnableBankingAdapter(BankAdapter):
                 raw["transaction_amount"].get("currency", ""),
                 _ri_str,
             ])
-            external_id = "synth-" + _hashlib.sha256(_parts.encode()).hexdigest()[:16]
-
-        # Log raw text fields to debug missing descriptions (TEMPORARY - remove after diagnosis).
-        # Also includes creditor_account / debtor_account / extracted IBAN so we can verify
-        # whether ABN AMRO populates the structured account-IBAN field per the EB spec.
-        _log.info(
-            "[EB_DEBUG] txn=%s amount=%s fields: riu=%r riua=%r ri=%r ai=%r note=%r refnum=%r "
-            "cn=%r dn=%r creditor=%r debtor=%r creditor_account=%r debtor_account=%r "
-            "extracted_creditor_iban=%r extracted_debtor_iban=%r keys=%s",
-            external_id,
-            amount,
-            raw.get("remittance_information_unstructured"),
-            raw.get("remittance_information_unstructured_array"),
-            raw.get("remittance_information"),
-            raw.get("additional_information"),
-            raw.get("note"),
-            raw.get("reference_number"),
-            raw.get("creditor_name"),
-            raw.get("debtor_name"),
-            raw.get("creditor"),
-            raw.get("debtor"),
-            raw.get("creditor_account"),
-            raw.get("debtor_account"),
-            _extract_iban(raw.get("creditor_account")) or _extract_iban(raw.get("creditor")),
-            _extract_iban(raw.get("debtor_account")) or _extract_iban(raw.get("debtor")),
-            sorted(raw.keys()),
-        )
+            external_id = "synth-" + hashlib.sha256(_parts.encode()).hexdigest()[:16]
 
         # Resolve nested creditor/debtor names (EB may use objects or flat fields)
         creditor_name = (
