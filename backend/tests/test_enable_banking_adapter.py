@@ -207,9 +207,10 @@ class TestFetchAccountsIban(unittest.TestCase):
         accounts = self.adapter.fetch_accounts()
 
         self.assertEqual(len(accounts), 1)
-        # IBAN must be passed through to AccountData. Whitespace is left as-is here
-        # — normalization happens at persist time alongside the existing helper.
-        self.assertEqual(accounts[0].iban, "NL91 ABNA 0417 1643 00")
+        # IBAN is normalized at the adapter layer via _extract_iban (spaces
+        # stripped, upper-cased) so downstream consumers always see the
+        # canonical form.
+        self.assertEqual(accounts[0].iban, "NL91ABNA0417164300")
 
     def test_fetch_accounts_iban_is_none_when_missing(self):
         """Accounts without an IBAN (e.g. some credit cards) must yield iban=None."""
