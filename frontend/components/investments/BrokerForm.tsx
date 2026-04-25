@@ -54,9 +54,9 @@ export function BrokerForm({ onCancel }: { onCancel: () => void }) {
     <form
       onSubmit={submit}
       style={{
+        border: `1px solid ${T.border}`,
         borderTop: `2px solid ${T.primary}`,
         background: T.card,
-        border: `1px solid ${T.border}`,
         padding: 24,
       }}
     >

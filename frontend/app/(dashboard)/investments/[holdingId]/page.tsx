@@ -17,14 +17,13 @@ export default async function HoldingDetailPage({
   const { holdingId } = await params;
   const { from, to } = rangeToDates("1M");
   // Backend exposes GET /holdings (list) but not GET /holdings/:id,
-  // so we fetch all and filter client-side until a dedicated endpoint is added.
-  const [holdings, history, portfolio] = await Promise.all([
-    listHoldings(),
-    getHoldingHistory(holdingId, from, to),
-    getPortfolio(),
-  ]);
+  // so we fetch holdings + portfolio first, validate the ID, then fetch history.
+  // This ensures notFound() is called before getHoldingHistory so an invalid
+  // holdingId never reaches the backend history endpoint.
+  const [holdings, portfolio] = await Promise.all([listHoldings(), getPortfolio()]);
   const holding = holdings.find((h) => h.id === holdingId);
   if (!holding) return notFound();
+  const history = await getHoldingHistory(holdingId, from, to);
   return (
     <HoldingDetailView
       holding={holding}

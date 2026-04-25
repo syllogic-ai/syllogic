@@ -1,5 +1,5 @@
 "use client";
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { fetchHistoryRange, type Range } from "@/lib/actions/investments";
 import {
@@ -30,6 +30,7 @@ export function InvestmentsOverview({
   const [range, setRange] = useState<Range>(initialRange);
   const [history, setHistory] = useState<ValuationPoint[]>(initialHistory);
   const [pending, startTransition] = useTransition();
+  const activeRangeRef = useRef<Range>(initialRange);
 
   const series = useMemo(
     () =>
@@ -64,9 +65,10 @@ export function InvestmentsOverview({
 
   const onRangeChange = (r: Range) => {
     setRange(r);
+    activeRangeRef.current = r;
     startTransition(async () => {
       const next = await fetchHistoryRange(r);
-      setHistory(next);
+      if (activeRangeRef.current === r) setHistory(next);
     });
   };
 

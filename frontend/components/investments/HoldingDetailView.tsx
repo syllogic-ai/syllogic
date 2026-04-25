@@ -1,5 +1,5 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { fetchHoldingHistoryRange, type Range } from "@/lib/actions/investments";
 import {
@@ -39,6 +39,7 @@ export function HoldingDetailView({
   const [range, setRange] = useState<Range>("1M");
   const [history, setHistory] = useState<ValuationPoint[]>(initialHistory);
   const [pending, startTransition] = useTransition();
+  const activeRangeRef = useRef<Range>("1M");
 
   const [qty, setQty] = useState(holding.quantity);
   const [avgCost, setAvgCost] = useState(holding.avg_cost ?? "");
@@ -70,15 +71,19 @@ export function HoldingDetailView({
     holding.account_id;
 
   const onRangeChange = (r: Range) => {
+    const prev = range;
     setRange(r);
     setChartErr(null);
+    activeRangeRef.current = r;
     startTransition(async () => {
       try {
         const next = await fetchHoldingHistoryRange(holding.id, r);
-        setHistory(next);
+        if (activeRangeRef.current === r) setHistory(next);
       } catch {
-        setRange(range);  // revert optimistic update
-        setChartErr("Could not load history.");
+        if (activeRangeRef.current === r) {
+          setRange(prev);
+          setChartErr("Could not load history.");
+        }
       }
     });
   };

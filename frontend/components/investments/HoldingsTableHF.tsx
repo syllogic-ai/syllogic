@@ -312,6 +312,7 @@ export function HoldingsTableHF({
                 {onDelete && h.source === "manual" && (
                   <button
                     onClick={(e) => { e.stopPropagation(); onDelete(h.id); }}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }}
                     title="Delete"
                     style={{
                       background: "transparent",
