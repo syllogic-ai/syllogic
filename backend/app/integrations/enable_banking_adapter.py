@@ -245,3 +245,21 @@ class EnableBankingAdapter(BankAdapter):
         """
         resp = self.client.get(f"/accounts/{account_uid}/balances")
         return resp.json()
+
+    def fetch_account_iban(self, account_uid: str) -> Optional[str]:
+        """Fetch the canonical IBAN for a single connected account.
+
+        Why this exists: ``GET /sessions/{session_id}`` returns rich account
+        objects only at OAuth time. On subsequent calls (post-mapping, post-
+        sync) the ``accounts`` field collapses to a list of UID strings, so
+        ``fetch_accounts`` can't be relied on for IBAN. ``GET /accounts/{uid}/
+        details`` is the per-account endpoint that always returns the IBAN.
+
+        Returns the normalized IBAN (spaces stripped, upper-cased) or None if
+        the account doesn't have one (rare — some credit cards don't).
+        """
+        resp = self.client.get(f"/accounts/{account_uid}/details")
+        data = resp.json()
+        if not isinstance(data, dict):
+            return None
+        return _extract_iban(data)
