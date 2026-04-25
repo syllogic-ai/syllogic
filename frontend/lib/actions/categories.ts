@@ -102,8 +102,34 @@ export async function updateCategory(
       return { success: false, error: "Category not found" };
     }
 
+    // System categories accept description/categorization_instructions updates
+    // (user-tailored context) but reject structural changes.
     if (existing.isSystem) {
-      return { success: false, error: "System categories cannot be modified" };
+      const attemptingStructuralChange =
+        (input.name !== undefined && input.name.trim() !== existing.name) ||
+        (input.color !== undefined && input.color !== existing.color) ||
+        (input.icon !== undefined && input.icon !== existing.icon);
+
+      if (attemptingStructuralChange) {
+        return {
+          success: false,
+          error: "System categories only allow editing description and categorization instructions",
+        };
+      }
+
+      await db
+        .update(categories)
+        .set({
+          ...(input.description !== undefined && { description: input.description?.trim() || null }),
+          ...(input.categorizationInstructions !== undefined && {
+            categorizationInstructions: input.categorizationInstructions?.trim() || null,
+          }),
+        })
+        .where(eq(categories.id, categoryId));
+
+      revalidatePath("/");
+      revalidatePath("/settings");
+      return { success: true };
     }
 
     // Check for duplicate name if name is being changed

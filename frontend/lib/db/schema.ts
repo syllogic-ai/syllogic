@@ -226,6 +226,7 @@ export const accounts = pgTable(
     functionalBalance: decimal("functional_balance", { precision: 15, scale: 2 }), // Calculated balance (sum of transactions + starting_balance)
     balanceIsAnchored: boolean("balance_is_anchored").default(false), // True when startingBalance is derived from known bank data (CSV with verified opening/closing balance)
     isActive: boolean("is_active").default(true),
+    aliasPatterns: jsonb("alias_patterns").$type<string[]>().default([]).notNull(),
     lastSyncedAt: timestamp("last_synced_at"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),

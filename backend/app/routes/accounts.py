@@ -177,6 +177,7 @@ def _serialize_account(account: Account) -> AccountResponse:
         institution=account.institution,
         currency=account.currency,
         is_active=account.is_active,
+        alias_patterns=account.alias_patterns or [],
         provider=account.provider,
         external_id=decrypt_with_fallback(account.external_id_ciphertext, account.external_id),
         created_at=account.created_at,

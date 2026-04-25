@@ -36,7 +36,7 @@ The `user_id` parameter is optional on all tools but must match the authenticate
 
 ## Available functionality
 - **Accounts**: List, view, and check balance history
-- **Categories**: List, view, and get category tree structure
+- **Categories**: List, view, get tree structure, and update description/categorization_instructions
 - **Transactions**: List, search, view, and update categories
 - **Analytics**: Spending/income by category, monthly cashflow, financial summary
 - **Recurring**: List and view subscriptions/bills
@@ -79,6 +79,32 @@ Use `match_mode="word"` for merchant names to avoid false positives!
 When using `search_transactions`, ALWAYS check `has_more` in the response.
 If true, you MUST call again with page=2, 3, etc. until has_more=false.
 The `total_count` field tells you how many total results exist.
+
+## Pagination & sort
+
+All list/search tools accept:
+- `cursor` (opaque string) — preferred for paging through large result sets; pass
+  `next_cursor` from the previous response.
+- `sort_by`: one of `booked_at_desc` (default), `booked_at_asc`, `amount_desc`,
+  `amount_asc`, `abs_amount_desc`.
+- `account_id` — limit to a single account.
+
+## Audit filters
+
+- `list_transactions(uncategorized=True)` — only rows with no category at all.
+- `list_transactions(category_type="expense"|"income"|"transfer")` — filter by type.
+- `get_spending_by_category(include_uncategorized=True)` — include an
+  "Uncategorized" bucket with `merchant_count`.
+- `get_top_merchants(category_id=...)` or `get_top_merchants(uncategorized=True)` —
+  audit miscategorized or unassigned merchants.
+
+## Safe bulk updates
+
+`bulk_update_transaction_categories(dry_run=True)` returns what *would* change
+(`would_update_count`, `sample_changes`) without mutating. Hard cap: 2000 IDs
+per call. Response also includes `invalid_ids`, `not_found_ids`, and
+`skipped_already_in_category_ids` so the agent can narrate exactly what
+happened.
 """,
     auth=_auth,
 )
@@ -175,6 +201,43 @@ def get_category(category_id: str, user_id: str | None = None) -> dict | None:
 
 
 @mcp.tool
+def update_category(
+    category_id: str,
+    description: str | None = None,
+    categorization_instructions: str | None = None,
+    user_id: str | None = None,
+) -> dict:
+    """
+    Update a category's description and/or categorization_instructions.
+
+    Use this to persist categorization context you learn during a conversation
+    (e.g. "transactions from <merchant> should be Groceries unless the amount
+    is under €5") so that future AI categorization applies the same rules.
+
+    Only provided fields are written. Pass an empty string ("") to explicitly
+    clear a field. System categories (e.g. Internal Transfer, External
+    Transfer) are editable via this tool — description and
+    categorization_instructions are user-tailored context.
+
+    Args:
+        category_id: The category's ID
+        description: New human-readable description for this category (optional)
+        categorization_instructions: Instructions the AI should follow when
+            deciding whether a transaction belongs in this category (optional)
+        user_id: The user's ID (optional, defaults to configured user)
+
+    Returns:
+        Dict with success status and updated category, or error message
+    """
+    return categories.update_category(
+        get_mcp_user_id(user_id),
+        category_id,
+        description,
+        categorization_instructions,
+    )
+
+
+@mcp.tool
 def get_category_tree(user_id: str | None = None) -> list[dict]:
     """
     Get categories in a hierarchical tree structure.
@@ -201,10 +264,14 @@ def list_transactions(
     search: str | None = None,
     limit: int = 50,
     page: int = 1,
-    user_id: str | None = None
-) -> list[dict]:
+    cursor: str | None = None,
+    sort_by: str = "booked_at_desc",
+    uncategorized: bool = False,
+    category_type: str | None = None,
+    user_id: str | None = None,
+) -> dict:
     """
-    List transactions with optional filtering.
+    List transactions with optional filtering, cursor pagination, and sort.
 
     Args:
         account_id: Filter by account ID (optional)
@@ -213,14 +280,20 @@ def list_transactions(
         to_date: End date in ISO format YYYY-MM-DD (optional)
         search: Search in description/merchant (optional)
         limit: Max results per page (default: 50, max: 100)
-        page: Page number (default: 1)
+        page: Page number (default: 1) - ignored when cursor is provided
+        cursor: Opaque cursor from previous response for stable pagination
+        sort_by: Sort order - booked_at_desc (default), booked_at_asc,
+            amount_desc, amount_asc, abs_amount_desc
+        uncategorized: If True, return only transactions with no category
+        category_type: Filter by resolved category type (expense, income, transfer)
         user_id: The user's ID (optional, defaults to configured user)
 
     Returns:
-        List of transaction dictionaries with account and category info
+        Dict with transactions list, limit, page (or None), and next_cursor
     """
     return transactions.list_transactions(
-        get_mcp_user_id(user_id), account_id, category_id, from_date, to_date, search, limit, page
+        get_mcp_user_id(user_id), account_id, category_id, from_date, to_date, search,
+        limit, page, cursor, sort_by, uncategorized, category_type,
     )
 
 
@@ -247,13 +320,17 @@ def search_transactions(
     ids_only: bool = False,
     limit: int = 50,
     page: int = 1,
-    user_id: str | None = None
+    cursor: str | None = None,
+    sort_by: str = "booked_at_desc",
+    account_id: str | None = None,
+    user_id: str | None = None,
 ) -> dict:
     """
     Search transactions by description or merchant name.
 
     ⚠️ PAGINATION WARNING: Always check `has_more` in the response!
     If true, you MUST call again with page=2, page=3, etc. until has_more=false.
+    Prefer `cursor`/`next_cursor` for stable pagination over large result sets.
 
     Args:
         query: Search query string (case-insensitive)
@@ -264,16 +341,21 @@ def search_transactions(
             - "word": Word boundary match - "Action" matches "Action Store" but NOT "Transaction"
         ids_only: If True, return only transaction IDs (faster, less tokens for bulk ops)
         limit: Max results per page (default: 50, max: 100)
-        page: Page number (default: 1)
+        page: Page number (default: 1) - ignored when cursor is provided
+        cursor: Opaque cursor from previous response for stable pagination
+        sort_by: Sort order - booked_at_desc (default), booked_at_asc,
+            amount_desc, amount_asc, abs_amount_desc
+        account_id: Filter results to a single account (optional)
         user_id: The user's ID (optional, defaults to configured user)
 
     Returns:
         Dict with:
         - transactions: List of matching transactions (or transaction_ids if ids_only=True)
-        - page: Current page number
+        - page: Current page number (None when cursor-paginated)
         - limit: Results per page
         - has_more: Boolean - KEEP PAGINATING until this is false!
         - total_count: Total matches across all pages (use to plan pagination)
+        - next_cursor: Opaque cursor for next page (None when exhausted)
 
     Example - find transactions to recategorize:
         search_transactions(
@@ -284,7 +366,8 @@ def search_transactions(
         )
     """
     return transactions.search_transactions(
-        get_mcp_user_id(user_id), query, exclude_category_id, match_mode, ids_only, limit, page
+        get_mcp_user_id(user_id), query, exclude_category_id, match_mode, ids_only,
+        limit, page, cursor, sort_by, account_id,
     )
 
 
@@ -295,13 +378,20 @@ def search_transactions_multi(
     match_mode: str = "contains",
     ids_only: bool = False,
     max_results: int = 500,
-    user_id: str | None = None
+    cursor: str | None = None,
+    sort_by: str = "booked_at_desc",
+    account_id: str | None = None,
+    user_id: str | None = None,
 ) -> dict:
     """
     Search transactions matching ANY of multiple queries in a single call.
 
     Use this instead of multiple search_transactions calls when you need to find
     transactions from several merchants at once (e.g., for bulk recategorization).
+
+    Pass `cursor=""` (or a real cursor from `next_cursor`) to enable cursor
+    pagination. Without a cursor, all results up to `max_results` are returned
+    in one shot.
 
     Args:
         queries: List of search terms (e.g., ["Jumbo", "Albert Heijn", "ALDI", "LIDL"])
@@ -312,6 +402,10 @@ def search_transactions_multi(
             - "word": Word boundary match (recommended for merchant names)
         ids_only: If True, return only transaction IDs (recommended for bulk updates)
         max_results: Maximum results to return (default: 500, max: 1000)
+        cursor: Opaque cursor; pass "" or a real cursor to enable cursor pagination
+        sort_by: Sort order - booked_at_desc (default), booked_at_asc,
+            amount_desc, amount_asc, abs_amount_desc
+        account_id: Filter results to a single account (optional)
         user_id: The user's ID (optional, defaults to configured user)
 
     Returns:
@@ -320,6 +414,7 @@ def search_transactions_multi(
         - total_count: Total matches found
         - capped: True if results hit max_results limit
         - query_counts: Matches per query (e.g., {"Jumbo": 127, "ALDI": 45})
+        - next_cursor: Opaque cursor for next page (only in cursor mode)
 
     Example - recategorize grocery store transactions:
         # Step 1: Find all grocery transactions not yet categorized
@@ -336,7 +431,8 @@ def search_transactions_multi(
         )
     """
     return transactions.search_transactions_multi(
-        get_mcp_user_id(user_id), queries, exclude_category_id, match_mode, ids_only, max_results
+        get_mcp_user_id(user_id), queries, exclude_category_id, match_mode, ids_only,
+        max_results, cursor, sort_by, account_id,
     )
 
 
@@ -367,18 +463,23 @@ def update_transaction_category(
 def bulk_update_transaction_categories(
     category_id: str,
     transaction_ids: list[str],
-    user_id: str | None = None
+    dry_run: bool = False,
+    user_id: str | None = None,
 ) -> dict:
     """
     Bulk update category for multiple transactions.
 
     Args:
         category_id: The category ID to assign to all transactions
-        transaction_ids: List of transaction IDs to update
+        transaction_ids: List of transaction IDs to update (max 2000)
+        dry_run: If True, preview what would change without committing (default: False)
         user_id: The user's ID (optional, defaults to configured user)
 
     Returns:
-        Dict with success status, updated_count, and any errors
+        Dict with success status and:
+        - updated_count (or would_update_count if dry_run=True)
+        - requested_count, invalid_ids, not_found_ids,
+          skipped_already_in_category_ids, sample_changes (up to 10)
 
     Recommended workflow using search_transactions_multi:
         # Find all grocery store transactions not yet categorized
@@ -388,14 +489,20 @@ def bulk_update_transaction_categories(
             match_mode="word",
             ids_only=True
         )
-        # Update them all at once
+        # Preview first
+        bulk_update_transaction_categories(
+            category_id="<groceries-id>",
+            transaction_ids=result["transaction_ids"],
+            dry_run=True,
+        )
+        # Then commit
         bulk_update_transaction_categories(
             category_id="<groceries-id>",
             transaction_ids=result["transaction_ids"]
         )
     """
     return transactions.bulk_update_transaction_categories(
-        get_mcp_user_id(user_id), category_id, transaction_ids
+        get_mcp_user_id(user_id), category_id, transaction_ids, dry_run
     )
 
 
@@ -408,7 +515,8 @@ def get_spending_by_category(
     from_date: str | None = None,
     to_date: str | None = None,
     account_id: str | None = None,
-    user_id: str | None = None
+    include_uncategorized: bool = False,
+    user_id: str | None = None,
 ) -> list[dict]:
     """
     Get spending breakdown by category.
@@ -417,12 +525,17 @@ def get_spending_by_category(
         from_date: Start date in ISO format YYYY-MM-DD (optional)
         to_date: End date in ISO format YYYY-MM-DD (optional)
         account_id: Filter by account ID (optional)
+        include_uncategorized: If True, include an "Uncategorized" bucket for
+            transactions with no category assigned (default: False)
         user_id: The user's ID (optional, defaults to configured user)
 
     Returns:
-        List of categories with total spending amount and transaction count
+        List of categories with total spending amount, transaction count, and
+        merchant_count
     """
-    return analytics.get_spending_by_category(get_mcp_user_id(user_id), from_date, to_date, account_id)
+    return analytics.get_spending_by_category(
+        get_mcp_user_id(user_id), from_date, to_date, account_id, include_uncategorized
+    )
 
 
 @mcp.tool
@@ -492,7 +605,9 @@ def get_top_merchants(
     from_date: str | None = None,
     to_date: str | None = None,
     limit: int = 10,
-    user_id: str | None = None
+    category_id: str | None = None,
+    uncategorized: bool = False,
+    user_id: str | None = None,
 ) -> list[dict]:
     """
     Get top merchants by total spending.
@@ -501,12 +616,18 @@ def get_top_merchants(
         from_date: Start date in ISO format YYYY-MM-DD (optional)
         to_date: End date in ISO format YYYY-MM-DD (optional)
         limit: Max number of merchants (default: 10, max: 50)
+        category_id: Filter to transactions in this category (optional).
+            Mutually exclusive with uncategorized.
+        uncategorized: If True, return only transactions with no category.
+            Mutually exclusive with category_id.
         user_id: The user's ID (optional, defaults to configured user)
 
     Returns:
         List of merchants with total spending and transaction count
     """
-    return analytics.get_top_merchants(get_mcp_user_id(user_id), from_date, to_date, limit)
+    return analytics.get_top_merchants(
+        get_mcp_user_id(user_id), from_date, to_date, limit, category_id, uncategorized
+    )
 
 
 # ============================================================================

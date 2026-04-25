@@ -1,6 +1,6 @@
 "use client";
 
-import { RiDeleteBinLine, RiEditLine, RiLockLine } from "@remixicon/react";
+import { RiDeleteBinLine, RiEditLine } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { type CategoryInput } from "@/lib/actions/categories";
 
@@ -40,40 +40,27 @@ export function CategoryRow({ category, onEdit, onDelete }: CategoryRowProps) {
 
       {/* Action buttons */}
       <div className="flex items-center gap-1 shrink-0">
-        {isSystem ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={onEdit}
+          title={isSystem ? "Edit description and categorization instructions" : "Edit category"}
+        >
+          <RiEditLine className="h-4 w-4" />
+        </Button>
+        {!isSystem && (
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="h-8 w-8"
-            disabled
-            title="Not able to modify."
+            className="h-8 w-8 text-destructive hover:text-destructive"
+            onClick={onDelete}
+            title="Delete category"
           >
-            <RiLockLine className="h-4 w-4 text-muted-foreground" />
+            <RiDeleteBinLine className="h-4 w-4" />
           </Button>
-        ) : (
-          <>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={onEdit}
-              title="Edit category"
-            >
-              <RiEditLine className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-destructive hover:text-destructive"
-              onClick={onDelete}
-              title="Delete category"
-            >
-              <RiDeleteBinLine className="h-4 w-4" />
-            </Button>
-          </>
         )}
       </div>
     </div>

@@ -29,7 +29,8 @@ def get_spending_by_category(
     user_id: str,
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
-    account_id: Optional[str] = None
+    account_id: Optional[str] = None,
+    include_uncategorized: bool = False,
 ) -> list[dict]:
     """
     Get spending breakdown by category.
@@ -41,9 +42,12 @@ def get_spending_by_category(
         from_date: Start date in ISO format (optional)
         to_date: End date in ISO format (optional)
         account_id: Filter by account ID (optional)
+        include_uncategorized: If True, include an "Uncategorized" bucket for
+            transactions with no category assigned (default: False)
 
     Returns:
-        List of categories with total spending amount and transaction count
+        List of categories with total spending amount, transaction count, and
+        merchant_count
     """
     # Validate parameters
     from_dt = validate_date(from_date)
@@ -61,12 +65,23 @@ def get_spending_by_category(
     if account_uuid:
         account_filter = f" AND t.account_id = '{account_uuid}'"
 
+    join_type = "LEFT JOIN" if include_uncategorized else "INNER JOIN"
+    # With INNER JOIN we already exclude null-category rows, so restrict to
+    # expense categories only. With LEFT JOIN we keep all debit rows but still
+    # require categorised rows to be expenses — null-category rows are allowed
+    # via the OR arm so they appear as the "Uncategorized" bucket.
+    uncategorized_filter = (
+        "AND (c.category_type = 'expense' OR c.id IS NULL)"
+        if include_uncategorized
+        else "AND c.category_type = 'expense'"
+    )
+
     with get_db() as db:
         sql = text(f"""
             {_get_link_group_nets_cte(user_id)}
             SELECT
                 COALESCE(t.category_id, t.category_system_id) as category_id,
-                c.name as category_name,
+                COALESCE(c.name, 'Uncategorized') as category_name,
                 c.color as category_color,
                 COALESCE(SUM(
                     CASE
@@ -76,15 +91,16 @@ def get_spending_by_category(
                         ELSE ABS(t.amount)
                     END
                 ), 0) as total,
-                COUNT(t.id) as count
+                COUNT(t.id) as count,
+                COUNT(DISTINCT t.merchant) FILTER (WHERE t.merchant IS NOT NULL AND t.merchant <> '') as merchant_count
             FROM transactions t
-            INNER JOIN categories c ON c.id = COALESCE(t.category_id, t.category_system_id)
+            {join_type} categories c ON c.id = COALESCE(t.category_id, t.category_system_id)
             LEFT JOIN transaction_links tl ON t.id = tl.transaction_id
             LEFT JOIN link_group_nets lgn ON tl.group_id = lgn.group_id
             WHERE t.user_id = '{user_id}'
                 AND t.transaction_type = 'debit'
                 AND t.include_in_analytics = true
-                AND c.category_type = 'expense'
+                {uncategorized_filter}
                 {date_filter}
                 {account_filter}
             GROUP BY COALESCE(t.category_id, t.category_system_id), c.name, c.color
@@ -100,6 +116,7 @@ def get_spending_by_category(
                 "category_color": r.category_color,
                 "total": float(r.total) if r.total else 0,
                 "count": r.count,
+                "merchant_count": r.merchant_count,
             }
             for r in results
         ]
@@ -385,7 +402,9 @@ def get_top_merchants(
     user_id: str,
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
-    limit: int = 10
+    limit: int = 10,
+    category_id: Optional[str] = None,
+    uncategorized: bool = False,
 ) -> list[dict]:
     """
     Get top merchants by total spending.
@@ -395,10 +414,18 @@ def get_top_merchants(
         from_date: Start date in ISO format (optional)
         to_date: End date in ISO format (optional)
         limit: Max number of merchants (default: 10, max: 50)
+        category_id: Filter to transactions in this category (optional).
+            Mutually exclusive with uncategorized.
+        uncategorized: If True, return only transactions with no category.
+            Mutually exclusive with category_id.
 
     Returns:
         List of merchants with total spending and transaction count
     """
+    if category_id and uncategorized:
+        raise ValueError("category_id and uncategorized are mutually exclusive")
+
+    cat_uuid = validate_uuid(category_id) if category_id else None
     limit = min(max(1, limit), 50)
 
     # Validate parameters
@@ -417,6 +444,23 @@ def get_top_merchants(
             Transaction.merchant != "",
             Transaction.include_in_analytics == True
         )
+
+        if cat_uuid:
+            query = query.filter(
+                or_(
+                    Transaction.category_id == cat_uuid,
+                    and_(
+                        Transaction.category_id.is_(None),
+                        Transaction.category_system_id == cat_uuid,
+                    ),
+                )
+            )
+
+        if uncategorized:
+            query = query.filter(
+                Transaction.category_id.is_(None),
+                Transaction.category_system_id.is_(None),
+            )
 
         if from_dt:
             query = query.filter(Transaction.booked_at >= from_dt)

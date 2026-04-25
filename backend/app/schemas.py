@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional, List
@@ -22,11 +22,13 @@ class AccountUpdate(BaseModel):
     institution: Optional[str] = None
     balance_current: Optional[Decimal] = None
     is_active: Optional[bool] = None
+    alias_patterns: list[str] = Field(default_factory=list)
 
 
 class AccountResponse(AccountBase):
     id: UUID
     is_active: bool
+    alias_patterns: list[str] = Field(default_factory=list)
     provider: Optional[str] = None
     external_id: Optional[str] = None
     created_at: datetime

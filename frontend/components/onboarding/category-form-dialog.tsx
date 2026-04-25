@@ -35,6 +35,7 @@ export function CategoryFormDialog({
   existingCount = 0,
 }: CategoryFormDialogProps) {
   const isEditing = !!category;
+  const isSystem = !!category?.isSystem;
 
   const [name, setName] = useState("");
   const [color, setColor] = useState<string>(CATEGORY_COLORS[0].value);
@@ -63,9 +64,9 @@ export function CategoryFormDialog({
     if (!name.trim() || !description.trim()) return;
 
     const updatedCategory: CategoryInput = {
-      name: name.trim(),
+      name: isSystem && category ? category.name : name.trim(),
       categoryType,
-      color,
+      color: isSystem && category ? category.color : color,
       icon: category?.icon || "RiFolderLine",
       description: description.trim(),
       categorizationInstructions: categorizationInstructions.trim() || undefined,
@@ -95,22 +96,25 @@ export function CategoryFormDialog({
             {isEditing ? "Edit Category" : `Add ${getCategoryTypeLabel()} Category`}
           </DialogTitle>
           <DialogDescription>
-            {isEditing
+            {isSystem
+              ? "System category — only description and categorization instructions can be edited."
+              : isEditing
               ? "Update the category details below."
               : "Create a new category to organize your transactions."}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Name *</Label>
+            <Label htmlFor="name">Name{isSystem ? "" : " *"}</Label>
             <div className="flex items-center gap-3">
-              <CategoryColorPicker value={color} onChange={setColor} />
+              <CategoryColorPicker value={color} onChange={setColor} disabled={isSystem} />
               <Input
                 id="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Enter category name"
                 className="flex-1"
+                disabled={isSystem}
               />
             </div>
           </div>
