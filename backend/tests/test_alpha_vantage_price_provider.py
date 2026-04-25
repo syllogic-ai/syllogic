@@ -96,3 +96,22 @@ def test_get_daily_close_returns_none_on_rate_limit():
             "AAPL", date(2026, 4, 18)
         )
     assert q is None
+
+
+def test_currency_cached_across_calls():
+    ts = _ts_daily_response([("2026-04-18", "100.00")])
+    with patch(
+        "app.integrations.price_provider.alpha_vantage_provider.httpx.get"
+    ) as get:
+        # 4 calls expected: TS, OVERVIEW, TS, (no second OVERVIEW because cached)
+        get.side_effect = [
+            MagicMock(json=lambda: ts, raise_for_status=lambda: None),
+            MagicMock(json=lambda: _overview_response("EUR"), raise_for_status=lambda: None),
+            MagicMock(json=lambda: ts, raise_for_status=lambda: None),
+        ]
+        provider = AlphaVantagePriceProvider(api_key="X")
+        q1 = provider.get_daily_close("AAPL", date(2026, 4, 18))
+        q2 = provider.get_daily_close("AAPL", date(2026, 4, 18))
+    assert q1 is not None and q2 is not None
+    assert q1.currency == "EUR" and q2.currency == "EUR"
+    assert get.call_count == 3  # not 4 — OVERVIEW called only once
