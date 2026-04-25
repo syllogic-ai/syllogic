@@ -169,9 +169,11 @@ def sync_bank_connection(self, connection_id: str):
         except Exception as e:
             # Don't fail the sync if account-level fetch hiccups — the per-account
             # transaction sync below has its own error handling, and IBAN backfill
-            # can retry on the next sync.
+            # can retry on the next sync. Use exc_info=True to surface the full
+            # traceback in worker logs so unexpected failures are diagnosable.
             logger.warning(
-                f"[SYNC] IBAN backfill skipped for connection {connection_id}: {e}"
+                "[SYNC] IBAN backfill skipped for connection %s: %s",
+                connection_id, e, exc_info=True,
             )
             db.rollback()
 
