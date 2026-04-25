@@ -115,3 +115,60 @@ def test_currency_cached_across_calls():
     assert q1 is not None and q2 is not None
     assert q1.currency == "EUR" and q2.currency == "EUR"
     assert get.call_count == 3  # not 4 — OVERVIEW called only once
+
+
+def test_search_symbols_returns_matches():
+    response = {
+        "bestMatches": [
+            {
+                "1. symbol": "AAPL",
+                "2. name": "Apple Inc",
+                "4. region": "United States",
+                "8. currency": "USD",
+            },
+            {
+                "1. symbol": "AAPL.LON",
+                "2. name": "Apple Inc",
+                "4. region": "United Kingdom",
+                "8. currency": "GBP",
+            },
+        ]
+    }
+    with patch(
+        "app.integrations.price_provider.alpha_vantage_provider.httpx.get"
+    ) as get:
+        get.return_value = MagicMock(json=lambda: response, raise_for_status=lambda: None)
+        out = AlphaVantagePriceProvider(api_key="X").search_symbols("apple")
+    assert [m.symbol for m in out] == ["AAPL", "AAPL.LON"]
+    assert out[0].currency == "USD"
+    assert out[1].exchange == "United Kingdom"
+
+
+def test_search_symbols_empty():
+    with patch(
+        "app.integrations.price_provider.alpha_vantage_provider.httpx.get"
+    ) as get:
+        get.return_value = MagicMock(
+            json=lambda: {"bestMatches": []}, raise_for_status=lambda: None
+        )
+        assert AlphaVantagePriceProvider(api_key="X").search_symbols("zzz") == []
+
+
+def test_get_daily_closes_loops_per_symbol():
+    ts_aapl = _ts_daily_response([("2026-04-18", "234.56")])
+    ts_msft = _ts_daily_response([("2026-04-18", "410.10")])
+    with patch(
+        "app.integrations.price_provider.alpha_vantage_provider.httpx.get"
+    ) as get:
+        get.side_effect = [
+            MagicMock(json=lambda: ts_aapl, raise_for_status=lambda: None),
+            MagicMock(json=lambda: _overview_response("USD"), raise_for_status=lambda: None),
+            MagicMock(json=lambda: ts_msft, raise_for_status=lambda: None),
+            MagicMock(json=lambda: _overview_response("USD"), raise_for_status=lambda: None),
+        ]
+        out = AlphaVantagePriceProvider(api_key="X").get_daily_closes(
+            ["AAPL", "MSFT"], date(2026, 4, 18)
+        )
+    assert set(out.keys()) == {"AAPL", "MSFT"}
+    assert out["AAPL"].close == Decimal("234.56")
+    assert out["MSFT"].close == Decimal("410.10")
