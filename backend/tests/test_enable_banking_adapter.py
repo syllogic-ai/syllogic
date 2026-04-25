@@ -177,5 +177,63 @@ class TestCounterpartyIban(unittest.TestCase):
         self.assertEqual(txn.counterparty_iban, "NL91ABNA0417164300")
 
 
+class TestFetchAccountsIban(unittest.TestCase):
+    """fetch_accounts must populate AccountData.iban from the raw EB session response."""
+
+    def setUp(self):
+        # Bypass __init__ — we don't need the real HTTP client to test transformation
+        self.adapter = EnableBankingAdapter.__new__(EnableBankingAdapter)
+        self.adapter.session_id = "session-123"
+
+    def test_fetch_accounts_extracts_iban_from_raw(self):
+        """A session-data response with iban populated must surface it on AccountData."""
+        from unittest.mock import MagicMock
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "aspsp": {"name": "ABN AMRO"},
+            "accounts": [
+                {
+                    "uid": "acc-1",
+                    "iban": "NL91 ABNA 0417 1643 00",
+                    "account_name": "Main Checking",
+                    "cash_account_type": "CACC",
+                    "currency": "EUR",
+                },
+            ],
+        }
+        self.adapter.client = MagicMock()
+        self.adapter.client.get.return_value = mock_response
+
+        accounts = self.adapter.fetch_accounts()
+
+        self.assertEqual(len(accounts), 1)
+        # IBAN must be passed through to AccountData. Whitespace is left as-is here
+        # — normalization happens at persist time alongside the existing helper.
+        self.assertEqual(accounts[0].iban, "NL91 ABNA 0417 1643 00")
+
+    def test_fetch_accounts_iban_is_none_when_missing(self):
+        """Accounts without an IBAN (e.g. some credit cards) must yield iban=None."""
+        from unittest.mock import MagicMock
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "aspsp": {"name": "ABN AMRO"},
+            "accounts": [
+                {
+                    "uid": "acc-2",
+                    "account_name": "Credit Card",
+                    "cash_account_type": "CARD",
+                    "currency": "EUR",
+                },
+            ],
+        }
+        self.adapter.client = MagicMock()
+        self.adapter.client.get.return_value = mock_response
+
+        accounts = self.adapter.fetch_accounts()
+
+        self.assertEqual(len(accounts), 1)
+        self.assertIsNone(accounts[0].iban)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -80,6 +80,7 @@ class EnableBankingAdapter(BankAdapter):
                 account_type=self._map_account_type(acc.get("cash_account_type")),
                 institution=aspsp_name,
                 currency=acc.get("currency", "EUR"),
+                iban=acc.get("iban"),
                 balance_available=None,  # Fetched separately via fetch_balances
             ))
         return accounts
