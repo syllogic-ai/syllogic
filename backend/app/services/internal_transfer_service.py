@@ -1,9 +1,12 @@
-"""Detect and manage internal transfers between the user's synced accounts
-and their manually-registered pocket accounts.
+"""Detect and manage internal transfers between any of the user's accounts
+(synced or manually-registered).
 
 Matching is done by counterparty IBAN blind index: transactions whose
-`counterparty_iban_hash` matches a manual account's `iban_hash` are linked to
-that pocket, and a mirror transaction is created on the pocket side.
+`counterparty_iban_hash` matches any of the user's account `iban_hash` values
+are linked to that destination account. A mirror transaction is created only
+when the destination is a manual pocket — synced destinations get their own
+transaction directly from the data provider (e.g. Enable Banking), so no
+mirror is needed and ``internal_transfers.mirror_txn_id`` is left NULL.
 """
 from __future__ import annotations
 
@@ -33,21 +36,25 @@ class InternalTransferService:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _load_pocket_map(self) -> Dict[str, Account]:
-        """Return ``{iban_hash: pocket_account}`` for this user's active manual
-        accounts that have an IBAN hash recorded.
+    def _load_user_account_iban_map(self) -> Dict[str, Account]:
+        """Return ``{iban_hash: account}`` for ALL of this user's active accounts
+        that have an IBAN hash recorded (synced and manual alike).
+
+        The caller branches on ``account.provider`` to decide whether to mirror
+        the transfer (manual destinations, where no other transaction source
+        exists) or just tag and link it (synced destinations, where EB delivers
+        the destination side's transaction independently).
         """
-        pockets = (
+        accounts = (
             self.db.query(Account)
             .filter(
                 Account.user_id == self.user_id,
-                Account.provider == "manual",
                 Account.iban_hash.isnot(None),
                 Account.is_active.is_(True),
             )
             .all()
         )
-        return {p.iban_hash: p for p in pockets}
+        return {a.iban_hash: a for a in accounts}
 
     def _resolve_transfer_category_id(self) -> Optional[UUID]:
         cat = (
@@ -82,7 +89,7 @@ class InternalTransferService:
         if not transaction_ids:
             return empty_result
 
-        pocket_map = self._load_pocket_map()
+        pocket_map = self._load_user_account_iban_map()
         if not pocket_map:
             return empty_result
 
@@ -119,39 +126,49 @@ class InternalTransferService:
             if pocket is None or pocket.id == src.account_id:
                 continue
 
-            mirror_amount = -src.amount
-            mirror_functional = (
-                -src.functional_amount if src.functional_amount is not None else None
-            )
+            is_manual = pocket.provider == "manual"
 
-            src_account_name = getattr(src.account, "name", None) or "account"
-            description = (
-                f"Transfer from {src_account_name}"
-                if mirror_amount > 0
-                else f"Transfer to {src_account_name}"
-            )
+            # Branch on destination provider:
+            #  - manual → create mirror so the manual side's balance reflects the transfer
+            #  - synced → no mirror (EB delivers that side's transaction independently);
+            #    still record an internal_transfers link with mirror_txn_id=NULL so the
+            #    unlink endpoint and analytics flag work the same way for both shapes.
+            mirror_id: Optional[UUID] = None
+            if is_manual:
+                mirror_amount = -src.amount
+                mirror_functional = (
+                    -src.functional_amount if src.functional_amount is not None else None
+                )
 
-            mirror = Transaction(
-                user_id=self.user_id,
-                account_id=pocket.id,
-                external_id=f"mirror-{src.id}",
-                amount=mirror_amount,
-                currency=src.currency,
-                functional_amount=mirror_functional,
-                description=description,
-                merchant=src_account_name,
-                booked_at=src.booked_at,
-                transaction_type="credit" if mirror_amount > 0 else "debit",
-                category_system_id=transfer_category_id,
-                include_in_analytics=False,
-            )
-            self.db.add(mirror)
-            self.db.flush()  # assigns mirror.id
+                src_account_name = getattr(src.account, "name", None) or "account"
+                description = (
+                    f"Transfer from {src_account_name}"
+                    if mirror_amount > 0
+                    else f"Transfer to {src_account_name}"
+                )
+
+                mirror = Transaction(
+                    user_id=self.user_id,
+                    account_id=pocket.id,
+                    external_id=f"mirror-{src.id}",
+                    amount=mirror_amount,
+                    currency=src.currency,
+                    functional_amount=mirror_functional,
+                    description=description,
+                    merchant=src_account_name,
+                    booked_at=src.booked_at,
+                    transaction_type="credit" if mirror_amount > 0 else "debit",
+                    category_system_id=transfer_category_id,
+                    include_in_analytics=False,
+                )
+                self.db.add(mirror)
+                self.db.flush()  # assigns mirror.id
+                mirror_id = mirror.id
 
             link = InternalTransfer(
                 user_id=self.user_id,
                 source_txn_id=src.id,
-                mirror_txn_id=mirror.id,
+                mirror_txn_id=mirror_id,  # None for synced destinations
                 source_account_id=src.account_id,
                 pocket_account_id=pocket.id,
                 amount=abs(src.amount),
@@ -168,7 +185,12 @@ class InternalTransferService:
             if transfer_category_id and src.category_id is None:
                 src.category_system_id = transfer_category_id
 
-            touched_pockets.add(pocket.id)
+            # Only manual destinations get added to the recalc set — they're the
+            # only ones where a mirror transaction was created and the balance
+            # needs to be recomputed. Synced destinations get their transactions
+            # (and therefore their balance) directly from EB.
+            if is_manual:
+                touched_pockets.add(pocket.id)
             detected += 1
 
         if detected:

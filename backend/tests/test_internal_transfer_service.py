@@ -586,7 +586,7 @@ def test_detect_preserves_user_category_override() -> None:
 
 # ---------------------------------------------------------------------------
 # Test 8: detection is strictly scoped to user — cross-user pockets never match
-# (security invariant; relies on the user_id filter in _load_pocket_map)
+# (security invariant; relies on the user_id filter in _load_user_account_iban_map)
 # ---------------------------------------------------------------------------
 
 def test_detect_does_not_match_cross_user_pocket() -> None:
@@ -634,6 +634,186 @@ def test_detect_does_not_match_cross_user_pocket() -> None:
         db.close()
 
 
+# ---------------------------------------------------------------------------
+# Test 9: synced -> synced detection creates link only, NO mirror
+# ---------------------------------------------------------------------------
+
+def test_detect_synced_to_synced_no_mirror_link_only() -> None:
+    """When the destination is a synced account, detection MUST NOT create a
+    mirror — EB delivers the destination side independently. We still create
+    an internal_transfers row with mirror_txn_id=NULL so the unlink endpoint
+    works, and we mark the source as Transfer + include_in_analytics=False."""
+    _ensure_schema()
+    db = SessionLocal()
+    user_id: Optional[str] = None
+    try:
+        from app.services.internal_transfer_service import InternalTransferService
+
+        user = _make_user(db)
+        user_id = user.id
+        _make_transfer_category(db, user_id)
+        synced_source = _make_synced_account(db, user_id, name="Main Checking")
+
+        # Build a SYNCED destination account (provider='enable_banking') with iban_hash.
+        synced_dest_iban = "NL55SYNCED0000000000"
+        synced_dest = Account(
+            user_id=user_id,
+            name="Synced Savings",
+            account_type="savings",
+            institution="ABN AMRO",
+            currency="EUR",
+            provider="enable_banking",
+            external_id=f"ext-{uuid.uuid4().hex[:12]}",
+            iban_hash=blind_index(synced_dest_iban),
+            is_active=True,
+            starting_balance=Decimal("0"),
+        )
+        db.add(synced_dest)
+        db.commit()
+
+        src = _make_source_transaction(
+            db, user_id, synced_source.id,
+            counterparty_iban=synced_dest_iban,
+            amount=Decimal("-200.00"),
+        )
+
+        service = InternalTransferService(db, user_id=user_id)
+        result = service.detect_for_transactions([src.id])
+
+        assert result["detected"] == 1, f"Expected 1 detection, got {result}"
+        # Synced destinations don't need balance recalc (no mirror added) so
+        # the touched-pockets list does NOT include the synced destination.
+        assert synced_dest.id not in result["pocket_account_ids"]
+
+        # Source flipped
+        db.refresh(src)
+        assert src.include_in_analytics is False
+        assert src.internal_transfer_id is not None
+
+        # Link row exists with mirror_txn_id=NULL
+        link = (
+            db.query(InternalTransfer)
+            .filter(InternalTransfer.id == src.internal_transfer_id)
+            .one()
+        )
+        assert link.mirror_txn_id is None, (
+            "Synced destinations must NOT have a mirror — EB delivers that side independently"
+        )
+        assert link.source_account_id == synced_source.id
+        assert link.pocket_account_id == synced_dest.id
+
+        # CRUCIALLY: no mirror transaction was created on the synced destination
+        mirror_count = (
+            db.query(Transaction)
+            .filter(Transaction.account_id == synced_dest.id)
+            .count()
+        )
+        assert mirror_count == 0, (
+            "Synced destination must not receive a mirror transaction"
+        )
+    finally:
+        if user_id:
+            _cleanup_user(db, user_id)
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# Test 10: synced -> manual still creates mirror (PR #72 behavior preserved)
+# ---------------------------------------------------------------------------
+
+def test_detect_synced_to_manual_still_creates_mirror() -> None:
+    """Existing PR #72 behavior must be preserved: synced→manual still creates a mirror."""
+    _ensure_schema()
+    db = SessionLocal()
+    user_id: Optional[str] = None
+    try:
+        from app.services.internal_transfer_service import InternalTransferService
+
+        user = _make_user(db)
+        user_id = user.id
+        _make_transfer_category(db, user_id)
+        synced = _make_synced_account(db, user_id, name="Main Checking")
+        pocket = _make_pocket_account(db, user_id, iban=POCKET_IBAN)
+        src = _make_source_transaction(
+            db, user_id, synced.id,
+            counterparty_iban=POCKET_IBAN,
+            amount=Decimal("-50.00"),
+        )
+
+        service = InternalTransferService(db, user_id=user_id)
+        result = service.detect_for_transactions([src.id])
+
+        assert result["detected"] == 1
+        # Manual destination IS in the touched list (mirror created → balance recalc needed)
+        assert pocket.id in result["pocket_account_ids"]
+
+        # Mirror exists on pocket with sign-flipped amount
+        mirror = (
+            db.query(Transaction)
+            .filter(Transaction.account_id == pocket.id)
+            .one()
+        )
+        assert mirror.amount == Decimal("50.00")
+    finally:
+        if user_id:
+            _cleanup_user(db, user_id)
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# Test 11: unlink for synced -> synced link (mirror_txn_id=NULL) works
+# ---------------------------------------------------------------------------
+
+def test_unlink_synced_to_synced_link_no_mirror_to_delete() -> None:
+    """Unlinking a synced→synced link (mirror_txn_id=NULL) must restore the source
+    and delete the link without erroring on the missing mirror."""
+    _ensure_schema()
+    db = SessionLocal()
+    user_id: Optional[str] = None
+    try:
+        from app.services.internal_transfer_service import InternalTransferService
+
+        user = _make_user(db)
+        user_id = user.id
+        _make_transfer_category(db, user_id)
+        synced_source = _make_synced_account(db, user_id, name="Main")
+
+        synced_dest_iban = "NL55SYNCED0000000000"
+        synced_dest = Account(
+            user_id=user_id, name="Synced Savings", account_type="savings",
+            institution="ABN AMRO", currency="EUR", provider="enable_banking",
+            external_id=f"ext-{uuid.uuid4().hex[:12]}",
+            iban_hash=blind_index(synced_dest_iban),
+            is_active=True, starting_balance=Decimal("0"),
+        )
+        db.add(synced_dest); db.commit()
+
+        src = _make_source_transaction(
+            db, user_id, synced_source.id,
+            counterparty_iban=synced_dest_iban,
+            amount=Decimal("-200.00"),
+        )
+
+        service = InternalTransferService(db, user_id=user_id)
+        service.detect_for_transactions([src.id])
+        link = db.query(InternalTransfer).filter_by(user_id=user_id).one()
+        assert link.mirror_txn_id is None
+
+        service.unlink(link.id)
+        db.commit()
+
+        # Source restored
+        db.refresh(src)
+        assert src.include_in_analytics is True
+        assert src.internal_transfer_id is None
+        # Link gone
+        assert db.query(InternalTransfer).filter_by(user_id=user_id).count() == 0
+    finally:
+        if user_id:
+            _cleanup_user(db, user_id)
+        db.close()
+
+
 if __name__ == "__main__":
     tests = [
         test_detect_creates_mirror_and_marks_source_not_in_analytics,
@@ -644,6 +824,9 @@ if __name__ == "__main__":
         test_detect_overwrites_stale_system_category,
         test_detect_preserves_user_category_override,
         test_detect_does_not_match_cross_user_pocket,
+        test_detect_synced_to_synced_no_mirror_link_only,
+        test_detect_synced_to_manual_still_creates_mirror,
+        test_unlink_synced_to_synced_link_no_mirror_to_delete,
     ]
     results = []
     for fn in tests:
