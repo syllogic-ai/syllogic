@@ -8,6 +8,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -217,7 +218,17 @@ def create_manual_holding(
         source="manual",
     )
     db.add(holding)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"A {payload.instrument_type} holding for {payload.symbol} already "
+                "exists in this account. Edit the existing holding instead of adding a new one."
+            ),
+        )
     db.refresh(holding)
 
     # Trigger an async revaluation so the new holding gets priced.
