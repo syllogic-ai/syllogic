@@ -53,6 +53,29 @@ class SyncService:
             account.external_id_ciphertext = None
             account.external_id = external_id
 
+    @staticmethod
+    def _set_account_iban_fields(account: Account, iban: Optional[str]) -> None:
+        """Persist iban_ciphertext + iban_hash on a synced account.
+
+        IBAN is treated as immutable. If the account already has iban_hash set,
+        we do NOT overwrite — bank IBANs don't change in practice, and avoiding
+        overwrites prevents a transient EB-response anomaly from corrupting
+        the registered IBAN. Whitespace is stripped and the value is upper-cased
+        before encryption to match the format used everywhere else in the codebase.
+        """
+        if not iban:
+            return
+        if account.iban_hash is not None:
+            return
+        normalized = iban.replace(" ", "").upper()
+        encrypted = encrypt_value(normalized)
+        hashed = blind_index(normalized)
+        if encrypted is None or hashed is None:
+            # Encryption not configured — silent skip (mirrors external_id behavior).
+            return
+        account.iban_ciphertext = encrypted
+        account.iban_hash = hashed
+
     def _find_existing_account(self, provider: str, external_id: Optional[str]) -> Optional[Account]:
         query = self.db.query(Account).filter(
             Account.user_id == self.user_id,
@@ -146,6 +169,7 @@ class SyncService:
                 # balance_current removed - use functional_balance instead
                 existing_account.balance_available = account_data.balance_available
                 self._set_account_external_id_fields(existing_account, account_data.external_id)
+                self._set_account_iban_fields(existing_account, account_data.iban)
                 existing_account.is_active = True
                 synced_accounts.append(existing_account)
             else:
@@ -161,6 +185,7 @@ class SyncService:
                     balance_available=account_data.balance_available,
                 )
                 self._set_account_external_id_fields(new_account, account_data.external_id)
+                self._set_account_iban_fields(new_account, account_data.iban)
                 self.db.add(new_account)
                 synced_accounts.append(new_account)
         
