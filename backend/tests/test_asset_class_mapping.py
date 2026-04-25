@@ -21,6 +21,17 @@ class TestAccountTypeToAssetClass:
         assert account_type_to_asset_class("investment") == "investment"
         assert account_type_to_asset_class("brokerage") == "investment"
 
+    def test_investment_brokerage_and_manual_map_to_investment(self):
+        # IBKR sync and manual investments use these account_type values.
+        assert account_type_to_asset_class("investment_brokerage") == "investment"
+        assert account_type_to_asset_class("investment_manual") == "investment"
+
+    def test_credit_card_maps_to_other(self):
+        assert account_type_to_asset_class("credit_card") == "other"
+
+    def test_cash_maps_to_cash(self):
+        assert account_type_to_asset_class("cash") == "cash"
+
     def test_crypto_property_vehicle_self(self):
         assert account_type_to_asset_class("crypto") == "crypto"
         assert account_type_to_asset_class("property") == "property"

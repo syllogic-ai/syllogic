@@ -20,9 +20,13 @@ ASSET_CLASS_KEYS: tuple[str, ...] = (
 
 _ACCOUNT_TYPE_TO_ASSET_CLASS: dict[str, str] = {
     "checking": "cash",
+    "cash": "cash",
     "savings": "savings",
     "credit": "other",
+    "credit_card": "other",
     "investment": "investment",
+    "investment_brokerage": "investment",
+    "investment_manual": "investment",
     "brokerage": "investment",
     "crypto": "crypto",
     "property": "property",

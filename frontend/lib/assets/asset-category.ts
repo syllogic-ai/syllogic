@@ -39,9 +39,13 @@ export const ASSET_CATEGORY_COLORS: Record<AssetCategoryKey, string> = {
 
 const ACCOUNT_TYPE_TO_CATEGORY: Record<string, AssetCategoryKey> = {
   checking: "cash",
+  cash: "cash",
   savings: "savings",
   credit: "other",
+  credit_card: "other",
   investment: "investment",
+  investment_brokerage: "investment",
+  investment_manual: "investment",
   brokerage: "investment",
   crypto: "crypto",
   property: "property",

@@ -24,6 +24,20 @@ describe("getAssetCategory", () => {
     expect(getAssetCategory("brokerage")).toBe("investment");
   });
 
+  it("maps investment_brokerage and investment_manual to investment", () => {
+    // IBKR sync and manual investments use these account_type values.
+    expect(getAssetCategory("investment_brokerage")).toBe("investment");
+    expect(getAssetCategory("investment_manual")).toBe("investment");
+  });
+
+  it("maps credit_card to other", () => {
+    expect(getAssetCategory("credit_card")).toBe("other");
+  });
+
+  it("maps cash to cash", () => {
+    expect(getAssetCategory("cash")).toBe("cash");
+  });
+
   it("maps crypto / property / vehicle to themselves", () => {
     expect(getAssetCategory("crypto")).toBe("crypto");
     expect(getAssetCategory("property")).toBe("property");
