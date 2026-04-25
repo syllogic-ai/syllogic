@@ -13,7 +13,15 @@ export function AllocationDonut({
   const cx = 40;
   const cy = 40;
   const C = 2 * Math.PI * r;
-  let acc = 0;
+  const cumulative = segments.reduce<number[]>((arr, s) => {
+    arr.push((arr[arr.length - 1] ?? 0) + s.pct);
+    return arr;
+  }, []);
+  const segs = segments.map((s, i) => ({
+    color: s.color,
+    dash: (s.pct / 100) * C,
+    offset: -((cumulative[i - 1] ?? 0) / 100) * C,
+  }));
   return (
     <svg width={size} height={size} viewBox="0 0 80 80">
       <circle
@@ -24,10 +32,7 @@ export function AllocationDonut({
         stroke={T.border}
         strokeWidth="12"
       />
-      {segments.map((s, i) => {
-        const dash = (s.pct / 100) * C;
-        const offset = -(acc / 100) * C;
-        acc += s.pct;
+      {segs.map((s, i) => {
         return (
           <circle
             key={i}
@@ -37,8 +42,8 @@ export function AllocationDonut({
             fill="none"
             stroke={s.color}
             strokeWidth="12"
-            strokeDasharray={`${dash} ${C}`}
-            strokeDashoffset={offset}
+            strokeDasharray={`${s.dash} ${C}`}
+            strokeDashoffset={s.offset}
             transform="rotate(-90 40 40)"
           />
         );
