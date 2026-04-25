@@ -22,10 +22,10 @@ export default async function HoldingDetailPage({
     getPortfolio(),
   ]);
   const holding = holdings.find((h) => h.id === holdingId);
-  if (!holding) notFound();
+  if (!holding) return notFound();
   return (
     <HoldingDetailView
-      holding={holding!}
+      holding={holding}
       portfolio={portfolio}
       initialHistory={history}
     />
