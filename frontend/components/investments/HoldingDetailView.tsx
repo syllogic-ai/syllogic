@@ -81,6 +81,7 @@ export function HoldingDetailView({
         if (activeRangeRef.current === r) setHistory(next);
       } catch {
         if (activeRangeRef.current === r) {
+          activeRangeRef.current = prev;
           setRange(prev);
           setChartErr("Could not load history.");
         }
