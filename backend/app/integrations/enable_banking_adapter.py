@@ -149,10 +149,13 @@ class EnableBankingAdapter(BankAdapter):
             ])
             external_id = "synth-" + _hashlib.sha256(_parts.encode()).hexdigest()[:16]
 
-        # Log raw text fields to debug missing descriptions (TEMPORARY - remove after diagnosis)
+        # Log raw text fields to debug missing descriptions (TEMPORARY - remove after diagnosis).
+        # Also includes creditor_account / debtor_account / extracted IBAN so we can verify
+        # whether ABN AMRO populates the structured account-IBAN field per the EB spec.
         _log.info(
             "[EB_DEBUG] txn=%s amount=%s fields: riu=%r riua=%r ri=%r ai=%r note=%r refnum=%r "
-            "cn=%r dn=%r creditor=%r debtor=%r keys=%s",
+            "cn=%r dn=%r creditor=%r debtor=%r creditor_account=%r debtor_account=%r "
+            "extracted_creditor_iban=%r extracted_debtor_iban=%r keys=%s",
             external_id,
             amount,
             raw.get("remittance_information_unstructured"),
@@ -165,6 +168,10 @@ class EnableBankingAdapter(BankAdapter):
             raw.get("debtor_name"),
             raw.get("creditor"),
             raw.get("debtor"),
+            raw.get("creditor_account"),
+            raw.get("debtor_account"),
+            _extract_iban(raw.get("creditor_account")) or _extract_iban(raw.get("creditor")),
+            _extract_iban(raw.get("debtor_account")) or _extract_iban(raw.get("debtor")),
             sorted(raw.keys()),
         )
 
