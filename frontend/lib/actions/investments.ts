@@ -22,3 +22,8 @@ export async function fetchHoldingHistoryRange(holdingId: string, range: Range) 
   const { from, to } = rangeToDates(range);
   return getHoldingHistory(holdingId, from, to);
 }
+
+export async function syncAllInvestmentsAction(): Promise<{ count: number }> {
+  const { syncAllInvestments } = await import("@/lib/api/investments");
+  return syncAllInvestments();
+}
