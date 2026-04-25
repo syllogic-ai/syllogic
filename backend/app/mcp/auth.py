@@ -2,6 +2,8 @@
 API Key authentication for the MCP server.
 Validates API keys and resolves them to user IDs.
 """
+from __future__ import annotations
+
 import hashlib
 import os
 import bcrypt

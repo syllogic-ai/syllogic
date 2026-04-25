@@ -1,0 +1,488 @@
+"""REST endpoints for investment connections, holdings, and portfolio."""
+from __future__ import annotations
+
+from datetime import date, datetime, timedelta
+from decimal import Decimal
+from typing import Optional
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import desc
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.db_helpers import get_user_id
+from app.integrations.price_provider import get_price_provider
+from app.models import (
+    Account,
+    AccountBalance,
+    BrokerConnection,
+    Holding,
+    HoldingValuation,
+    User,
+)
+from app.schemas import (
+    BrokerConnectionCreate,
+    HoldingCreate,
+    HoldingUpdate,
+    HoldingResponse,
+    ManualAccountCreate,
+    PortfolioSummary,
+    SymbolSearchResult,
+    ValuationPoint,
+)
+from app.services import credentials_crypto
+from tasks.investment_tasks import sync_investment_account
+
+router = APIRouter()
+
+
+# ---------------------------------------------------------------------------
+# Broker connections
+# ---------------------------------------------------------------------------
+
+
+@router.post("/broker-connections")
+def create_broker_connection(
+    payload: BrokerConnectionCreate,
+    user_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    user_id = get_user_id(user_id)
+
+    # Create the underlying brokerage account.
+    account = Account(
+        user_id=user_id,
+        name=payload.account_name,
+        account_type="investment_brokerage",
+        currency=payload.base_currency,
+        provider=payload.provider,
+    )
+    db.add(account)
+    db.flush()
+
+    creds = {
+        "flex_token": payload.flex_token,
+        "query_id_positions": payload.query_id_positions,
+        "query_id_trades": payload.query_id_trades,
+    }
+    encrypted = credentials_crypto.encrypt(creds)
+
+    conn = BrokerConnection(
+        user_id=user_id,
+        account_id=account.id,
+        provider=payload.provider,
+        credentials_encrypted=encrypted,
+        last_sync_status="pending",
+    )
+    db.add(conn)
+    db.commit()
+    db.refresh(conn)
+
+    # Kick off background sync.
+    sync_investment_account.delay(str(account.id))
+
+    return {
+        "connection_id": str(conn.id),
+        "account_id": str(account.id),
+        "provider": conn.provider,
+        "last_sync_status": conn.last_sync_status,
+    }
+
+
+@router.get("/broker-connections")
+def list_broker_connections(
+    user_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    user_id = get_user_id(user_id)
+    conns = db.query(BrokerConnection).filter(BrokerConnection.user_id == user_id).all()
+    return [
+        {
+            "id": str(c.id),
+            "account_id": str(c.account_id),
+            "provider": c.provider,
+            "last_sync_at": c.last_sync_at.isoformat() if c.last_sync_at else None,
+            "last_sync_status": c.last_sync_status,
+            "last_sync_error": c.last_sync_error,
+        }
+        for c in conns
+    ]
+
+
+@router.post("/broker-connections/{connection_id}/sync")
+def trigger_sync(
+    connection_id: UUID,
+    user_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    user_id = get_user_id(user_id)
+    conn = (
+        db.query(BrokerConnection)
+        .filter(BrokerConnection.id == connection_id, BrokerConnection.user_id == user_id)
+        .first()
+    )
+    if not conn:
+        raise HTTPException(status_code=404, detail="Broker connection not found")
+    sync_investment_account.delay(str(conn.account_id))
+    return {"status": "queued", "account_id": str(conn.account_id)}
+
+
+@router.delete("/broker-connections/{connection_id}", status_code=204)
+def delete_broker_connection(
+    connection_id: UUID,
+    user_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    user_id = get_user_id(user_id)
+    conn = (
+        db.query(BrokerConnection)
+        .filter(BrokerConnection.id == connection_id, BrokerConnection.user_id == user_id)
+        .first()
+    )
+    if not conn:
+        raise HTTPException(status_code=404, detail="Broker connection not found")
+    db.delete(conn)
+    db.commit()
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Manual investment accounts
+# ---------------------------------------------------------------------------
+
+
+@router.post("/manual-accounts")
+def create_manual_account(
+    payload: ManualAccountCreate,
+    user_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    user_id = get_user_id(user_id)
+    account = Account(
+        user_id=user_id,
+        name=payload.name,
+        account_type="investment_manual",
+        currency=payload.base_currency,
+        provider="manual",
+    )
+    db.add(account)
+    db.commit()
+    db.refresh(account)
+    return {
+        "account_id": str(account.id),
+        "name": account.name,
+        "currency": account.currency,
+    }
+
+
+@router.post("/manual-accounts/{account_id}/holdings")
+def create_manual_holding(
+    account_id: UUID,
+    payload: HoldingCreate,
+    user_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    user_id = get_user_id(user_id)
+    account = (
+        db.query(Account)
+        .filter(Account.id == account_id, Account.user_id == user_id)
+        .first()
+    )
+    if not account or account.account_type != "investment_manual":
+        raise HTTPException(status_code=404, detail="Manual investment account not found")
+
+    # Resolve symbol metadata via the price provider.
+    name: Optional[str] = None
+    try:
+        provider = get_price_provider()
+        matches = provider.search_symbols(payload.symbol)
+        if matches:
+            top = matches[0]
+            name = getattr(top, "name", None)
+    except Exception:
+        # Symbol lookup is best-effort; do not fail the holding creation.
+        name = None
+
+    holding = Holding(
+        user_id=user_id,
+        account_id=account.id,
+        symbol=payload.symbol,
+        name=name,
+        currency=payload.currency,
+        instrument_type=payload.instrument_type,
+        quantity=payload.quantity,
+        avg_cost=payload.avg_cost,
+        as_of_date=payload.as_of_date,
+        source="manual",
+    )
+    db.add(holding)
+    db.commit()
+    db.refresh(holding)
+
+    # Trigger an async revaluation so the new holding gets priced.
+    try:
+        sync_investment_account.delay(str(account.id))
+    except Exception:
+        pass
+
+    return {
+        "holding_id": str(holding.id),
+        "account_id": str(account.id),
+        "symbol": holding.symbol,
+        "name": holding.name,
+        "quantity": str(holding.quantity),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Holdings
+# ---------------------------------------------------------------------------
+
+
+@router.get("/holdings", response_model=list[HoldingResponse])
+def list_holdings(
+    account_id: Optional[UUID] = None,
+    user_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    user_id = get_user_id(user_id)
+    query = db.query(Holding).filter(Holding.user_id == user_id)
+    if account_id is not None:
+        query = query.filter(Holding.account_id == account_id)
+
+    results: list[HoldingResponse] = []
+    for h in query.all():
+        latest_val = (
+            db.query(HoldingValuation)
+            .filter(HoldingValuation.holding_id == h.id)
+            .order_by(desc(HoldingValuation.date))
+            .first()
+        )
+        results.append(
+            HoldingResponse(
+                id=h.id,
+                account_id=h.account_id,
+                symbol=h.symbol,
+                name=h.name,
+                currency=h.currency,
+                instrument_type=h.instrument_type,
+                quantity=h.quantity,
+                avg_cost=h.avg_cost,
+                as_of_date=h.as_of_date,
+                source=h.source,
+                current_price=latest_val.price if latest_val else None,
+                current_value_user_currency=(
+                    latest_val.value_user_currency if latest_val else None
+                ),
+                is_stale=bool(latest_val.is_stale) if latest_val else False,
+            )
+        )
+    return results
+
+
+@router.patch("/holdings/{holding_id}")
+def update_holding(
+    holding_id: UUID,
+    updates: HoldingUpdate,
+    user_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    user_id = get_user_id(user_id)
+    holding = (
+        db.query(Holding)
+        .filter(Holding.id == holding_id, Holding.user_id == user_id)
+        .first()
+    )
+    if not holding:
+        raise HTTPException(status_code=404, detail="Holding not found")
+    if holding.source != "manual":
+        raise HTTPException(status_code=400, detail="Only manual holdings can be edited")
+
+    payload = updates.model_dump(exclude_unset=True)
+    for field, value in payload.items():
+        setattr(holding, field, value)
+    db.commit()
+    db.refresh(holding)
+    return {"id": str(holding.id), "quantity": str(holding.quantity)}
+
+
+@router.delete("/holdings/{holding_id}", status_code=204)
+def delete_holding(
+    holding_id: UUID,
+    user_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    user_id = get_user_id(user_id)
+    holding = (
+        db.query(Holding)
+        .filter(Holding.id == holding_id, Holding.user_id == user_id)
+        .first()
+    )
+    if not holding:
+        raise HTTPException(status_code=404, detail="Holding not found")
+    if holding.source != "manual":
+        raise HTTPException(status_code=400, detail="Only manual holdings can be deleted")
+    db.delete(holding)
+    db.commit()
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Portfolio
+# ---------------------------------------------------------------------------
+
+
+@router.get("/portfolio/summary", response_model=PortfolioSummary)
+def portfolio_summary(
+    user_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    user_id = get_user_id(user_id)
+    user = db.query(User).filter(User.id == user_id).first()
+    currency = getattr(user, "functional_currency", "EUR") or "EUR"
+
+    accounts = (
+        db.query(Account)
+        .filter(
+            Account.user_id == user_id,
+            Account.account_type.in_(["investment_brokerage", "investment_manual"]),
+        )
+        .all()
+    )
+
+    total_value = Decimal("0")
+    today_change = Decimal("0")
+    allocation_by_type: dict[str, Decimal] = {}
+    allocation_by_currency: dict[str, Decimal] = {}
+    accounts_payload: list[dict] = []
+
+    for account in accounts:
+        # Account total = sum of latest valuations across its holdings.
+        account_value = Decimal("0")
+        holdings = db.query(Holding).filter(Holding.account_id == account.id).all()
+        for h in holdings:
+            latest = (
+                db.query(HoldingValuation)
+                .filter(HoldingValuation.holding_id == h.id)
+                .order_by(desc(HoldingValuation.date))
+                .first()
+            )
+            if latest:
+                account_value += Decimal(latest.value_user_currency)
+                allocation_by_type[h.instrument_type] = (
+                    allocation_by_type.get(h.instrument_type, Decimal("0"))
+                    + Decimal(latest.value_user_currency)
+                )
+                allocation_by_currency[h.currency] = (
+                    allocation_by_currency.get(h.currency, Decimal("0"))
+                    + Decimal(latest.value_user_currency)
+                )
+
+        total_value += account_value
+
+        # Today change: today's snapshot vs the immediately prior snapshot.
+        # Skip if no snapshot for today (e.g. weekend, holiday, missed Celery run)
+        # so we don't surface a stale delta as "today's" movement.
+        today_iso = date.today()
+        latest_balance = (
+            db.query(AccountBalance)
+            .filter(
+                AccountBalance.account_id == account.id,
+                AccountBalance.date == today_iso,
+            )
+            .order_by(desc(AccountBalance.date))
+            .first()
+        )
+        if latest_balance is not None:
+            prior_balance = (
+                db.query(AccountBalance)
+                .filter(
+                    AccountBalance.account_id == account.id,
+                    AccountBalance.date < today_iso,
+                )
+                .order_by(desc(AccountBalance.date))
+                .first()
+            )
+            if prior_balance is not None:
+                today_change += Decimal(
+                    latest_balance.balance_in_functional_currency
+                ) - Decimal(prior_balance.balance_in_functional_currency)
+
+        accounts_payload.append(
+            {
+                "id": str(account.id),
+                "name": account.name,
+                "type": account.account_type,
+                "currency": account.currency,
+                "value": str(account_value),
+            }
+        )
+
+    return PortfolioSummary(
+        total_value=total_value,
+        total_value_today_change=today_change,
+        currency=currency,
+        accounts=accounts_payload,
+        allocation_by_type=allocation_by_type,
+        allocation_by_currency=allocation_by_currency,
+    )
+
+
+@router.get("/portfolio/history", response_model=list[ValuationPoint])
+def portfolio_history(
+    days: int = Query(30, ge=1, le=3650),
+    user_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    user_id = get_user_id(user_id)
+    cutoff = date.today() - timedelta(days=days)
+
+    accounts = (
+        db.query(Account.id)
+        .filter(
+            Account.user_id == user_id,
+            Account.account_type.in_(["investment_brokerage", "investment_manual"]),
+        )
+        .all()
+    )
+    account_ids = [a.id for a in accounts]
+    if not account_ids:
+        return []
+
+    rows = (
+        db.query(AccountBalance)
+        .filter(
+            AccountBalance.account_id.in_(account_ids),
+            AccountBalance.date >= cutoff,
+        )
+        .order_by(AccountBalance.date.asc())
+        .all()
+    )
+
+    by_date: dict[date, Decimal] = {}
+    for r in rows:
+        d = r.date.date() if isinstance(r.date, datetime) else r.date
+        by_date[d] = by_date.get(d, Decimal("0")) + Decimal(r.balance_in_functional_currency)
+
+    return [ValuationPoint(date=d, value=v) for d, v in sorted(by_date.items())]
+
+
+# ---------------------------------------------------------------------------
+# Symbol search
+# ---------------------------------------------------------------------------
+
+
+@router.get("/symbols/search", response_model=list[SymbolSearchResult])
+def search_symbols(q: str = Query(..., min_length=1)):
+    provider = get_price_provider()
+    matches = provider.search_symbols(q)
+    return [
+        SymbolSearchResult(
+            symbol=getattr(m, "symbol", ""),
+            name=getattr(m, "name", ""),
+            exchange=getattr(m, "exchange", None),
+            currency=getattr(m, "currency", None),
+        )
+        for m in matches
+    ]

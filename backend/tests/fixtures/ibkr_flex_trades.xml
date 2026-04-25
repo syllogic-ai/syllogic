@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FlexQueryResponse queryName="trades" type="AF">
+  <FlexStatements count="1">
+    <FlexStatement accountId="U1234567" fromDate="20260101" toDate="20260418" period="YearToDate">
+      <Trades>
+        <Trade tradeID="T1" symbol="AAPL" assetCategory="STK" currency="USD" tradeDate="20260115" buySell="BUY" quantity="10" tradePrice="180.00"/>
+        <Trade tradeID="T2" symbol="VWCE" assetCategory="ETF" currency="EUR" tradeDate="20260201" buySell="BUY" quantity="42" tradePrice="95.10"/>
+      </Trades>
+    </FlexStatement>
+  </FlexStatements>
+</FlexQueryResponse>

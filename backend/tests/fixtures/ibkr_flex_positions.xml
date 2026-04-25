@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FlexQueryResponse queryName="positions" type="AF">
+  <FlexStatements count="1">
+    <FlexStatement accountId="U1234567" fromDate="20260101" toDate="20260418" period="YearToDate">
+      <OpenPositions>
+        <OpenPosition symbol="AAPL" description="APPLE INC" assetCategory="STK" currency="USD" position="10" markPrice="234.56" costBasisPrice="180.00"/>
+        <OpenPosition symbol="VWCE" description="VANGUARD FTSE ALL-WORLD" assetCategory="ETF" currency="EUR" position="42" markPrice="115.20" costBasisPrice="95.10"/>
+      </OpenPositions>
+      <CashReport>
+        <CashReportCurrency currency="USD" endingCash="1500.00"/>
+        <CashReportCurrency currency="EUR" endingCash="320.50"/>
+      </CashReport>
+    </FlexStatement>
+  </FlexStatements>
+</FlexQueryResponse>

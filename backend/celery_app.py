@@ -13,7 +13,7 @@ celery_app = Celery(
     "finance_tasks",
     broker=REDIS_URL,
     backend=REDIS_URL,
-    include=["tasks.csv_import_tasks", "tasks.demo_tasks", "tasks.enable_banking_tasks", "tasks.post_import_pipeline"],
+    include=["tasks.csv_import_tasks", "tasks.demo_tasks", "tasks.enable_banking_tasks", "tasks.post_import_pipeline", "tasks.investment_tasks"],
 )
 
 
@@ -69,6 +69,16 @@ def _build_beat_schedule() -> dict:
     schedule["check-consent-expiry"] = {
         "task": "tasks.enable_banking_tasks.check_consent_expiry",
         "schedule": crontab(minute=0, hour=9),
+    }
+
+    try:
+        investment_hour = int(os.getenv("SYLLOGIC_INVESTMENT_SYNC_HOUR_UTC", "2"))
+    except ValueError:
+        investment_hour = 2
+    investment_hour = max(0, min(23, investment_hour))
+    schedule["daily-investment-sync-all"] = {
+        "task": "tasks.investment_tasks.daily_investment_sync_all",
+        "schedule": crontab(minute=0, hour=investment_hour),
     }
 
     return schedule

@@ -232,3 +232,83 @@ class DailyBalanceImport(BaseModel):
     """Daily balance data extracted from CSV for import."""
     date: str  # ISO date format YYYY-MM-DD
     balance: Decimal
+
+
+# Investment Schemas
+from datetime import date as _date_date
+from typing import Literal
+
+
+class BrokerConnectionCreate(BaseModel):
+    provider: Literal["ibkr_flex"]
+    flex_token: str
+    query_id_positions: str
+    query_id_trades: str
+    account_name: str
+    base_currency: str = "EUR"
+
+
+class BrokerConnectionResponse(BaseModel):
+    id: UUID
+    account_id: UUID
+    provider: str
+    last_sync_at: Optional[datetime]
+    last_sync_status: Optional[str]
+    last_sync_error: Optional[str]
+
+
+class ManualAccountCreate(BaseModel):
+    name: str
+    base_currency: str = "EUR"
+
+
+class HoldingCreate(BaseModel):
+    symbol: str
+    quantity: Decimal
+    instrument_type: Literal["equity", "etf", "cash"]
+    currency: str
+    as_of_date: Optional[_date_date] = None
+    avg_cost: Optional[Decimal] = None
+
+
+class HoldingUpdate(BaseModel):
+    quantity: Optional[Decimal] = None
+    as_of_date: Optional[_date_date] = None
+    avg_cost: Optional[Decimal] = None
+
+
+class HoldingResponse(BaseModel):
+    id: UUID
+    account_id: UUID
+    symbol: str
+    name: Optional[str]
+    currency: str
+    instrument_type: str
+    quantity: Decimal
+    avg_cost: Optional[Decimal]
+    as_of_date: Optional[_date_date]
+    source: str
+    current_price: Optional[Decimal] = None
+    current_value_user_currency: Optional[Decimal] = None
+    is_stale: bool = False
+
+
+class PortfolioSummary(BaseModel):
+    total_value: Decimal
+    total_value_today_change: Decimal
+    currency: str
+    accounts: list[dict]
+    allocation_by_type: dict[str, Decimal]
+    allocation_by_currency: dict[str, Decimal]
+
+
+class ValuationPoint(BaseModel):
+    date: _date_date
+    value: Decimal
+
+
+class SymbolSearchResult(BaseModel):
+    symbol: str
+    name: str
+    exchange: Optional[str] = None
+    currency: Optional[str] = None

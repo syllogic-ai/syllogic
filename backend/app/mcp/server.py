@@ -8,7 +8,7 @@ from pydantic import AnyHttpUrl
 
 from app.db_helpers import get_mcp_user_id
 from app.mcp.auth import CompositeAuthProvider, AS_ISSUER, MCP_PUBLIC_URL
-from app.mcp.tools import accounts, categories, transactions, analytics, recurring
+from app.mcp.tools import accounts, categories, transactions, analytics, recurring, investments
 
 _auth = RemoteAuthProvider(
     token_verifier=CompositeAuthProvider(),
@@ -40,6 +40,7 @@ The `user_id` parameter is optional on all tools but must match the authenticate
 - **Transactions**: List, search, view, and update categories
 - **Analytics**: Spending/income by category, monthly cashflow, financial summary
 - **Recurring**: List and view subscriptions/bills
+- **Investments**: List holdings, portfolio summary/history, symbol search
 
 ## Bulk recategorization workflow (recommended)
 
@@ -678,3 +679,80 @@ def get_recurring_summary(user_id: str | None = None) -> dict:
         Summary with totals by frequency, importance groups, and monthly/yearly costs
     """
     return recurring.get_recurring_summary(get_mcp_user_id(user_id))
+
+
+# ============================================================================
+# Investment Tools
+# ============================================================================
+
+@mcp.tool
+def list_holdings(
+    account_id: str | None = None,
+    user_id: str | None = None,
+) -> list[dict]:
+    """
+    List investment holdings for a user, with the latest available valuation.
+
+    Args:
+        account_id: Filter to a single investment account (optional)
+        user_id: The user's ID (optional, defaults to configured user)
+
+    Returns:
+        List of holdings with symbol, quantity, latest price, and current value
+        in the user's functional currency.
+    """
+    return investments.list_holdings(get_mcp_user_id(user_id), account_id)
+
+
+@mcp.tool
+def get_portfolio_summary(user_id: str | None = None) -> dict:
+    """
+    Get a summary of the user's investment portfolio.
+
+    Aggregates the latest holding valuations across all active investment
+    accounts (manual + brokerage).
+
+    Args:
+        user_id: The user's ID (optional, defaults to configured user)
+
+    Returns:
+        Dict with currency, total_value, holdings_count, stale_valuations,
+        and a per-account breakdown.
+    """
+    return investments.get_portfolio_summary(get_mcp_user_id(user_id))
+
+
+@mcp.tool
+def get_portfolio_history(
+    from_date: str | None = None,
+    to_date: str | None = None,
+    user_id: str | None = None,
+) -> list[dict]:
+    """
+    Get daily portfolio value history (sum across investment accounts) in
+    the user's functional currency.
+
+    Args:
+        from_date: Start date (ISO YYYY-MM-DD, optional)
+        to_date: End date (ISO YYYY-MM-DD, optional)
+        user_id: The user's ID (optional, defaults to configured user)
+
+    Returns:
+        List of {date, value_user_currency} entries sorted by date.
+    """
+    return investments.get_portfolio_history(get_mcp_user_id(user_id), from_date, to_date)
+
+
+@mcp.tool
+def search_symbol(query: str, user_id: str | None = None) -> list[dict]:
+    """
+    Search the user's existing holdings by symbol or name (case-insensitive).
+
+    Args:
+        query: Substring to match against holding symbol or name
+        user_id: The user's ID (optional, defaults to configured user)
+
+    Returns:
+        List of matching {symbol, name, currency, instrument_type} entries.
+    """
+    return investments.search_symbol(get_mcp_user_id(user_id), query)

@@ -11,6 +11,8 @@ import {
   jsonb,
   index,
   unique,
+  numeric,
+  date,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
@@ -624,6 +626,76 @@ export const companyLogos = pgTable(
     unique("company_logos_domain_unique").on(table.domain),
   ]
 );
+
+export const brokerConnections = pgTable("broker_connections", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  accountId: uuid("account_id").notNull().references(() => accounts.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull(),
+  credentialsEncrypted: text("credentials_encrypted").notNull(),
+  lastSyncAt: timestamp("last_sync_at"),
+  lastSyncStatus: text("last_sync_status").default("pending"),
+  lastSyncError: text("last_sync_error"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const holdings = pgTable("holdings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  accountId: uuid("account_id").notNull().references(() => accounts.id, { onDelete: "cascade" }),
+  symbol: text("symbol").notNull(),
+  name: text("name"),
+  currency: text("currency").notNull(),
+  instrumentType: text("instrument_type").notNull(),
+  quantity: numeric("quantity", { precision: 28, scale: 8 }).notNull(),
+  avgCost: numeric("avg_cost", { precision: 28, scale: 8 }),
+  asOfDate: date("as_of_date"),
+  source: text("source").notNull(),
+  lastPriceError: text("last_price_error"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (t) => ({
+  uniqHolding: uniqueIndex("holdings_account_symbol_type_uq").on(t.accountId, t.symbol, t.instrumentType),
+  byAccount: index("idx_holdings_account").on(t.accountId),
+}));
+
+export const brokerTrades = pgTable("broker_trades", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  accountId: uuid("account_id").notNull().references(() => accounts.id, { onDelete: "cascade" }),
+  symbol: text("symbol").notNull(),
+  tradeDate: date("trade_date").notNull(),
+  side: text("side").notNull(),
+  quantity: numeric("quantity", { precision: 28, scale: 8 }).notNull(),
+  price: numeric("price", { precision: 28, scale: 8 }).notNull(),
+  currency: text("currency").notNull(),
+  externalId: text("external_id").notNull(),
+}, (t) => ({
+  uniqTrade: uniqueIndex("broker_trades_account_external_uq").on(t.accountId, t.externalId),
+}));
+
+export const priceSnapshots = pgTable("price_snapshots", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  symbol: text("symbol").notNull(),
+  currency: text("currency").notNull(),
+  date: date("date").notNull(),
+  close: numeric("close", { precision: 28, scale: 8 }).notNull(),
+  provider: text("provider").notNull(),
+}, (t) => ({
+  uniqSnap: uniqueIndex("price_snapshots_symbol_date_uq").on(t.symbol, t.date),
+}));
+
+export const holdingValuations = pgTable("holding_valuations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  holdingId: uuid("holding_id").notNull().references(() => holdings.id, { onDelete: "cascade" }),
+  date: date("date").notNull(),
+  quantity: numeric("quantity", { precision: 28, scale: 8 }).notNull(),
+  price: numeric("price", { precision: 28, scale: 8 }).notNull(),
+  valueUserCurrency: numeric("value_user_currency", { precision: 15, scale: 2 }).notNull(),
+  isStale: boolean("is_stale").default(false),
+}, (t) => ({
+  uniqVal: uniqueIndex("holding_valuations_holding_date_uq").on(t.holdingId, t.date),
+}));
 
 // ============================================================================
 // Relations
