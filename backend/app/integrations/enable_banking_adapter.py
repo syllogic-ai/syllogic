@@ -255,11 +255,28 @@ class EnableBankingAdapter(BankAdapter):
         ``fetch_accounts`` can't be relied on for IBAN. ``GET /accounts/{uid}/
         details`` is the per-account endpoint that always returns the IBAN.
 
+        The response shape nests the IBAN under ``account_id``:
+
+            {"account_id": {"iban": "FI04..."}, ...}
+
+        We try that path first, and fall back to ``all_account_ids`` (which
+        carries any non-IBAN scheme like BBAN as a separate entry) for ASPSPs
+        that omit the primary ``account_id.iban`` field.
+
         Returns the normalized IBAN (spaces stripped, upper-cased) or None if
-        the account doesn't have one (rare — some credit cards don't).
+        the account doesn't expose an IBAN at all (rare — some credit cards).
         """
         resp = self.client.get(f"/accounts/{account_uid}/details")
         data = resp.json()
         if not isinstance(data, dict):
             return None
-        return _extract_iban(data)
+        iban = _extract_iban(data.get("account_id"))
+        if iban:
+            return iban
+        # Some ASPSPs only put the IBAN inside all_account_ids[]. Iterate
+        # looking for the first IBAN-scheme entry.
+        for entry in data.get("all_account_ids") or []:
+            iban = _extract_iban(entry)
+            if iban:
+                return iban
+        return None

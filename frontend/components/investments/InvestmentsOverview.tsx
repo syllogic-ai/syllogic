@@ -1,10 +1,13 @@
 "use client";
 import { useState, useTransition, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { fetchHistoryRange, type Range } from "@/lib/actions/investments";
+import {
+  fetchHistoryRange,
+  syncAllInvestmentsAction,
+  type Range,
+} from "@/lib/actions/investments";
 import {
   deleteHolding,
-  syncAllInvestments,
   type Holding,
   type PortfolioSummary,
   type ValuationPoint,
@@ -34,6 +37,7 @@ export function InvestmentsOverview({
   const [pending, startTransition] = useTransition();
   const activeRangeRef = useRef<Range>(initialRange);
   const [syncing, setSyncing] = useState(false);
+  const [syncErr, setSyncErr] = useState<string | null>(null);
 
   const series = useMemo(
     () =>
@@ -83,9 +87,12 @@ export function InvestmentsOverview({
 
   const onSync = async () => {
     setSyncing(true);
+    setSyncErr(null);
     try {
-      await syncAllInvestments();
+      await syncAllInvestmentsAction();
       setTimeout(() => router.refresh(), 3000);
+    } catch (e) {
+      setSyncErr(e instanceof Error ? e.message : "Sync failed");
     } finally {
       setSyncing(false);
     }
@@ -146,6 +153,19 @@ export function InvestmentsOverview({
             {syncing ? "Syncing…" : "Refresh prices"}
           </button>
         </div>
+        {syncErr && (
+          <div
+            style={{
+              fontSize: 11,
+              color: "#ef4444",
+              background: "rgba(239,68,68,0.08)",
+              border: "1px solid rgba(239,68,68,0.3)",
+              padding: "6px 10px",
+            }}
+          >
+            Sync error: {syncErr}
+          </div>
+        )}
         <div
           style={{
             background: T.card,
