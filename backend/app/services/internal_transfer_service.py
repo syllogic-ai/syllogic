@@ -54,7 +54,25 @@ class InternalTransferService:
             )
             .all()
         )
-        return {a.iban_hash: a for a in accounts}
+        # Build the map, but exclude any IBAN hash that maps to more than one
+        # account — we can't safely route a transfer to an ambiguous destination.
+        seen: Dict[str, Account] = {}
+        duplicates: set[str] = set()
+        for a in accounts:
+            h = a.iban_hash
+            if h in seen:
+                duplicates.add(h)
+            else:
+                seen[h] = a
+        if duplicates:
+            logger.warning(
+                "[INTERNAL_TRANSFER] %d IBAN hash(es) map to multiple accounts "
+                "for user %s — those hashes will be skipped to avoid mis-routing: %s",
+                len(duplicates),
+                self.user_id,
+                duplicates,
+            )
+        return {h: a for h, a in seen.items() if h not in duplicates}
 
     def _resolve_transfer_category_id(self) -> Optional[UUID]:
         cat = (
