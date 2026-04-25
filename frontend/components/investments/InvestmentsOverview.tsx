@@ -90,7 +90,9 @@ export function InvestmentsOverview({
     setSyncErr(null);
     try {
       await syncAllInvestmentsAction();
-      setTimeout(() => router.refresh(), 3000);
+      // Give the in-process background sync ~10 s to complete before
+      // refreshing. The sync runs in the FastAPI worker after responding.
+      setTimeout(() => router.refresh(), 10_000);
     } catch (e) {
       setSyncErr(e instanceof Error ? e.message : "Sync failed");
     } finally {

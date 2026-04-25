@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import desc
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -33,7 +33,50 @@ from app.schemas import (
     ValuationPoint,
 )
 from app.services import credentials_crypto
-from tasks.investment_tasks import sync_investment_account, daily_investment_sync_all
+
+logger = __import__("logging").getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Helper: in-process sync (FastAPI BackgroundTask, no Celery/Redis required)
+# ---------------------------------------------------------------------------
+
+
+def _run_sync_in_process(account_id: UUID) -> None:
+    """Sync one investment account in the FastAPI worker process.
+
+    Used as a FastAPI BackgroundTask for user-triggered refreshes so the
+    result is guaranteed regardless of whether the Celery broker is
+    reachable from the backend service (scheduled nightly syncs still go
+    through Celery beat → worker as before).
+    """
+    from uuid import UUID as _UUID
+    from app.database import SessionLocal
+    from app.services.investment_sync_service import InvestmentSyncService
+    from app.services.exchange_rate_service import ExchangeRateService
+
+    class _FxAdapter:
+        def __init__(self, db):
+            self._svc = ExchangeRateService(db=db)
+
+        def convert(self, amount, src, dst, on):
+            if src.upper() == dst.upper():
+                return amount
+            result = self._svc.convert_amount(
+                amount=amount, from_currency=src, to_currency=dst, for_date=on,
+            )
+            return result if result is not None else amount
+
+    logger.info("[INVESTMENT_SYNC] Starting in-process sync for account %s", account_id)
+    db = SessionLocal()
+    try:
+        svc = InvestmentSyncService(db=db, fx=_FxAdapter(db))
+        svc.sync_account(_UUID(str(account_id)))
+        logger.info("[INVESTMENT_SYNC] Completed in-process sync for account %s", account_id)
+    except Exception:
+        logger.exception("[INVESTMENT_SYNC] Failed in-process sync for account %s", account_id)
+    finally:
+        db.close()
+
 
 router = APIRouter()
 
@@ -46,6 +89,7 @@ router = APIRouter()
 @router.post("/broker-connections")
 def create_broker_connection(
     payload: BrokerConnectionCreate,
+    background_tasks: BackgroundTasks,
     user_id: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
@@ -81,7 +125,7 @@ def create_broker_connection(
     db.refresh(conn)
 
     # Kick off background sync.
-    sync_investment_account.delay(str(account.id))
+    background_tasks.add_task(_run_sync_in_process, account.id)
 
     return {
         "connection_id": str(conn.id),
@@ -114,6 +158,7 @@ def list_broker_connections(
 @router.post("/broker-connections/{connection_id}/sync")
 def trigger_sync(
     connection_id: UUID,
+    background_tasks: BackgroundTasks,
     user_id: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
@@ -125,17 +170,19 @@ def trigger_sync(
     )
     if not conn:
         raise HTTPException(status_code=404, detail="Broker connection not found")
-    sync_investment_account.delay(str(conn.account_id))
+    background_tasks.add_task(_run_sync_in_process, conn.account_id)
     return {"status": "queued", "account_id": str(conn.account_id)}
 
 
 @router.post("/sync-all")
 def trigger_sync_all(
+    background_tasks: BackgroundTasks,
     user_id: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     """Queue a price-refresh sync for every active investment account belonging
-    to the user (manual + brokerage). Protected by the standard user auth."""
+    to the user (manual + brokerage). Uses Celery when Redis is available,
+    otherwise falls back to FastAPI BackgroundTasks (in-process)."""
     user_id = get_user_id(user_id)
     accounts = (
         db.query(Account)
@@ -147,7 +194,7 @@ def trigger_sync_all(
         .all()
     )
     for account in accounts:
-        sync_investment_account.delay(str(account.id))
+        background_tasks.add_task(_run_sync_in_process, account.id)
     return {"status": "queued", "count": len(accounts)}
 
 
@@ -203,6 +250,7 @@ def create_manual_account(
 def create_manual_holding(
     account_id: UUID,
     payload: HoldingCreate,
+    background_tasks: BackgroundTasks,
     user_id: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
@@ -254,10 +302,7 @@ def create_manual_holding(
     db.refresh(holding)
 
     # Trigger an async revaluation so the new holding gets priced.
-    try:
-        sync_investment_account.delay(str(account.id))
-    except Exception:
-        pass
+    background_tasks.add_task(_run_sync_in_process, account.id)
 
     return {
         "holding_id": str(holding.id),
@@ -318,6 +363,7 @@ def list_holdings(
 def update_holding(
     holding_id: UUID,
     updates: HoldingUpdate,
+    background_tasks: BackgroundTasks,
     user_id: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
@@ -342,10 +388,7 @@ def update_holding(
     # Re-price the account if the symbol was changed so the new symbol
     # gets fetched from the price provider immediately.
     if symbol_changed:
-        try:
-            sync_investment_account.delay(str(holding.account_id))
-        except Exception:
-            pass
+        background_tasks.add_task(_run_sync_in_process, holding.account_id)
 
     return {"id": str(holding.id), "symbol": holding.symbol, "quantity": str(holding.quantity)}
 
