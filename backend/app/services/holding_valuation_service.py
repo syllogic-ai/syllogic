@@ -49,7 +49,8 @@ class HoldingValuationService:
     def _price_for(self, h: Holding, on: date) -> tuple[Decimal, str, bool]:
         if h.instrument_type == "cash":
             return Decimal("1"), h.currency, False
-        snap = self.price_service.latest_snapshot(h.symbol, on)
+        lookup_symbol = h.provider_symbol or h.symbol
+        snap = self.price_service.latest_snapshot(lookup_symbol, on)
         if snap is None:
             return Decimal("0"), h.currency, True
         return Decimal(snap.close), snap.currency, snap.date != on

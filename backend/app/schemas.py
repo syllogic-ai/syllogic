@@ -264,6 +264,7 @@ class ManualAccountCreate(BaseModel):
 
 class HoldingCreate(BaseModel):
     symbol: str
+    provider_symbol: Optional[str] = None
     quantity: Decimal
     instrument_type: Literal["equity", "etf", "cash"]
     currency: str
@@ -275,12 +276,14 @@ class HoldingUpdate(BaseModel):
     quantity: Optional[Decimal] = None
     as_of_date: Optional[_date_date] = None
     avg_cost: Optional[Decimal] = None
+    provider_symbol: Optional[str] = None
 
 
 class HoldingResponse(BaseModel):
     id: UUID
     account_id: UUID
     symbol: str
+    provider_symbol: Optional[str] = None
     name: Optional[str]
     currency: str
     instrument_type: str

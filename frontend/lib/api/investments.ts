@@ -8,6 +8,7 @@ export type Holding = {
   id: string;
   account_id: string;
   symbol: string;
+  provider_symbol?: string | null;
   name: string | null;
   currency: string;
   instrument_type: "equity" | "etf" | "cash";
@@ -206,7 +207,7 @@ export async function syncAllInvestments(): Promise<{ count: number }> {
 
 export async function updateHolding(
   holdingId: string,
-  payload: { quantity?: string; avg_cost?: string; as_of_date?: string },
+  payload: { quantity?: string; avg_cost?: string; as_of_date?: string; provider_symbol?: string | null },
 ): Promise<void> {
   const session = await getAuthenticatedSession();
   if (!session?.user?.id) throw new Error("Not authenticated");

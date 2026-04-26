@@ -231,6 +231,7 @@ def create_manual_holding(
         user_id=user_id,
         account_id=account.id,
         symbol=payload.symbol,
+        provider_symbol=payload.provider_symbol or None,
         name=name,
         currency=payload.currency,
         instrument_type=payload.instrument_type,

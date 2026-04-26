@@ -720,6 +720,7 @@ class Holding(Base):
     user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     account_id = Column(UUID(as_uuid=True), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
     symbol = Column(String(64), nullable=False)
+    provider_symbol = Column(String(64), nullable=True)
     name = Column(String(255))
     currency = Column(String(3), nullable=False)
     instrument_type = Column(String(20), nullable=False)

@@ -27,6 +27,7 @@ export function EditHoldingDialog({
   const [qty, setQty] = useState(holding.quantity);
   const [avgCost, setAvgCost] = useState(holding.avg_cost ?? "");
   const [asOfDate, setAsOfDate] = useState(holding.as_of_date ?? "");
+  const [providerSymbol, setProviderSymbol] = useState(holding.provider_symbol ?? "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -39,6 +40,7 @@ export function EditHoldingDialog({
         quantity: qty,
         ...(avgCost ? { avg_cost: avgCost } : {}),
         ...(asOfDate ? { as_of_date: asOfDate } : {}),
+        provider_symbol: providerSymbol || null,
       });
       onOpenChange(false);
       router.refresh();
@@ -91,6 +93,22 @@ export function EditHoldingDialog({
               value={asOfDate}
               onChange={(e) => setAsOfDate(e.target.value)}
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="provider-symbol">
+              Price lookup symbol{" "}
+              <span className="text-muted-foreground">(optional)</span>
+            </Label>
+            <Input
+              id="provider-symbol"
+              value={providerSymbol}
+              onChange={(e) => setProviderSymbol(e.target.value)}
+              placeholder={`e.g. ${holding.symbol}.LON or ${holding.symbol}.AS`}
+            />
+            <p className="text-xs text-muted-foreground">
+              Override the ticker used for price lookups. Useful for European ETFs
+              that need an exchange suffix (e.g. VUAA → VUAA.LON).
+            </p>
           </div>
           {err && <p className="text-sm text-destructive">{err}</p>}
           <DialogFooter>
