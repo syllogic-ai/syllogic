@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath, revalidateTag } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { users, categories, type User, type NewCategory } from "@/lib/db/schema";
@@ -127,7 +127,7 @@ export async function updatePersonalDetails(
       })
       .where(eq(users.id, session.user.id));
 
-    revalidateTag(CACHE_TAGS.onboarding(session.user.id), "default");
+    updateTag(CACHE_TAGS.onboarding(session.user.id));
     // Ensure layout consumers (sidebar avatar) pick up the updated image immediately.
     revalidatePath("/", "layout");
     return { success: true };
@@ -184,8 +184,8 @@ export async function saveOnboardingCategories(
       })
       .where(eq(users.id, userId));
 
-    revalidateTag(CACHE_TAGS.onboarding(userId), "default");
-    revalidateTag(CACHE_TAGS.categories(userId), "default");
+    updateTag(CACHE_TAGS.onboarding(userId));
+    updateTag(CACHE_TAGS.categories(userId));
     revalidatePath("/");
     return { success: true };
   } catch (error) {
@@ -215,7 +215,7 @@ export async function completeOnboarding(): Promise<{ success: boolean; error?: 
       })
       .where(eq(users.id, userId));
 
-    revalidateTag(CACHE_TAGS.onboarding(userId), "default");
+    updateTag(CACHE_TAGS.onboarding(userId));
     revalidatePath("/");
     return { success: true };
   } catch (error) {

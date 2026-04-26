@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath, revalidateTag } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { eq, and, lte, gte, lt, desc, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { accounts, accountBalances, transactions, recurringTransactions, subscriptionSuggestions, type NewAccount } from "@/lib/db/schema";
@@ -50,7 +50,7 @@ export async function createAccount(
 
     revalidatePath("/settings");
     revalidatePath("/transactions/import");
-    revalidateTag(CACHE_TAGS.accounts(userId), "default");
+    updateTag(CACHE_TAGS.accounts(userId));
     return { success: true, accountId: result.id };
   } catch (error) {
     console.error("Failed to create account:", error);
@@ -108,7 +108,7 @@ export async function updateAccount(
     revalidatePath("/transactions");
     revalidatePath("/settings");
     revalidatePath("/");
-    revalidateTag(CACHE_TAGS.accounts(userId), "default");
+    updateTag(CACHE_TAGS.accounts(userId));
     return { success: true };
   } catch (error) {
     console.error("Failed to update account:", error);
@@ -147,7 +147,7 @@ export async function deleteAccount(
 
     revalidatePath("/settings");
     revalidatePath("/");
-    revalidateTag(CACHE_TAGS.accounts(userId), "default");
+    updateTag(CACHE_TAGS.accounts(userId));
     return { success: true };
   } catch (error) {
     console.error("Failed to delete account:", error);
@@ -224,7 +224,7 @@ export async function hardDeleteAccount(
     revalidatePath("/");
     revalidatePath("/transactions");
     revalidatePath("/assets");
-    revalidateTag(CACHE_TAGS.accounts(userId), "default");
+    updateTag(CACHE_TAGS.accounts(userId));
 
     return {
       success: true,
@@ -307,7 +307,7 @@ export async function recalculateStartingBalance(
     revalidatePath("/transactions");
     revalidatePath("/");
     revalidatePath("/assets");
-    revalidateTag(CACHE_TAGS.accounts(userId), "default");
+    updateTag(CACHE_TAGS.accounts(userId));
 
     return { success: true, newStartingBalance };
   } catch (error) {

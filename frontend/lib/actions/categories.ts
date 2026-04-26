@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath, revalidateTag } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { eq, and, count } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { categories, transactions, type Category, type NewCategory } from "@/lib/db/schema";
@@ -73,7 +73,7 @@ export async function createCategory(
 
     revalidatePath("/");
     revalidatePath("/settings");
-    revalidateTag(CACHE_TAGS.categories(userId), "default");
+    updateTag(CACHE_TAGS.categories(userId));
     return { success: true, categoryId: inserted.id };
   } catch (error) {
     console.error("Failed to create category:", error);
@@ -131,7 +131,7 @@ export async function updateCategory(
 
       revalidatePath("/");
       revalidatePath("/settings");
-      revalidateTag(CACHE_TAGS.categories(userId), "default");
+      updateTag(CACHE_TAGS.categories(userId));
       return { success: true };
     }
 
@@ -165,7 +165,7 @@ export async function updateCategory(
 
     revalidatePath("/");
     revalidatePath("/settings");
-    revalidateTag(CACHE_TAGS.categories(userId), "default");
+    updateTag(CACHE_TAGS.categories(userId));
     return { success: true };
   } catch (error) {
     console.error("Failed to update category:", error);
@@ -226,7 +226,7 @@ export async function deleteCategory(
     revalidatePath("/");
     revalidatePath("/settings");
     revalidatePath("/transactions");
-    revalidateTag(CACHE_TAGS.categories(userId), "default");
+    updateTag(CACHE_TAGS.categories(userId));
     return { success: true };
   } catch (error) {
     console.error("Failed to delete category:", error);
@@ -397,7 +397,7 @@ export async function deleteCategoryWithReassignment(
     revalidatePath("/");
     revalidatePath("/settings");
     revalidatePath("/transactions");
-    revalidateTag(CACHE_TAGS.categories(userId), "default");
+    updateTag(CACHE_TAGS.categories(userId));
 
     return { success: true, reassignedCount };
   } catch (error) {
