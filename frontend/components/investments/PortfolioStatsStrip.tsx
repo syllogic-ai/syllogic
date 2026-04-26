@@ -1,5 +1,3 @@
-import { T } from "./_tokens";
-
 export function computeBestDay(
   series: number[],
 ): { delta: number; index: number } | null {
@@ -11,6 +9,8 @@ export function computeBestDay(
   }
   return best.delta > 0 ? best : null;
 }
+
+type Tone = "positive" | "negative" | "neutral";
 
 export function PortfolioStatsStrip({
   costBasis,
@@ -29,60 +29,57 @@ export function PortfolioStatsStrip({
   bestDay: { delta: number; label: string } | null;
   currencySymbol?: string;
 }) {
-  const cells: [string, string][] = [
-    [
-      "Cost basis",
-      `${currencySymbol} ${costBasis.toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-    ],
-    [
-      "Unrealized P&L",
-      `${unrealizedPnl >= 0 ? "▲ +" : "▼ -"}${currencySymbol} ${Math.abs(unrealizedPnl).toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-    ],
-    ["Return", `${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(1)}%`],
-    [
-      "Holdings",
-      `${holdingsCount} across ${accountsCount} account${accountsCount !== 1 ? "s" : ""}`,
-    ],
-    [
-      "Best day",
-      bestDay
+  const cells: { label: string; value: string; tone: Tone }[] = [
+    {
+      label: "Cost basis",
+      value: `${currencySymbol} ${costBasis.toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      tone: "neutral",
+    },
+    {
+      label: "Unrealized P&L",
+      value: `${unrealizedPnl >= 0 ? "▲ +" : "▼ -"}${currencySymbol} ${Math.abs(unrealizedPnl).toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      tone: unrealizedPnl >= 0 ? "positive" : "negative",
+    },
+    {
+      label: "Return",
+      value: `${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(1)}%`,
+      tone: returnPct >= 0 ? "positive" : "negative",
+    },
+    {
+      label: "Holdings",
+      value: `${holdingsCount}`,
+      tone: "neutral",
+    },
+    {
+      label: "Accounts",
+      value: `${accountsCount}`,
+      tone: "neutral",
+    },
+    {
+      label: "Best day",
+      value: bestDay
         ? `▲ +${currencySymbol} ${bestDay.delta.toLocaleString("en", { maximumFractionDigits: 0 })} (${bestDay.label})`
         : "—",
-    ],
+      tone: "neutral",
+    },
   ];
   return (
-    <div style={{ display: "flex", gap: 0, borderTop: `1px solid ${T.border}` }}>
-      {cells.map(([label, val], i) => (
-        <div
-          key={i}
-          style={{
-            flex: 1,
-            padding: "12px 16px",
-            borderRight:
-              i < cells.length - 1 ? `1px solid ${T.border}` : "none",
-            display: "flex",
-            flexDirection: "column",
-            gap: 3,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 10,
-              color: T.mutedFg,
-              textTransform: "uppercase",
-              letterSpacing: ".08em",
-            }}
-          >
+    <div className="grid grid-cols-2 md:grid-cols-6 gap-px bg-border border border-border rounded-md overflow-hidden">
+      {cells.map(({ label, value, tone }) => (
+        <div key={label} className="flex flex-col gap-1 bg-card p-3">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
             {label}
           </div>
           <div
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              fontVariantNumeric: "tabular-nums",
-            }}
+            className={`text-sm font-semibold tabular-nums ${
+              tone === "positive"
+                ? "text-emerald-600 dark:text-emerald-400"
+                : tone === "negative"
+                  ? "text-destructive"
+                  : ""
+            }`}
           >
-            {val}
+            {value}
           </div>
         </div>
       ))}
