@@ -1,4 +1,6 @@
 from __future__ import annotations
+import os
+import time
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Callable
@@ -54,11 +56,11 @@ class InvestmentSyncService:
         conn = self.db.query(BrokerConnection).filter_by(account_id=account.id).one()
         creds = decrypt(conn.credentials_encrypted)
         adapter = self.adapter_factory(creds)
+
+        # Step 1 — positions (fatal if it fails; nothing useful happens without them).
         try:
             ref_positions = adapter.request_statement(creds["query_id_positions"])
             positions_xml = adapter.fetch_statement(ref_positions)
-            ref_trades = adapter.request_statement(creds["query_id_trades"])
-            trades_xml = adapter.fetch_statement(ref_trades)
         except FlexAuthError as e:
             conn.last_sync_status = "needs_reauth"
             conn.last_sync_error = str(e)
@@ -75,14 +77,46 @@ class InvestmentSyncService:
             raise
 
         statement = adapter.parse_positions_xml(positions_xml)
-        trades = adapter.parse_trades_xml(trades_xml)
         self._upsert_positions(account, statement.positions)
         self._upsert_cash(account, statement.cash)
-        self._upsert_trades(account, trades)
+        # Persist positions immediately so a later trades-fetch failure
+        # doesn't roll back the work we already did.
+        self.db.commit()
+
+        # Step 2 — trades (best-effort; IBKR Flex throttles a token to ~1
+        # request per ~10 min per query, so the back-to-back call here is
+        # the most common 1018 trigger). A small delay smooths the bursty
+        # double-call pattern; on failure we keep the sync as "partial"
+        # so positions still surface and trades catch up next cycle.
+        delay = float(os.getenv("IBKR_FLEX_INTER_QUERY_DELAY_SEC", "5"))
+        if delay > 0:
+            time.sleep(delay)
+
+        trades_error: str | None = None
+        try:
+            ref_trades = adapter.request_statement(creds["query_id_trades"])
+            trades_xml = adapter.fetch_statement(ref_trades)
+            trades = adapter.parse_trades_xml(trades_xml)
+            self._upsert_trades(account, trades)
+        except FlexAuthError as e:
+            trades_error = f"trades auth failed: {e}"
+            logger.warning("IBKR trades sync failed (auth) for %s: %s", account.id, e)
+        except FlexStatementNotReady as e:
+            trades_error = f"trades not ready: {e}"
+            logger.info("IBKR trades not ready for %s: %s", account.id, e)
+        except FlexError as e:
+            trades_error = f"trades fetch failed: {e}"
+            logger.warning("IBKR trades sync failed for %s: %s", account.id, e)
+
+        # Re-value either way — positions are saved.
         self.valuation_service.compute(account_id=account.id, on=on)
 
-        conn.last_sync_status = "ok"
-        conn.last_sync_error = None
+        if trades_error:
+            conn.last_sync_status = "partial"
+            conn.last_sync_error = trades_error
+        else:
+            conn.last_sync_status = "ok"
+            conn.last_sync_error = None
         conn.last_sync_at = datetime.utcnow()
         self.db.commit()
 
