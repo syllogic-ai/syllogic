@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   RiHomeLine,
@@ -188,14 +189,17 @@ export function AppSidebar({ initialUser }: AppSidebarProps) {
                   <SidebarMenuButton
                     isActive={isActive}
                     tooltip={item.title}
-                    onClick={() =>
-                      router.push(
-                        item.href === "/"
-                          ? getHomePathWithFilters()
-                          : item.href === "/transactions"
-                          ? getTransactionsPathWithFilters()
-                          : item.href
-                      )
+                    render={
+                      <Link
+                        href={
+                          item.href === "/"
+                            ? getHomePathWithFilters()
+                            : item.href === "/transactions"
+                            ? getTransactionsPathWithFilters()
+                            : item.href
+                        }
+                        prefetch
+                      />
                     }
                   >
                     <item.icon className="shrink-0" />
