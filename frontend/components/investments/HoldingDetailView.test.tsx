@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { HoldingDetailView } from "./HoldingDetailView";
 import type { Holding, PortfolioSummary, ValuationPoint } from "@/lib/api/investments";
@@ -11,6 +11,7 @@ vi.mock("@/lib/actions/investments", () => ({
 }));
 vi.mock("@/lib/api/investments", () => ({
   updateHolding: vi.fn(),
+  deleteHolding: vi.fn(),
 }));
 
 const MANUAL_HOLDING: Holding = {
@@ -56,7 +57,7 @@ const HISTORY: ValuationPoint[] = [
 ];
 
 describe("HoldingDetailView", () => {
-  it("renders edit panel for manual holding", () => {
+  it("renders back button", () => {
     render(
       <HoldingDetailView
         holding={MANUAL_HOLDING}
@@ -64,11 +65,26 @@ describe("HoldingDetailView", () => {
         initialHistory={HISTORY}
       />,
     );
-    expect(screen.getByText("Edit holding")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /save changes/i })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /All holdings/i }),
+    ).toBeTruthy();
   });
 
-  it("hides edit panel for IBKR holding", () => {
+  it("shows Edit button for manual holding and opens dialog", () => {
+    render(
+      <HoldingDetailView
+        holding={MANUAL_HOLDING}
+        portfolio={PORTFOLIO}
+        initialHistory={HISTORY}
+      />,
+    );
+    const editBtn = screen.getByRole("button", { name: /^Edit$/i });
+    expect(editBtn).toBeTruthy();
+    fireEvent.click(editBtn);
+    expect(screen.getByText(/Edit holding · VUAA/i)).toBeTruthy();
+  });
+
+  it("hides Edit button for IBKR holding", () => {
     render(
       <HoldingDetailView
         holding={IBKR_HOLDING}
@@ -76,7 +92,7 @@ describe("HoldingDetailView", () => {
         initialHistory={HISTORY}
       />,
     );
-    expect(screen.queryByText("Edit holding")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Edit$/i })).toBeNull();
   });
 
   it("shows — for total return when avg_cost is null", () => {
@@ -101,5 +117,50 @@ describe("HoldingDetailView", () => {
     );
     expect(screen.getByText("VUAA")).toBeTruthy();
     expect(screen.getByText("My Account")).toBeTruthy();
+  });
+
+  it("renders all stat labels", () => {
+    render(
+      <HoldingDetailView
+        holding={MANUAL_HOLDING}
+        portfolio={PORTFOLIO}
+        initialHistory={HISTORY}
+      />,
+    );
+    expect(screen.getByText(/Current price/i)).toBeTruthy();
+    expect(screen.getByText(/Market value/i)).toBeTruthy();
+    expect(screen.getByText(/Total return/i)).toBeTruthy();
+    expect(screen.getByText(/Avg cost \/ share/i)).toBeTruthy();
+    expect(screen.getByText(/Portfolio weight/i)).toBeTruthy();
+  });
+
+  it("renders range toggle items with aria-labels", () => {
+    render(
+      <HoldingDetailView
+        holding={MANUAL_HOLDING}
+        portfolio={PORTFOLIO}
+        initialHistory={HISTORY}
+      />,
+    );
+    expect(screen.getByLabelText("Range 1M")).toBeTruthy();
+    expect(screen.getByLabelText("Range 1W")).toBeTruthy();
+    expect(screen.getByLabelText("Range ALL")).toBeTruthy();
+  });
+
+  it("renders three tab triggers and About content on click", () => {
+    render(
+      <HoldingDetailView
+        holding={MANUAL_HOLDING}
+        portfolio={PORTFOLIO}
+        initialHistory={HISTORY}
+      />,
+    );
+    expect(screen.getByRole("tab", { name: /Overview/i })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /Transactions/i })).toBeTruthy();
+    const aboutTab = screen.getByRole("tab", { name: /About/i });
+    expect(aboutTab).toBeTruthy();
+    fireEvent.click(aboutTab);
+    // dl content visible after switching
+    expect(screen.getAllByText(/Symbol/i).length).toBeGreaterThan(0);
   });
 });
