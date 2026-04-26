@@ -214,7 +214,31 @@ export function HoldingsTableHF({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map((h) => {
+            {(["etf", "equity", "cash"] as const).flatMap((groupType) => {
+              const groupRows = rows.filter((r) => r.instrument_type === groupType);
+              if (groupRows.length === 0) return [];
+              const groupTotal = groupRows.reduce((s, r) => s + r._value, 0);
+              const groupLabel =
+                groupType === "etf" ? "ETF" : groupType === "equity" ? "Equity" : "Cash";
+              return [
+                <TableRow key={`group-${groupType}`} className="bg-muted/40 hover:bg-muted/40">
+                  <TableCell
+                    colSpan={5}
+                    className="uppercase tracking-wider text-[10px] font-semibold text-muted-foreground"
+                  >
+                    {groupLabel} · {groupRows.length}
+                  </TableCell>
+                  <TableCell
+                    colSpan={3}
+                    className="text-right tabular-nums text-xs font-semibold text-muted-foreground"
+                  >
+                    {portfolioCurrencySymbol} {groupTotal.toLocaleString("en", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </TableCell>
+                </TableRow>,
+                ...groupRows.map((h) => {
               const sym = currencySymbol(h.currency);
               return (
                 <TableRow
@@ -321,6 +345,8 @@ export function HoldingsTableHF({
                   </TableCell>
                 </TableRow>
               );
+                }),
+              ];
             })}
           </TableBody>
           <TableFooter>

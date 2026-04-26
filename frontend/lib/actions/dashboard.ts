@@ -18,6 +18,7 @@ import {
   ASSET_CATEGORY_ORDER,
   getAssetCategory,
 } from "@/lib/assets/asset-category";
+import { getPortfolio } from "@/lib/api/investments";
 
 async function getUserCurrency(userId: string): Promise<string> {
   const result = await db
@@ -782,7 +783,7 @@ export async function getAssetsOverview(): Promise<AssetsOverviewData> {
     };
   }
 
-  const [userAccounts, userProperties, userVehicles, currency] = await Promise.all([
+  const [userAccounts, userProperties, userVehicles, currency, portfolio] = await Promise.all([
     db
       .select({
         id: accounts.id,
@@ -819,6 +820,7 @@ export async function getAssetsOverview(): Promise<AssetsOverviewData> {
       .from(vehicles)
       .where(and(eq(vehicles.userId, session.user.id), eq(vehicles.isActive, true))),
     getUserCurrency(session.user.id),
+    getPortfolio().catch(() => null),
   ]);
 
   // Group accounts by asset category
@@ -900,6 +902,33 @@ export async function getAssetsOverview(): Promise<AssetsOverviewData> {
         currency: vehicle.currency || currency,
         initial: vehicle.name.charAt(0).toUpperCase(),
       });
+    }
+  }
+
+  // Process investment accounts from portfolio
+  if (portfolio?.accounts?.length) {
+    for (const invAccount of portfolio.accounts) {
+      const value = typeof invAccount.balance === "number"
+        ? invAccount.balance
+        : parseFloat(String(invAccount.balance) || "0");
+
+      if (value > 0) {
+        total += value;
+
+        if (!categoryMap.has("investment")) {
+          categoryMap.set("investment", []);
+        }
+
+        categoryMap.get("investment")!.push({
+          id: invAccount.id,
+          name: invAccount.name,
+          institution: invAccount.type || null,
+          value,
+          percentage: 0,
+          currency: portfolio.currency || currency,
+          initial: invAccount.name.charAt(0).toUpperCase(),
+        });
+      }
     }
   }
 
