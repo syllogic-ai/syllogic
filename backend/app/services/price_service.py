@@ -3,6 +3,7 @@ from datetime import date
 from decimal import Decimal
 import logging
 from sqlalchemy.orm import Session
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.models import PriceSnapshot
 from app.integrations.price_provider import get_price_provider
@@ -36,13 +37,14 @@ class PriceService:
                 logger.warning("price provider %s failed for %s on %s: %s", self.provider.name, missing, on, e)
                 fetched = {}
             for sym, quote in fetched.items():
-                self.db.add(PriceSnapshot(
+                stmt = pg_insert(PriceSnapshot).values(
                     symbol=quote.symbol,
                     currency=quote.currency,
                     date=quote.date,
                     close=quote.close,
                     provider=self.provider.name,
-                ))
+                ).on_conflict_do_nothing(index_elements=["symbol", "date"])
+                self.db.execute(stmt)
                 cached[sym] = quote
             self.db.commit()
         return cached
