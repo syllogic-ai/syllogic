@@ -8,17 +8,16 @@ import { InvestmentsEmpty } from "@/components/investments/InvestmentsEmpty";
 import { rangeToDates } from "@/lib/utils/date-ranges";
 
 export async function InvestmentsSection() {
-  const [portfolio, holdings] = await Promise.all([
+  const { from, to } = rangeToDates("1M");
+  const [portfolio, holdings, history] = await Promise.all([
     getPortfolio(),
     listHoldings(),
+    getPortfolioHistory(from, to),
   ]);
 
   if (holdings.length === 0) {
     return <InvestmentsEmpty />;
   }
-
-  const { from, to } = rangeToDates("1M");
-  const history = await getPortfolioHistory(from, to);
 
   return (
     <InvestmentsOverview

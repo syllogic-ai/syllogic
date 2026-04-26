@@ -10,17 +10,17 @@ export async function TransactionsSection({
 }: {
   queryState: TransactionsQueryState;
 }) {
-  const session = await getAuthenticatedSession();
-  const canImportCsv =
-    !!process.env.OPENAI_API_KEY &&
-    !isDemoRestrictedUserEmail(session?.user.email);
-  const canDelete = !isDemoRestrictedUserEmail(session?.user.email);
-
-  const [pageData, categories, accounts] = await Promise.all([
+  const [session, pageData, categories, accounts] = await Promise.all([
+    getAuthenticatedSession(),
     getTransactionsPage(queryState),
     getUserCategories(),
     getUserAccounts(),
   ]);
+
+  const canImportCsv =
+    !!process.env.OPENAI_API_KEY &&
+    !isDemoRestrictedUserEmail(session?.user.email);
+  const canDelete = !isDemoRestrictedUserEmail(session?.user.email);
 
   return (
     <TransactionsClient

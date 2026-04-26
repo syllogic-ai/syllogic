@@ -1,12 +1,13 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { users, categories, type User, type NewCategory } from "@/lib/db/schema";
 import { getAuthenticatedSession, requireAuth } from "@/lib/auth-helpers";
 import { storage } from "@/lib/storage";
 import { DEFAULT_CATEGORIES, type DefaultCategory } from "@/lib/constants/default-categories";
+import { CACHE_TAGS } from "@/lib/data/cached";
 import { type CategoryInput } from "./categories";
 
 export type OnboardingStatus = "pending" | "step_1" | "step_2" | "step_3" | "completed";
@@ -126,6 +127,7 @@ export async function updatePersonalDetails(
       })
       .where(eq(users.id, session.user.id));
 
+    revalidateTag(CACHE_TAGS.onboarding(session.user.id), "default");
     // Ensure layout consumers (sidebar avatar) pick up the updated image immediately.
     revalidatePath("/", "layout");
     return { success: true };
@@ -182,6 +184,8 @@ export async function saveOnboardingCategories(
       })
       .where(eq(users.id, userId));
 
+    revalidateTag(CACHE_TAGS.onboarding(userId), "default");
+    revalidateTag(CACHE_TAGS.categories(userId), "default");
     revalidatePath("/");
     return { success: true };
   } catch (error) {
@@ -211,6 +215,7 @@ export async function completeOnboarding(): Promise<{ success: boolean; error?: 
       })
       .where(eq(users.id, userId));
 
+    revalidateTag(CACHE_TAGS.onboarding(userId), "default");
     revalidatePath("/");
     return { success: true };
   } catch (error) {

@@ -188,7 +188,6 @@ export function AppSidebar({ initialUser }: AppSidebarProps) {
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
                     isActive={isActive}
-                    tooltip={item.title}
                     render={
                       <Link
                         href={
@@ -199,6 +198,7 @@ export function AppSidebar({ initialUser }: AppSidebarProps) {
                             : item.href
                         }
                         prefetch
+                        title={isCollapsed ? item.title : undefined}
                       />
                     }
                   >
