@@ -294,6 +294,7 @@ class HoldingResponse(BaseModel):
     source: str
     current_price: Optional[Decimal] = None
     current_value_user_currency: Optional[Decimal] = None
+    cost_basis_user_currency: Optional[Decimal] = None
     is_stale: bool = False
 
 

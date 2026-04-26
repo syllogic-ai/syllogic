@@ -326,6 +326,38 @@ def list_holdings(
     db: Session = Depends(get_db),
 ):
     user_id = get_user_id(user_id)
+    user = db.query(User).filter(User.id == user_id).first()
+    user_currency = (
+        getattr(user, "functional_currency", None) or "EUR"
+    ).upper()
+
+    from app.services.exchange_rate_service import ExchangeRateService
+
+    fx_svc = ExchangeRateService(db=db)
+
+    def _convert_cost_to_user(
+        avg_cost: Optional[Decimal],
+        qty: Decimal,
+        src_currency: str,
+        on: Optional[date],
+    ) -> Optional[Decimal]:
+        if avg_cost is None:
+            return None
+        cost_native = Decimal(avg_cost) * Decimal(qty)
+        src = (src_currency or user_currency).upper()
+        if src == user_currency:
+            return cost_native.quantize(Decimal("0.01"))
+        for_date = on or date.today()
+        converted = fx_svc.convert_amount(
+            amount=cost_native,
+            from_currency=src,
+            to_currency=user_currency,
+            for_date=for_date,
+        )
+        if converted is None:
+            return None
+        return Decimal(converted).quantize(Decimal("0.01"))
+
     query = db.query(Holding).filter(Holding.user_id == user_id)
     if account_id is not None:
         query = query.filter(Holding.account_id == account_id)
@@ -337,6 +369,9 @@ def list_holdings(
             .filter(HoldingValuation.holding_id == h.id)
             .order_by(desc(HoldingValuation.date))
             .first()
+        )
+        cost_basis_user = _convert_cost_to_user(
+            h.avg_cost, h.quantity, h.currency, h.as_of_date
         )
         results.append(
             HoldingResponse(
@@ -355,6 +390,7 @@ def list_holdings(
                 current_value_user_currency=(
                     latest_val.value_user_currency if latest_val else None
                 ),
+                cost_basis_user_currency=cost_basis_user,
                 is_stale=bool(latest_val.is_stale) if latest_val else False,
             )
         )

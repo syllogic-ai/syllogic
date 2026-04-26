@@ -65,8 +65,8 @@ export function HoldingDetailView({
   const totalValue = Number(portfolio.total_value);
   const weight = totalValue > 0 ? (marketValue / totalValue) * 100 : 0;
   const costBasis =
-    holding.avg_cost != null
-      ? Number(holding.avg_cost) * Number(holding.quantity)
+    holding.cost_basis_user_currency != null
+      ? Number(holding.cost_basis_user_currency)
       : null;
   const totalReturn =
     costBasis != null && costBasis > 0
