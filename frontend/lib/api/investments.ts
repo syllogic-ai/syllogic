@@ -18,6 +18,7 @@ export type Holding = {
   source: "manual" | "ibkr_flex";
   current_price?: string | null;
   current_value_user_currency?: string | null;
+  cost_basis_user_currency?: string | null;
   is_stale: boolean;
 };
 

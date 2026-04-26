@@ -97,7 +97,10 @@ export function HoldingsTableHF({
         const qty = Number(h.quantity);
         const price = Number(h.current_price ?? 0);
         const value = Number(h.current_value_user_currency ?? 0);
-        const cost = h.avg_cost != null ? Number(h.avg_cost) * qty : null;
+        const cost =
+          h.cost_basis_user_currency != null
+            ? Number(h.cost_basis_user_currency)
+            : null;
         const pnl = cost != null ? value - cost : null;
         return {
           ...h,
