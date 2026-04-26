@@ -2,9 +2,10 @@
 import { useState } from "react";
 import { RiLinksLine, RiPencilLine } from "@remixicon/react";
 import type { InvestmentAccount } from "@/lib/api/investments";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { BrokerForm } from "./BrokerForm";
 import { ManualForm } from "./ManualForm";
-import { T } from "./_tokens";
 
 type Path = "broker" | "manual" | null;
 
@@ -44,157 +45,74 @@ export function ConnectPathPicker({
   ];
 
   return (
-    <div className="syllogic-surface" style={{ flex: 1, overflow: "auto" }}>
-      <div
-        style={{
-          padding: "28px 32px",
-          maxWidth: 720,
-          display: "flex",
-          flexDirection: "column",
-          gap: 20,
-        }}
-      >
-        <div
-          style={{
-            fontSize: 13,
-            color: T.mutedFg,
-            lineHeight: 1.8,
-            maxWidth: 560,
-          }}
-        >
+    <div className="flex-1 overflow-auto">
+      <div className="p-8 max-w-3xl space-y-5">
+        <p className="text-sm text-muted-foreground leading-relaxed max-w-xl">
           Choose how to track your investments. You can use both methods across
           different accounts — a brokerage account synced from IBKR alongside a
           manually-managed account for assets held elsewhere.
-        </div>
-        <div style={{ display: "flex", gap: 12 }}>
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {paths.map((p) => {
             const sel = picked === p.id;
             return (
-              <div
+              <Card
                 key={p.id}
                 onClick={() => setPicked(p.id)}
-                style={{
-                  flex: 1,
-                  padding: 24,
-                  cursor: "pointer",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 14,
-                  background: sel ? T.bg : T.card,
-                  border: sel
-                    ? `2px solid ${T.primary}`
-                    : `1px solid ${T.border}`,
-                  transition: "border-color 120ms, background 120ms",
-                }}
+                className={`cursor-pointer transition-colors ${
+                  sel
+                    ? "border-2 border-primary bg-muted/30"
+                    : "hover:bg-muted/20"
+                }`}
               >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "flex-start",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 36,
-                      height: 36,
-                      border: `1px solid ${T.border}`,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      background: sel ? T.primary : T.card,
-                      color: sel ? T.primaryFg : T.mutedFg,
-                    }}
-                  >
-                    {p.icon}
-                  </div>
-                  {p.badge && (
-                    <span
-                      style={{
-                        padding: "2px 8px",
-                        background: T.primary,
-                        color: T.primaryFg,
-                        fontSize: 9,
-                        letterSpacing: ".08em",
-                      }}
+                <CardContent className="p-6 flex flex-col gap-3.5 h-full">
+                  <div className="flex items-start justify-between">
+                    <div
+                      className={`w-9 h-9 border border-border flex items-center justify-center ${
+                        sel
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground"
+                      }`}
                     >
-                      {p.badge}
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <div
-                    style={{
-                      fontWeight: 700,
-                      fontSize: 14,
-                      marginBottom: 6,
-                    }}
-                  >
-                    {p.title}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 12,
-                      color: T.mutedFg,
-                      lineHeight: 1.7,
-                    }}
-                  >
-                    {p.sub}
-                  </div>
-                </div>
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: T.mutedFg,
-                    borderTop: `1px solid ${T.border}`,
-                    paddingTop: 12,
-                    marginTop: "auto",
-                    lineHeight: 1.6,
-                  }}
-                >
-                  {p.detail}
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 7,
-                    marginTop: 4,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 14,
-                      height: 14,
-                      border: `1.5px solid ${sel ? T.primary : T.border}`,
-                      borderRadius: "50%",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    {sel && (
-                      <div
-                        style={{
-                          width: 6,
-                          height: 6,
-                          background: T.primary,
-                          borderRadius: "50%",
-                        }}
-                      />
+                      {p.icon}
+                    </div>
+                    {p.badge && (
+                      <Badge className="text-[9px] tracking-wider rounded-none">
+                        {p.badge}
+                      </Badge>
                     )}
                   </div>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      color: sel ? T.fg : T.mutedFg,
-                      fontWeight: sel ? 600 : 400,
-                    }}
-                  >
-                    {sel ? "Selected" : "Select this path"}
-                  </span>
-                </div>
-              </div>
+                  <div>
+                    <div className="font-bold text-sm mb-1.5">{p.title}</div>
+                    <div className="text-xs text-muted-foreground leading-relaxed">
+                      {p.sub}
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground border-t border-border pt-3 mt-auto leading-relaxed">
+                    {p.detail}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <div
+                      className={`w-3.5 h-3.5 border-[1.5px] rounded-full flex items-center justify-center ${
+                        sel ? "border-primary" : "border-border"
+                      }`}
+                    >
+                      {sel && (
+                        <div className="w-1.5 h-1.5 bg-primary rounded-full" />
+                      )}
+                    </div>
+                    <span
+                      className={`text-xs ${
+                        sel
+                          ? "text-foreground font-semibold"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {sel ? "Selected" : "Select this path"}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
             );
           })}
         </div>
@@ -203,14 +121,7 @@ export function ConnectPathPicker({
         )}
         {picked === "broker" && <BrokerForm onCancel={() => setPicked(null)} />}
         {!picked && (
-          <div
-            style={{
-              fontSize: 11,
-              color: T.mutedFg,
-              textAlign: "center",
-              paddingTop: 4,
-            }}
-          >
+          <div className="text-xs text-muted-foreground text-center pt-1">
             Select a path above to continue
           </div>
         )}

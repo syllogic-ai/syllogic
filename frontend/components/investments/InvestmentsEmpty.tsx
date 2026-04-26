@@ -6,211 +6,81 @@ import {
   RiLinksLine,
   RiPencilLine,
 } from "@remixicon/react";
-import { T } from "./_tokens";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 
 export function InvestmentsEmpty() {
   const router = useRouter();
   const go = () => router.push("/investments/connect");
   return (
-    <div
-      className="syllogic-surface"
-      style={{
-        flex: 1,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 40,
-      }}
-    >
-      <div
-        style={{
-          maxWidth: 520,
-          width: "100%",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <div
-          style={{
-            padding: "32px 32px 24px",
-            background: T.card,
-            border: `1px solid ${T.border}`,
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-            alignItems: "center",
-            textAlign: "center",
-          }}
-        >
-          <div
-            style={{
-              width: 44,
-              height: 44,
-              border: `1px solid ${T.border}`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: T.bg,
-            }}
-          >
-            <RiLineChartLine size={20} color={T.mutedFg} />
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <div style={{ fontSize: 15, fontWeight: 600 }}>No holdings yet</div>
-            <div
-              style={{
-                fontSize: 12,
-                color: T.mutedFg,
-                lineHeight: 1.7,
-                maxWidth: 340,
-              }}
-            >
-              Track your portfolio by connecting a broker for automatic sync, or
-              add holdings manually.
+    <div className="flex-1 flex items-center justify-center p-10">
+      <div className="max-w-xl w-full flex flex-col">
+        <Card className="rounded-none">
+          <CardContent className="px-8 pt-8 pb-6 flex flex-col items-center text-center gap-3">
+            <div className="w-11 h-11 border border-border flex items-center justify-center bg-muted/40">
+              <RiLineChartLine size={20} className="text-muted-foreground" />
             </div>
-          </div>
-        </div>
-        <div
-          style={{
-            display: "flex",
-            gap: 0,
-            borderLeft: `1px solid ${T.border}`,
-            borderRight: `1px solid ${T.border}`,
-            borderBottom: `1px solid ${T.border}`,
-          }}
-        >
-          <div
-            style={{
-              flex: 1,
-              padding: 24,
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-              borderRight: `1px solid ${T.border}`,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div className="flex flex-col gap-1.5">
+              <div className="text-base font-semibold">No holdings yet</div>
+              <div className="text-xs text-muted-foreground leading-relaxed max-w-[340px]">
+                Track your portfolio by connecting a broker for automatic sync,
+                or add holdings manually.
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <div className="grid grid-cols-2 border border-t-0 border-border">
+          <div className="p-6 flex flex-col gap-3 border-r border-border">
+            <div className="flex items-center gap-2">
               <RiLinksLine size={16} />
-              <span style={{ fontWeight: 600, fontSize: 13 }}>
-                Connect broker
-              </span>
-              <span
-                style={{
-                  marginLeft: "auto",
-                  padding: "1px 6px",
-                  background: T.primary,
-                  color: T.primaryFg,
-                  fontSize: 9,
-                  letterSpacing: ".06em",
-                }}
-              >
+              <span className="font-semibold text-sm">Connect broker</span>
+              <Badge className="ml-auto text-[9px] tracking-wider rounded-none">
                 RECOMMENDED
-              </span>
+              </Badge>
             </div>
-            <div
-              style={{ fontSize: 11, color: T.mutedFg, lineHeight: 1.7 }}
-            >
+            <div className="text-xs text-muted-foreground leading-relaxed">
               Connect Interactive Brokers via Flex Query. Positions and trades
               sync automatically.
             </div>
-            <ul
-              style={{
-                margin: "4px 0 0",
-                padding: "0 0 0 16px",
-                display: "flex",
-                flexDirection: "column",
-                gap: 5,
-              }}
-            >
+            <ul className="mt-1 pl-4 list-disc space-y-1">
               {[
                 "Automatic position sync",
                 "Trade history imported",
                 "No manual entry needed",
               ].map((t) => (
-                <li key={t} style={{ fontSize: 11, color: T.mutedFg }}>
+                <li key={t} className="text-xs text-muted-foreground">
                   {t}
                 </li>
               ))}
             </ul>
-            <button
-              onClick={go}
-              style={{
-                marginTop: 4,
-                padding: "8px 0",
-                background: T.primary,
-                color: T.primaryFg,
-                border: "none",
-                cursor: "pointer",
-                fontFamily: "inherit",
-                fontSize: 12,
-                fontWeight: 500,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 6,
-              }}
-            >
+            <Button onClick={go} className="mt-1 w-full">
               <RiLinksLine size={13} /> Connect IBKR
-            </button>
+            </Button>
           </div>
-          <div
-            style={{
-              flex: 1,
-              padding: 24,
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div className="p-6 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
               <RiPencilLine size={16} />
-              <span style={{ fontWeight: 600, fontSize: 13 }}>Add manually</span>
+              <span className="font-semibold text-sm">Add manually</span>
             </div>
-            <div
-              style={{ fontSize: 11, color: T.mutedFg, lineHeight: 1.7 }}
-            >
+            <div className="text-xs text-muted-foreground leading-relaxed">
               Create an account, search by symbol, and enter quantities. Prices
               are fetched automatically.
             </div>
-            <ul
-              style={{
-                margin: "4px 0 0",
-                padding: "0 0 0 16px",
-                display: "flex",
-                flexDirection: "column",
-                gap: 5,
-              }}
-            >
+            <ul className="mt-1 pl-4 list-disc space-y-1">
               {[
                 "No broker needed",
                 "Prices updated daily",
                 "You manage quantities",
               ].map((t) => (
-                <li key={t} style={{ fontSize: 11, color: T.mutedFg }}>
+                <li key={t} className="text-xs text-muted-foreground">
                   {t}
                 </li>
               ))}
             </ul>
-            <button
-              onClick={go}
-              style={{
-                marginTop: 4,
-                padding: "8px 0",
-                background: T.card,
-                color: T.fg,
-                border: `1px solid ${T.border}`,
-                cursor: "pointer",
-                fontFamily: "inherit",
-                fontSize: 12,
-                fontWeight: 500,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 6,
-              }}
-            >
+            <Button onClick={go} variant="outline" className="mt-1 w-full">
               <RiAddLine size={13} /> Add holding
-            </button>
+            </Button>
           </div>
         </div>
       </div>
