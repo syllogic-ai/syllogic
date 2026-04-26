@@ -1,7 +1,9 @@
-import { AllocationDonut, type DonutSegment } from "./AllocationDonut";
-import { T } from "./_tokens";
-
-const PALETTE = [T.chart1, T.chart2, T.chart3];
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import {
+  AllocationDonut,
+  DONUT_PALETTE,
+  type DonutSegment,
+} from "./AllocationDonut";
 
 function toSegments(data: Record<string, string | number>): DonutSegment[] {
   const entries = Object.entries(data);
@@ -9,7 +11,7 @@ function toSegments(data: Record<string, string | number>): DonutSegment[] {
   return entries.map(([label, v], i) => ({
     label,
     pct: Math.round((Number(v) / total) * 100),
-    color: PALETTE[i % PALETTE.length],
+    color: DONUT_PALETTE[i % DONUT_PALETTE.length],
   }));
 }
 
@@ -25,57 +27,33 @@ export function AllocationRow({
     { title: "By currency", segs: toSegments(byCurrency) },
   ];
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-      {groups.map((g, gi) => (
-        <div
-          key={gi}
-          style={{
-            background: T.card,
-            border: `1px solid ${T.border}`,
-            padding: 18,
-            display: "flex",
-            gap: 20,
-            alignItems: "center",
-          }}
-        >
-          <AllocationDonut segments={g.segs} size={72} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 10 }}>
-              {g.title}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {groups.map((g) => (
+        <Card key={g.title}>
+          <CardHeader>
+            <h3 className="text-sm font-semibold">{g.title}</h3>
+          </CardHeader>
+          <CardContent className="flex items-center gap-5">
+            <AllocationDonut segments={g.segs} size={72} />
+            <div className="flex-1 flex flex-col gap-1.5">
               {g.segs.map((s, i) => (
                 <div
                   key={i}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    fontSize: 11,
-                  }}
+                  className="flex items-center gap-2 text-xs"
                 >
                   <span
-                    style={{
-                      width: 8,
-                      height: 8,
-                      background: s.color,
-                      flexShrink: 0,
-                    }}
+                    className="w-2 h-2 flex-shrink-0"
+                    style={{ background: s.color }}
                   />
-                  <span style={{ flex: 1, color: T.mutedFg }}>{s.label}</span>
-                  <span
-                    style={{
-                      fontWeight: 600,
-                      fontVariantNumeric: "tabular-nums",
-                    }}
-                  >
-                    {s.pct}%
+                  <span className="flex-1 text-muted-foreground">
+                    {s.label}
                   </span>
+                  <span className="font-semibold tabular-nums">{s.pct}%</span>
                 </div>
               ))}
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       ))}
     </div>
   );

@@ -1,6 +1,12 @@
-import { T } from "./_tokens";
-
 export type DonutSegment = { label: string; pct: number; color: string };
+
+export const DONUT_PALETTE = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+];
 
 export function AllocationDonut({
   segments,
@@ -23,13 +29,18 @@ export function AllocationDonut({
     offset: -((cumulative[i - 1] ?? 0) / 100) * C,
   }));
   return (
-    <svg width={size} height={size} viewBox="0 0 80 80">
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 80 80"
+      className="text-muted-foreground/30"
+    >
       <circle
         cx={cx}
         cy={cy}
         r={r}
         fill="none"
-        stroke={T.border}
+        stroke="var(--border)"
         strokeWidth="12"
       />
       {segs.map((s, i) => {
