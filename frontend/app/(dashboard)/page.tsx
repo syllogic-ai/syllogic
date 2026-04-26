@@ -5,7 +5,6 @@ import { ProfitLossChart } from "@/components/charts/profit-loss-chart";
 import { SpendingByCategoryChart } from "@/components/charts/spending-by-category-chart";
 import { SankeyFlowChart } from "@/components/charts/sankey-flow-chart";
 import { AssetsOverviewCard } from "@/components/assets";
-import { PortfolioSummaryCard } from "@/components/investments/PortfolioSummaryCard";
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
 import { SearchButton } from "@/components/dashboard/search-button";
 import {
@@ -162,10 +161,6 @@ export default async function HomePage({ searchParams }: PageProps) {
           <AssetsOverviewCard data={data.assetsOverview} />
         </div>
 
-        {/* Row 5: Investments Summary */}
-        <div className="grid gap-4">
-          <PortfolioSummaryCard />
-        </div>
       </div>
     </>
   );

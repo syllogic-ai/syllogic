@@ -24,8 +24,9 @@ export type Holding = {
 export type PortfolioAccount = {
   id: string;
   name: string;
-  balance: string | number;
+  value: string | number;
   type: string;
+  currency?: string;
 };
 
 export type PortfolioSummary = {

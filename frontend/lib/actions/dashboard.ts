@@ -908,9 +908,9 @@ export async function getAssetsOverview(): Promise<AssetsOverviewData> {
   // Process investment accounts from portfolio
   if (portfolio?.accounts?.length) {
     for (const invAccount of portfolio.accounts) {
-      const value = typeof invAccount.balance === "number"
-        ? invAccount.balance
-        : parseFloat(String(invAccount.balance) || "0");
+      const value = typeof invAccount.value === "number"
+        ? invAccount.value
+        : parseFloat(String(invAccount.value) || "0");
 
       if (value > 0) {
         total += value;
