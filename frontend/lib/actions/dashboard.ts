@@ -3,6 +3,7 @@
 import { db } from "@/lib/db";
 import { accounts, transactions, categories, users, properties, vehicles, accountBalances, transactionLinks } from "@/lib/db/schema";
 import { getAuthenticatedSession } from "@/lib/auth-helpers";
+import { getCachedUserAccounts } from "@/lib/data/cached";
 import { eq, sql, gte, lte, and, desc, inArray, isNull } from "drizzle-orm";
 import { buildConservativeSankey } from "@/lib/dashboard/sankey";
 import {
@@ -73,24 +74,7 @@ async function getLatestTransactionDate(userId: string, accountIds?: string[]): 
 
 // Get user accounts for filter dropdown
 export async function getUserAccounts() {
-  const session = await getAuthenticatedSession();
-
-  if (!session?.user?.id) {
-    return [];
-  }
-
-  const result = await db
-    .select({
-      id: accounts.id,
-      name: accounts.name,
-      institution: accounts.institution,
-      accountType: accounts.accountType,
-    })
-    .from(accounts)
-    .where(and(eq(accounts.userId, session.user.id), eq(accounts.isActive, true)))
-    .orderBy(accounts.name);
-
-  return result;
+  return getCachedUserAccounts();
 }
 
 // Get available months/years for the date selector
