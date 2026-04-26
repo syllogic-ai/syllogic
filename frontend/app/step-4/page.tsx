@@ -25,7 +25,7 @@ import { OnboardingProgress } from "@/components/onboarding/onboarding-progress"
 import { CsvUploadDropzone } from "@/components/transactions/csv-upload-dropzone";
 import { getUserAccounts } from "@/lib/actions/transactions";
 import { initializeCsvImport } from "@/lib/actions/csv-import";
-import type { Account } from "@/lib/db/schema";
+type Account = { id: string; name: string; institution: string | null; accountType: string; currency: string | null };
 
 export default function StepFourImportPage() {
   const router = useRouter();

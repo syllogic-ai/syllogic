@@ -55,6 +55,7 @@ async function fetchAccountsForUser(userId: string) {
       name: accounts.name,
       institution: accounts.institution,
       accountType: accounts.accountType,
+      currency: accounts.currency,
     })
     .from(accounts)
     .where(and(eq(accounts.userId, userId), eq(accounts.isActive, true)))
