@@ -2,10 +2,10 @@
 
 export function PortfolioChart({
   data,
-  currencySymbol = "€",
+  currencySymbol,
 }: {
   data: number[];
-  currencySymbol?: string;
+  currencySymbol: string;
 }) {
   if (data.length < 2) {
     return (

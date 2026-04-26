@@ -58,12 +58,14 @@ export function HoldingsTableHF({
   holdings,
   accountNames,
   accountsCount,
+  portfolioCurrencySymbol,
   onAddClick,
   onDelete,
 }: {
   holdings: Holding[];
   accountNames: Record<string, string>;
   accountsCount: number;
+  portfolioCurrencySymbol: string;
   onAddClick?: () => void;
   onDelete?: (id: string) => void;
 }) {
@@ -257,7 +259,7 @@ export function HoldingsTableHF({
                     {h.current_price ? `${sym} ${h._price.toFixed(2)}` : "—"}
                   </TableCell>
                   <TableCell className="text-right tabular-nums font-semibold">
-                    € {h._value.toLocaleString("en", {
+                    {portfolioCurrencySymbol} {h._value.toLocaleString("en", {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
                     })}
@@ -271,7 +273,7 @@ export function HoldingsTableHF({
                   }`}>
                     {h._pnl == null
                       ? "—"
-                      : `${h._pnl >= 0 ? "+" : ""}€ ${h._pnl.toLocaleString("en", {
+                      : `${h._pnl >= 0 ? "+" : ""}${portfolioCurrencySymbol} ${h._pnl.toLocaleString("en", {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
                         })}`}
@@ -324,7 +326,7 @@ export function HoldingsTableHF({
                 Total
               </TableCell>
               <TableCell className="text-right tabular-nums font-bold">
-                € {totalValue.toLocaleString("en", {
+                {portfolioCurrencySymbol} {totalValue.toLocaleString("en", {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 })}

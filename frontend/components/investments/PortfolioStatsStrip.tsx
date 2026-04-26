@@ -19,7 +19,7 @@ export function PortfolioStatsStrip({
   holdingsCount,
   accountsCount,
   bestDay,
-  currencySymbol = "€",
+  currencySymbol,
 }: {
   costBasis: number;
   unrealizedPnl: number;
@@ -27,7 +27,7 @@ export function PortfolioStatsStrip({
   holdingsCount: number;
   accountsCount: number;
   bestDay: { delta: number; label: string } | null;
-  currencySymbol?: string;
+  currencySymbol: string;
 }) {
   const cells: { label: string; value: string; tone: Tone }[] = [
     {

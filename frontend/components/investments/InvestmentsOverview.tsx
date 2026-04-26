@@ -151,6 +151,7 @@ export function InvestmentsOverview({
         holdings={holdings}
         accountNames={accountNames}
         accountsCount={portfolio.accounts.length}
+        portfolioCurrencySymbol={sym}
         onAddClick={() => router.push("/investments/connect")}
         onDelete={onDelete}
       />

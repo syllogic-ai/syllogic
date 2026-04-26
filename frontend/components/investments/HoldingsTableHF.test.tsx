@@ -59,6 +59,7 @@ describe("HoldingsTableHF", () => {
         holdings={H}
         accountNames={{ a: "Acct" }}
         accountsCount={1}
+        portfolioCurrencySymbol="€"
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Filter ETF" }));
@@ -71,6 +72,7 @@ describe("HoldingsTableHF", () => {
         holdings={H}
         accountNames={{ a: "Acct" }}
         accountsCount={1}
+        portfolioCurrencySymbol="€"
       />,
     );
     // Find the row containing MSFT (the stale holding) and check class
@@ -89,6 +91,7 @@ describe("HoldingsTableHF row navigation", () => {
         holdings={H}
         accountNames={{ a: "Acct" }}
         accountsCount={1}
+        portfolioCurrencySymbol="€"
       />,
     );
     fireEvent.click(screen.getByText("VUAA"));
@@ -101,6 +104,7 @@ describe("HoldingsTableHF row navigation", () => {
         holdings={H}
         accountNames={{ a: "Acct" }}
         accountsCount={1}
+        portfolioCurrencySymbol="€"
       />,
     );
     const triggers = screen.getAllByRole("button", { name: "Row actions" });
@@ -117,6 +121,7 @@ describe("HoldingsTableHF row navigation", () => {
         holdings={H}
         accountNames={{ a: "Acct" }}
         accountsCount={1}
+        portfolioCurrencySymbol="€"
         onDelete={onDelete}
       />,
     );
@@ -138,6 +143,7 @@ describe("HoldingsTableHF row navigation", () => {
         holdings={[BROKER_HOLDING]}
         accountNames={{ a: "Acct" }}
         accountsCount={1}
+        portfolioCurrencySymbol="€"
       />,
     );
     const trigger = screen.getByRole("button", { name: "Row actions" });
