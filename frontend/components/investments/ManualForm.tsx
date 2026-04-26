@@ -1,15 +1,14 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { RiSearchLine } from "@remixicon/react";
 import {
   addManualHolding,
   createManualAccount,
   type InvestmentAccount,
   type SymbolSearchResult,
 } from "@/lib/api/investments";
-import { searchSymbolsAction } from "@/lib/actions/investments";
 import { Button } from "@/components/ui/button";
+import { SymbolSearchInput } from "./SymbolSearchInput";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
@@ -39,30 +38,12 @@ export function ManualForm({
   const [newName, setNewName] = useState("My Brokerage");
   const [baseCcy, setBaseCcy] = useState("EUR");
   const [symbol, setSymbol] = useState("");
-  const [matches, setMatches] = useState<SymbolSearchResult[]>([]);
-  const [showResults, setShowResults] = useState(false);
   const [qty, setQty] = useState("");
   const [type, setType] = useState<Inst>("etf");
   const [currency, setCurrency] = useState("EUR");
   const [avgCost, setAvgCost] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const debounce = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (debounce.current) window.clearTimeout(debounce.current);
-    if (!symbol) {
-      setMatches([]);
-      return;
-    }
-    debounce.current = window.setTimeout(async () => {
-      try {
-        setMatches(await searchSymbolsAction(symbol));
-      } catch {
-        setMatches([]);
-      }
-    }, 200);
-  }, [symbol]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,49 +94,15 @@ export function ManualForm({
               </Select>
             </Field>
             <Field label="Symbol" className="flex-[2_1_0%]">
-              <div className="relative">
-                <RiSearchLine
-                  size={12}
-                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
-                />
-                <Input
-                  placeholder="Search symbol or name…"
-                  className="pl-7"
-                  value={symbol}
-                  onChange={(e) => setSymbol(e.target.value)}
-                  onFocus={() => setShowResults(true)}
-                  onBlur={() => setTimeout(() => setShowResults(false), 150)}
-                />
-                {showResults && matches.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 z-10 bg-card border border-border shadow-md">
-                    {matches.map((r, i) => (
-                      <div
-                        key={i}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          setSymbol(r.symbol);
-                          if (r.currency) setCurrency(r.currency);
-                        }}
-                        className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-muted ${
-                          i < matches.length - 1 ? "border-b border-border" : ""
-                        }`}
-                      >
-                        <span className="font-bold text-xs min-w-[44px]">
-                          {r.symbol}
-                        </span>
-                        <span className="flex-1 text-xs text-muted-foreground">
-                          {r.name}
-                        </span>
-                        {r.exchange && (
-                          <span className="text-[10px] px-1.5 py-px border border-border text-muted-foreground">
-                            {r.exchange}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <SymbolSearchInput
+                value={symbol}
+                onChange={setSymbol}
+                onSelect={(r: SymbolSearchResult) => {
+                  setSymbol(r.symbol);
+                  if (r.currency) setCurrency(r.currency);
+                }}
+                placeholder="Search symbol or name…"
+              />
             </Field>
           </div>
           {accountId === NEW && (

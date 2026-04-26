@@ -13,6 +13,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SymbolSearchInput } from "./SymbolSearchInput";
+import type { SymbolSearchResult } from "@/lib/api/investments";
 
 export function EditHoldingDialog({
   open,
@@ -99,10 +101,11 @@ export function EditHoldingDialog({
               Price lookup symbol{" "}
               <span className="text-muted-foreground">(optional)</span>
             </Label>
-            <Input
+            <SymbolSearchInput
               id="provider-symbol"
               value={providerSymbol}
-              onChange={(e) => setProviderSymbol(e.target.value)}
+              onChange={setProviderSymbol}
+              onSelect={(r: SymbolSearchResult) => setProviderSymbol(r.symbol)}
               placeholder={`e.g. ${holding.symbol}.LON or ${holding.symbol}.AS`}
             />
             <p className="text-xs text-muted-foreground">
