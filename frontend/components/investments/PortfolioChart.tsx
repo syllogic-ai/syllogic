@@ -1,5 +1,4 @@
 "use client";
-import { T } from "./_tokens";
 
 export function PortfolioChart({
   data,
@@ -10,16 +9,7 @@ export function PortfolioChart({
 }) {
   if (data.length < 2) {
     return (
-      <div
-        style={{
-          height: 180,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: T.mutedFg,
-          fontSize: 12,
-        }}
-      >
+      <div className="h-[180px] flex items-center justify-center text-xs text-muted-foreground">
         Not enough history
       </div>
     );
@@ -45,13 +35,13 @@ export function PortfolioChart({
   return (
     <svg
       viewBox={`-44 -4 ${W + 52} ${H + 24}`}
-      style={{ width: "100%", height: 180, display: "block" }}
+      className="w-full h-[180px] block"
       preserveAspectRatio="none"
     >
       <defs>
         <linearGradient id="invAreaGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={T.primary} stopOpacity="0.12" />
-          <stop offset="100%" stopColor={T.primary} stopOpacity="0" />
+          <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.12" />
+          <stop offset="100%" stopColor="var(--primary)" stopOpacity="0" />
         </linearGradient>
       </defs>
       {yTicks.map((v, i) => (
@@ -61,7 +51,7 @@ export function PortfolioChart({
           y1={toY(v)}
           x2={W}
           y2={toY(v)}
-          stroke={T.border}
+          stroke="var(--border)"
           strokeWidth="1"
         />
       ))}
@@ -72,7 +62,7 @@ export function PortfolioChart({
           y={toY(v) + 4}
           textAnchor="end"
           fontSize="9"
-          style={{ fill: T.mutedFg }}
+          fill="var(--muted-foreground)"
         >
           {v >= 1000
             ? `${currencySymbol}${(v / 1000).toFixed(0)}k`
@@ -83,13 +73,19 @@ export function PortfolioChart({
       <path
         d={linePath}
         fill="none"
-        stroke={T.primary}
+        stroke="var(--primary)"
         strokeWidth="1.5"
         strokeLinecap="square"
         strokeLinejoin="miter"
       />
-      <circle cx={lastX} cy={lastY} r="3.5" fill={T.primary} />
-      <circle cx={lastX} cy={lastY} r="6" fill={T.primary} fillOpacity="0.2" />
+      <circle cx={lastX} cy={lastY} r="3.5" fill="var(--primary)" />
+      <circle
+        cx={lastX}
+        cy={lastY}
+        r="6"
+        fill="var(--primary)"
+        fillOpacity="0.2"
+      />
     </svg>
   );
 }
