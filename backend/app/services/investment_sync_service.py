@@ -88,7 +88,15 @@ class InvestmentSyncService:
         # the most common 1018 trigger). A small delay smooths the bursty
         # double-call pattern; on failure we keep the sync as "partial"
         # so positions still surface and trades catch up next cycle.
-        delay = float(os.getenv("IBKR_FLEX_INTER_QUERY_DELAY_SEC", "5"))
+        delay_raw = os.getenv("IBKR_FLEX_INTER_QUERY_DELAY_SEC", "5")
+        try:
+            delay = float(delay_raw)
+        except ValueError:
+            logger.warning(
+                "Invalid IBKR_FLEX_INTER_QUERY_DELAY_SEC=%r; defaulting to 5",
+                delay_raw,
+            )
+            delay = 5.0
         if delay > 0:
             time.sleep(delay)
 
