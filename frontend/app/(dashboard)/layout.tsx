@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { JetBrains_Mono } from "next/font/google";
-import { auth } from "@/lib/auth";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/app-sidebar";
-import { getOnboardingStatus, getOnboardingRedirectPath } from "@/lib/actions/onboarding";
+import { getOnboardingRedirectPath } from "@/lib/actions/onboarding";
+import { getCachedSession, getCachedOnboardingStatus } from "@/lib/data/cached";
 import { ImportStatusNotifier } from "@/components/import-status-notifier";
 import { WalkthroughProvider } from "@/components/walkthrough/walkthrough-provider";
 
@@ -19,9 +19,7 @@ export default async function DashboardLayout({
   const sidebarCookie = cookieStore.get("syllogic.sidebar.open")?.value;
   const defaultSidebarOpen = sidebarCookie === "true";
 
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await getCachedSession();
 
   if (!session) {
     redirect("/login");
@@ -31,7 +29,7 @@ export default async function DashboardLayout({
   //
   // Note: `redirect()` throws a special Next.js error to trigger navigation.
   // Do NOT wrap this in a broad try/catch, or the redirect will be swallowed.
-  const onboardingStatus = await getOnboardingStatus();
+  const onboardingStatus = await getCachedOnboardingStatus();
   if (onboardingStatus && !onboardingStatus.isCompleted) {
     const redirectPath = await getOnboardingRedirectPath(onboardingStatus.status);
     redirect(redirectPath);

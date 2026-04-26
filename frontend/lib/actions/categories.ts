@@ -1,10 +1,11 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { eq, and, count } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { categories, transactions, type Category, type NewCategory } from "@/lib/db/schema";
 import { requireAuth } from "@/lib/auth-helpers";
+import { getCachedUserCategories, CACHE_TAGS } from "@/lib/data/cached";
 
 export interface CategoryCreateInput {
   name: string;
@@ -72,6 +73,7 @@ export async function createCategory(
 
     revalidatePath("/");
     revalidatePath("/settings");
+    updateTag(CACHE_TAGS.categories(userId));
     return { success: true, categoryId: inserted.id };
   } catch (error) {
     console.error("Failed to create category:", error);
@@ -129,6 +131,7 @@ export async function updateCategory(
 
       revalidatePath("/");
       revalidatePath("/settings");
+      updateTag(CACHE_TAGS.categories(userId));
       return { success: true };
     }
 
@@ -162,6 +165,7 @@ export async function updateCategory(
 
     revalidatePath("/");
     revalidatePath("/settings");
+    updateTag(CACHE_TAGS.categories(userId));
     return { success: true };
   } catch (error) {
     console.error("Failed to update category:", error);
@@ -222,6 +226,7 @@ export async function deleteCategory(
     revalidatePath("/");
     revalidatePath("/settings");
     revalidatePath("/transactions");
+    updateTag(CACHE_TAGS.categories(userId));
     return { success: true };
   } catch (error) {
     console.error("Failed to delete category:", error);
@@ -230,16 +235,7 @@ export async function deleteCategory(
 }
 
 export async function getCategories(): Promise<Category[]> {
-  const userId = await requireAuth();
-
-  if (!userId) {
-    return [];
-  }
-
-  return db.query.categories.findMany({
-    where: eq(categories.userId, userId),
-    orderBy: (categories, { asc }) => [asc(categories.name)],
-  });
+  return getCachedUserCategories() as Promise<Category[]>;
 }
 
 // Alias for backward compatibility
@@ -401,6 +397,7 @@ export async function deleteCategoryWithReassignment(
     revalidatePath("/");
     revalidatePath("/settings");
     revalidatePath("/transactions");
+    updateTag(CACHE_TAGS.categories(userId));
 
     return { success: true, reassignedCount };
   } catch (error) {

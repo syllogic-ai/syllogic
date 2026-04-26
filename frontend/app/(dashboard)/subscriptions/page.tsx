@@ -1,27 +1,20 @@
-import { SubscriptionsClient } from "@/components/subscriptions/subscriptions-client";
-import { getSubscriptions, getSubscriptionKpis } from "@/lib/actions/subscriptions";
-import { getUserCategories } from "@/lib/actions/categories";
-import { getPendingSuggestions } from "@/lib/actions/subscription-suggestions";
-import { getAccounts } from "@/lib/actions/accounts";
+import { Suspense } from "react";
+import { CardGridSkeleton, DetailListSkeleton } from "@/components/skeletons/page-skeletons";
+import { SubscriptionsSection } from "./_sections";
 
-export default async function SubscriptionsPage() {
-  const [subscriptions, accounts, categories, suggestions, kpis] = await Promise.all([
-    getSubscriptions(),
-    getAccounts(),
-    getUserCategories(),
-    getPendingSuggestions(),
-    getSubscriptionKpis(),
-  ]);
-
+export default function SubscriptionsPage() {
   return (
     <div className="flex min-h-[calc(100vh-4rem)] flex-col gap-4 p-4">
-      <SubscriptionsClient
-        initialSubscriptions={subscriptions}
-        accounts={accounts}
-        categories={categories}
-        suggestions={suggestions}
-        kpis={kpis}
-      />
+      <Suspense
+        fallback={
+          <>
+            <CardGridSkeleton count={4} />
+            <DetailListSkeleton rows={8} />
+          </>
+        }
+      >
+        <SubscriptionsSection />
+      </Suspense>
     </div>
   );
 }

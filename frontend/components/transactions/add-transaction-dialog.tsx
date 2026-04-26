@@ -33,7 +33,8 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { createTransaction, getUserAccounts } from "@/lib/actions/transactions";
 import { getUserCategories } from "@/lib/actions/categories";
-import type { Account, Category } from "@/lib/db/schema";
+import type { Category } from "@/lib/db/schema";
+type Account = { id: string; name: string; institution: string | null; accountType: string; currency: string | null };
 import type { CategoryDisplay } from "@/types";
 import { getCategoriesForTransactionType } from "@/lib/utils/category-utils";
 

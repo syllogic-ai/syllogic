@@ -316,20 +316,10 @@ export async function updateTransactionCategory(
   }
 }
 
+import { getUserAccounts as _dashboardGetUserAccounts } from "@/lib/actions/dashboard";
+
 export async function getUserAccounts() {
-  const userId = await requireAuth();
-
-  if (!userId) {
-    return [];
-  }
-
-  return db.query.accounts.findMany({
-    where: and(
-      eq(accounts.userId, userId),
-      eq(accounts.isActive, true)
-    ),
-    orderBy: [desc(accounts.createdAt)],
-  });
+  return _dashboardGetUserAccounts();
 }
 
 // Note: getUserCategories has been consolidated in lib/actions/categories.ts
