@@ -207,7 +207,13 @@ export async function syncAllInvestments(): Promise<{ count: number }> {
 
 export async function updateHolding(
   holdingId: string,
-  payload: { symbol?: string; quantity?: string; avg_cost?: string; as_of_date?: string; provider_symbol?: string | null },
+  payload: {
+    symbol?: string;
+    quantity?: string;
+    avg_cost?: string | null;
+    as_of_date?: string | null;
+    provider_symbol?: string | null;
+  },
 ): Promise<void> {
   const session = await getAuthenticatedSession();
   if (!session?.user?.id) throw new Error("Not authenticated");

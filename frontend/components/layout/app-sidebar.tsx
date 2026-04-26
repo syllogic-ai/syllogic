@@ -179,7 +179,10 @@ export function AppSidebar({ initialUser }: AppSidebarProps) {
         <SidebarGroup>
           <SidebarMenu>
             {navItems.map((item) => {
-              const isActive = pathname === item.href;
+              const isActive =
+                item.href === "/"
+                  ? pathname === "/"
+                  : pathname === item.href || pathname.startsWith(item.href + "/");
               return (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton

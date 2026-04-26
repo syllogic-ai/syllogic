@@ -28,6 +28,7 @@ export function SymbolSearchInput({
   const [activeIndex, setActiveIndex] = useState(-1);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const latestRequestRef = useRef(0);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -37,17 +38,20 @@ export function SymbolSearchInput({
       return;
     }
     debounceRef.current = setTimeout(async () => {
+      const requestId = ++latestRequestRef.current;
       setLoading(true);
       try {
         const hits = await searchSymbolsAction(value.trim());
+        if (requestId !== latestRequestRef.current) return;
         setResults(hits);
         setOpen(hits.length > 0);
         setActiveIndex(-1);
       } catch {
+        if (requestId !== latestRequestRef.current) return;
         setResults([]);
         setOpen(false);
       } finally {
-        setLoading(false);
+        if (requestId === latestRequestRef.current) setLoading(false);
       }
     }, 350);
 

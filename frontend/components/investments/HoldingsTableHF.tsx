@@ -286,6 +286,9 @@ export function HoldingsTableHF({
                           size="icon-sm"
                           aria-label="Row actions"
                           onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") e.stopPropagation();
+                          }}
                         >
                           <RiMore2Fill className="size-4" />
                         </Button>

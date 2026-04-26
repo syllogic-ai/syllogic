@@ -42,9 +42,9 @@ export function EditHoldingDialog({
       await updateHolding(holding.id, {
         ...(symbol !== holding.symbol ? { symbol } : {}),
         quantity: qty,
-        ...(avgCost ? { avg_cost: avgCost } : {}),
-        ...(asOfDate ? { as_of_date: asOfDate } : {}),
-        provider_symbol: providerSymbol || null,
+        avg_cost: avgCost === "" ? null : avgCost,
+        as_of_date: asOfDate === "" ? null : asOfDate,
+        provider_symbol: providerSymbol === "" ? null : providerSymbol,
       });
       onOpenChange(false);
       router.refresh();
