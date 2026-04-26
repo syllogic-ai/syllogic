@@ -46,7 +46,7 @@ const PORTFOLIO: PortfolioSummary = {
   total_value: "50000",
   total_value_today_change: "100",
   currency: "EUR",
-  accounts: [{ id: "a1", name: "My Account", balance: "9842", type: "manual" }],
+  accounts: [{ id: "a1", name: "My Account", value: "9842", type: "manual" }],
   allocation_by_type: {},
   allocation_by_currency: {},
 };
