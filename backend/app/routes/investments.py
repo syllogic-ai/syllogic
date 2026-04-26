@@ -343,6 +343,7 @@ def list_holdings(
                 id=h.id,
                 account_id=h.account_id,
                 symbol=h.symbol,
+                provider_symbol=h.provider_symbol,
                 name=h.name,
                 currency=h.currency,
                 instrument_type=h.instrument_type,
