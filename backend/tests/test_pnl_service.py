@@ -121,3 +121,32 @@ def test_compute_fifo_multi_symbol_independent():
     assert len(result.realized) == 1
     assert result.realized[0].symbol == "AAPL"
     assert {l.symbol for l in result.open_lots} == {"MSFT"}
+
+
+from unittest.mock import MagicMock
+
+
+def test_realized_pnl_enriches_with_base_currency_fx():
+    """The DB-aware wrapper applies FX-on-close-date for base currency."""
+    from app.services.pnl_service import realized_pnl_from_trades
+
+    trades = [
+        _t("AAPL", "2024-01-10", "buy", 10, 150, currency="USD"),
+        _t("AAPL", "2024-06-01", "sell", 10, 200, currency="USD"),
+    ]
+
+    fx = MagicMock()
+    # 1 USD = 0.92 EUR on close date
+    fx.get_exchange_rate.return_value = Decimal("0.92")
+
+    result = realized_pnl_from_trades(trades, base_currency="EUR", fx_service=fx)
+
+    assert len(result) == 1
+    row = result[0]
+    assert row["symbol"] == "AAPL"
+    assert row["currency"] == "USD"
+    assert row["realized_native"] == Decimal("500")
+    assert row["realized_base"] == Decimal("460.00")
+    assert len(row["lots_closed"]) == 1
+    assert row["lots_closed"][0]["pnl_base"] == Decimal("460.00")
+    fx.get_exchange_rate.assert_called_with("USD", "EUR", date.fromisoformat("2024-06-01"))

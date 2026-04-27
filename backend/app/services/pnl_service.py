@@ -146,3 +146,60 @@ def compute_fifo(trades: Iterable[Trade]) -> FifoResult:
             ))
 
     return FifoResult(realized=realized, open_lots=open_lots)
+
+
+def realized_pnl_from_trades(
+    trades: Iterable[Trade],
+    base_currency: str,
+    fx_service,
+) -> list[dict]:
+    """
+    Run FIFO and enrich each closed lot with base-currency P&L.
+
+    `fx_service` must implement `get_exchange_rate(src, dst, on: date) -> Decimal | None`
+    (matches `app.services.exchange_rate_service.ExchangeRateService`).
+
+    Groups closed lots by symbol; per-lot FX is taken on the lot's close_date.
+    Lots whose FX lookup fails contribute 0 to `realized_base` and are flagged
+    via a `fx_missing` boolean on the lot dict.
+    """
+    fifo = compute_fifo(trades)
+
+    by_symbol: dict[str, list[ClosedLot]] = {}
+    for lot in fifo.realized:
+        by_symbol.setdefault(lot.symbol, []).append(lot)
+
+    out: list[dict] = []
+    for symbol, lots in by_symbol.items():
+        symbol_currency = lots[0].currency
+        realized_native_total = Decimal("0")
+        realized_base_total = Decimal("0")
+        lot_dicts = []
+        for lot in lots:
+            rate = fx_service.get_exchange_rate(lot.currency, base_currency, lot.close_date)
+            if rate is None:
+                pnl_base = Decimal("0")
+                fx_missing = True
+            else:
+                pnl_base = (lot.pnl_native * rate).quantize(Decimal("0.01"))
+                fx_missing = False
+            realized_native_total += lot.pnl_native
+            realized_base_total += pnl_base
+            lot_dicts.append({
+                "open_date": lot.open_date.isoformat(),
+                "close_date": lot.close_date.isoformat(),
+                "quantity": lot.quantity,
+                "cost_native": lot.cost_native,
+                "proceeds_native": lot.proceeds_native,
+                "pnl_native": lot.pnl_native,
+                "pnl_base": pnl_base,
+                "fx_missing": fx_missing,
+            })
+        out.append({
+            "symbol": symbol,
+            "currency": symbol_currency,
+            "realized_native": realized_native_total,
+            "realized_base": realized_base_total,
+            "lots_closed": lot_dicts,
+        })
+    return out
