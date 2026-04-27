@@ -86,11 +86,11 @@ def compute_fifo(trades: Iterable[Trade]) -> FifoResult:
     """
     sorted_trades = sorted(trades, key=lambda t: (t.trade_date, 0 if t.side == "buy" else 1))
 
-    open_by_symbol: dict[str, list[_MutableLot]] = {}
+    open_by_key: dict[tuple[str, str], list[_MutableLot]] = {}
     realized: list[ClosedLot] = []
 
     for t in sorted_trades:
-        lots = open_by_symbol.setdefault(t.symbol, [])
+        lots = open_by_key.setdefault((t.symbol, t.currency), [])
         if t.side == "buy":
             # Buy fees increase cost basis: cost_per_share = (price*qty + fees) / qty
             cost_per_share = (
@@ -135,7 +135,7 @@ def compute_fifo(trades: Iterable[Trade]) -> FifoResult:
                 lots.pop(0)
 
     open_lots: list[OpenLot] = []
-    for sym, lots in open_by_symbol.items():
+    for (sym, _ccy), lots in open_by_key.items():
         for lot in lots:
             open_lots.append(OpenLot(
                 symbol=sym,

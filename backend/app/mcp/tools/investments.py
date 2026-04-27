@@ -316,7 +316,7 @@ def _trades_for_user(
         q = q.filter(BrokerTrade.trade_date >= validate_date(start_date))
     if end_date:
         q = q.filter(BrokerTrade.trade_date <= validate_date(end_date))
-    rows = q.order_by(BrokerTrade.trade_date).all()
+    rows = q.order_by(BrokerTrade.trade_date, BrokerTrade.id).all()
     return [
         Trade(
             symbol=r.symbol,

@@ -184,3 +184,28 @@ def test_unrealized_pnl_uses_latest_price_and_fx():
     assert row["unrealized_native"] == Decimal("600")
     # 600 USD * 0.90 = 540 EUR
     assert row["unrealized_base"] == Decimal("540.00")
+
+
+def test_compute_fifo_separates_lots_by_currency():
+    """Same symbol traded in two currencies must not cross-match in FIFO."""
+    trades = [
+        _t("BRK", "2024-01-10", "buy", 10, 100, currency="USD"),
+        _t("BRK", "2024-01-15", "buy", 10, 90, currency="EUR"),
+        # Sell 5 USD shares — must consume the USD lot, not the EUR one.
+        _t("BRK", "2024-06-01", "sell", 5, 120, currency="USD"),
+    ]
+
+    result = compute_fifo(trades)
+
+    assert len(result.realized) == 1
+    closed = result.realized[0]
+    assert closed.currency == "USD"
+    assert closed.cost_native == Decimal("500")  # 5 * 100 USD, not 5 * 90 EUR
+    assert closed.proceeds_native == Decimal("600")
+    assert closed.pnl_native == Decimal("100")
+
+    # Two open lots remain: 5 USD shares and the full 10 EUR shares.
+    open_by_currency = {l.currency: l for l in result.open_lots}
+    assert set(open_by_currency.keys()) == {"USD", "EUR"}
+    assert open_by_currency["USD"].quantity_remaining == Decimal("5")
+    assert open_by_currency["EUR"].quantity_remaining == Decimal("10")

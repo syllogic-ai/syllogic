@@ -31,6 +31,24 @@ def _normalize_quantity(q: Decimal) -> str:
     return s if s != "-0" else "0"
 
 
+def _hash_trade_key(
+    trade_date: date,
+    symbol: str,
+    side: str,
+    quantity: Decimal,
+    price: Decimal,
+) -> str:
+    """16-hex stable digest of the trade collision key (date|symbol|side|qty|price)."""
+    key = "|".join([
+        trade_date.isoformat(),
+        symbol.upper(),
+        side.lower(),
+        _normalize_quantity(quantity),
+        _normalize_quantity(price),
+    ])
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+
+
 def _generate_external_id(
     trade_date: date,
     symbol: str,
@@ -44,15 +62,7 @@ def _generate_external_id(
     Format: `<16-hex>#<N>`. Same statement re-uploaded → same id (no-op).
     Two genuinely identical trades on the same day → distinct ids via ordinal.
     """
-    key = "|".join([
-        trade_date.isoformat(),
-        symbol.upper(),
-        side.lower(),
-        _normalize_quantity(quantity),
-        _normalize_quantity(price),
-    ])
-    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
-    return f"{digest}#{ordinal}"
+    return f"{_hash_trade_key(trade_date, symbol, side, quantity, price)}#{ordinal}"
 
 
 class ImportError(Exception):
@@ -151,22 +161,49 @@ def import_trades(
         }
 
     # Generate external_ids for trades that didn't provide one.
-    # Group by collision key to assign per-batch ordinals.
-    by_key: dict[tuple, int] = defaultdict(int)
+    # Ordinal assignment is sequential (0, 1, 2, ...) per collision key. This
+    # preserves idempotent re-upload (same trades → same ids → ON CONFLICT
+    # dedup) while also being cross-batch aware: if a previous batch already
+    # imported N same-key trades (#0..#N-1) and a new batch contains M more,
+    # we look up the existing count and start new ordinals at N — so the new
+    # rows don't collide with the existing #0..#N-1 and are correctly inserted.
+    existing_max_by_digest: dict[str, int] = {}
+    existing_rows = (
+        db.query(BrokerTrade.external_id)
+        .filter(BrokerTrade.account_id == account.id)
+        .all()
+    )
+    for (eid,) in existing_rows:
+        if not eid or "#" not in eid:
+            continue
+        prefix, _, ord_str = eid.rpartition("#")
+        try:
+            n = int(ord_str)
+        except ValueError:
+            continue
+        prev = existing_max_by_digest.get(prefix)
+        if prev is None or n > prev:
+            existing_max_by_digest[prefix] = n
+
+    batch_count_by_digest: dict[str, int] = defaultdict(int)
     for vt in validated:
         if vt.external_id:
             continue
-        key = (vt.trade_date, vt.symbol.upper(), vt.side, _normalize_quantity(vt.quantity), _normalize_quantity(vt.price))
-        ordinal = by_key[key]
-        by_key[key] += 1
-        vt.external_id = _generate_external_id(
+        digest = _hash_trade_key(
             trade_date=vt.trade_date,
             symbol=vt.symbol,
             side=vt.side,
             quantity=vt.quantity,
             price=vt.price,
-            ordinal=ordinal,
         )
+        # Sequential within batch (0, 1, 2, ...). For re-uploads these match
+        # existing ids and dedup. If the batch produces more same-key trades
+        # than already exist, the surplus uses ordinals beyond the existing max.
+        batch_idx = batch_count_by_digest[digest]
+        batch_count_by_digest[digest] += 1
+        existing_max = existing_max_by_digest.get(digest, -1)
+        ordinal = batch_idx if batch_idx <= existing_max else max(batch_idx, existing_max + 1)
+        vt.external_id = f"{digest}#{ordinal}"
 
     # Bulk insert with ON CONFLICT DO NOTHING; RETURNING tells us which rows actually inserted.
     rows = [
@@ -195,12 +232,14 @@ def import_trades(
     skipped = len(validated) - inserted
     affected_symbols = sorted({vt.symbol.upper() for vt in validated})
 
+    # Recompute holdings before deciding whether to commit so dry_run still
+    # surfaces FIFO oversell errors and any other recompute failures.
+    for symbol in affected_symbols:
+        _recompute_holding(db, account, symbol)
+
     if dry_run:
         db.rollback()
     else:
-        # Recompute holdings for each affected (account, symbol) pair from full trade history
-        for symbol in affected_symbols:
-            _recompute_holding(db, account, symbol)
         db.commit()
 
     return {
@@ -253,7 +292,11 @@ def _recompute_holding(db: Session, account: Account, symbol: str) -> None:
 
     holding = (
         db.query(Holding)
-        .filter(Holding.account_id == account.id, Holding.symbol == symbol)
+        .filter(
+            Holding.account_id == account.id,
+            Holding.symbol == symbol,
+            Holding.instrument_type == "equity",
+        )
         .first()
     )
     if holding is None:
