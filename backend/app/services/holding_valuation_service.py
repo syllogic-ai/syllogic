@@ -46,6 +46,12 @@ class HoldingValuationService:
         self.db.commit()
         return total_user
 
+    # Number of days between `on` and the latest snapshot beyond which we
+    # consider the price stale. 3 days covers normal weekend gaps (Friday
+    # close → Monday morning lookup) and most one-off holidays without
+    # producing constant false-positive stale flags.
+    STALE_AFTER_DAYS = 3
+
     def _price_for(self, h: Holding, on: date) -> tuple[Decimal, str, bool]:
         if h.instrument_type == "cash":
             return Decimal("1"), h.currency, False
@@ -53,7 +59,9 @@ class HoldingValuationService:
         snap = self.price_service.latest_snapshot(lookup_symbol, on)
         if snap is None:
             return Decimal("0"), h.currency, True
-        return Decimal(snap.close), snap.currency, snap.date != on
+        gap_days = (on - snap.date).days
+        is_stale = gap_days > self.STALE_AFTER_DAYS
+        return Decimal(snap.close), snap.currency, is_stale
 
     def _upsert_valuation(self, holding_id, on: date, qty: Decimal, price: Decimal,
                           value_user: Decimal, is_stale: bool) -> None:

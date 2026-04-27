@@ -50,7 +50,51 @@ export function InvestmentsOverview({
   const absChange = last - first;
   const pctChange = first > 0 ? (absChange / first) * 100 : 0;
   const totalValue = Number(portfolio.total_value);
-  const costBasis = totalValue - absChange;
+
+  // Real cost basis & unrealized P&L from per-holding cost_basis_user_currency
+  // (server-side derived from FIFO avg_cost × FX).
+  //
+  // "Active position" = one we still hold (quantity > 0). This INCLUDES
+  // holdings that are currently worth zero (e.g. delisted/worthless stock
+  // we haven't sold) — those are real unrealized losses and must be
+  // counted. EXCLUDES fully-sold positions (qty=0, avg_cost=null), whose
+  // P&L is already realized.
+  //
+  // Falls back to the chart-range delta only when cost basis is unavailable
+  // for some active position — using partial cost basis would understate
+  // it and overstate P&L. An empty portfolio (no holdings, no active
+  // positions) reports zero P&L, not the chart delta.
+  let activePositions = 0;
+  let activeWithCost = 0;
+  let costBasisFromHoldings = 0;
+  let valueFromHoldings = 0;
+  for (const h of holdings) {
+    const qty = Number(h.quantity ?? 0);
+    if (!Number.isFinite(qty) || qty <= 0) continue;
+    activePositions += 1;
+    const v = Number(h.current_value_user_currency ?? 0);
+    if (Number.isFinite(v)) valueFromHoldings += v;
+    const c = h.cost_basis_user_currency;
+    if (c != null) {
+      const cn = Number(c);
+      if (Number.isFinite(cn)) {
+        costBasisFromHoldings += cn;
+        activeWithCost += 1;
+      }
+    }
+  }
+  const isEmptyPortfolio = activePositions === 0;
+  const hasCompleteCost = !isEmptyPortfolio && activeWithCost === activePositions;
+  const costBasis = isEmptyPortfolio
+    ? 0
+    : hasCompleteCost
+      ? costBasisFromHoldings
+      : totalValue - absChange;
+  const unrealizedPnl = isEmptyPortfolio
+    ? 0
+    : hasCompleteCost
+      ? valueFromHoldings - costBasisFromHoldings
+      : absChange;
   const accountNames = Object.fromEntries(
     portfolio.accounts.map((a) => [a.id, a.name]),
   );
@@ -135,7 +179,7 @@ export function InvestmentsOverview({
           <PortfolioChart data={series} currencySymbol={sym} />
           <PortfolioStatsStrip
             costBasis={costBasis}
-            unrealizedPnl={absChange}
+            unrealizedPnl={unrealizedPnl}
             returnPct={pctChange}
             holdingsCount={holdings.length}
             accountsCount={portfolio.accounts.length}

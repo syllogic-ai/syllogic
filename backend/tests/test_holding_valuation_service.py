@@ -84,14 +84,34 @@ def test_cash_holding_skips_price_lookup(db):
     assert val.value_user_currency == Decimal("1380.00")
 
 
-def test_marks_stale_when_no_same_day_snapshot(db):
+def test_does_not_mark_stale_within_freshness_window(db):
+    """Snapshot from up to 3 days ago is fresh — covers weekend / 1-day holiday."""
     user = _make_user(db, currency="EUR")
     acc = _make_account(db, user.id, currency="EUR")
     h = Holding(id=uuid4(), user_id=user.id, account_id=acc.id, symbol="AAPL",
                 currency="USD", instrument_type="equity",
                 quantity=Decimal("10"), source="manual")
     db.add(h)
-    db.add(PriceSnapshot(symbol="AAPL", currency="USD", date=date(2026, 4, 17),
+    # Snapshot 3 days before `on` — on the boundary, still fresh.
+    db.add(PriceSnapshot(symbol="AAPL", currency="USD", date=date(2026, 4, 15),
+                         close=Decimal("230.00"), provider="yahoo"))
+    db.commit()
+    fx = MagicMock(); fx.convert.return_value = Decimal("2100.00")
+    HoldingValuationService(db=db, fx=fx).compute(account_id=acc.id, on=date(2026, 4, 18))
+    val = db.query(HoldingValuation).filter_by(holding_id=h.id, date=date(2026, 4, 18)).one()
+    assert val.is_stale is False
+
+
+def test_marks_stale_when_snapshot_older_than_window(db):
+    """Snapshot more than 3 days old is stale."""
+    user = _make_user(db, currency="EUR")
+    acc = _make_account(db, user.id, currency="EUR")
+    h = Holding(id=uuid4(), user_id=user.id, account_id=acc.id, symbol="AAPL",
+                currency="USD", instrument_type="equity",
+                quantity=Decimal("10"), source="manual")
+    db.add(h)
+    # Snapshot 4 days before `on` — outside the freshness window.
+    db.add(PriceSnapshot(symbol="AAPL", currency="USD", date=date(2026, 4, 14),
                          close=Decimal("230.00"), provider="yahoo"))
     db.commit()
     fx = MagicMock(); fx.convert.return_value = Decimal("2100.00")
