@@ -198,6 +198,9 @@ def import_trades(
     if dry_run:
         db.rollback()
     else:
+        # Recompute holdings for each affected (account, symbol) pair from full trade history
+        for symbol in affected_symbols:
+            _recompute_holding(db, account, symbol)
         db.commit()
 
     return {
@@ -206,3 +209,70 @@ def import_trades(
         "errors": errors,
         "affected_symbols": affected_symbols,
     }
+
+
+def _recompute_holding(db: Session, account: Account, symbol: str) -> None:
+    """Rebuild Holding(account, symbol) from full BrokerTrade history using FIFO."""
+    trades = (
+        db.query(BrokerTrade)
+        .filter(BrokerTrade.account_id == account.id, BrokerTrade.symbol == symbol)
+        .order_by(BrokerTrade.trade_date)
+        .all()
+    )
+    if not trades:
+        return
+
+    fifo_trades = [
+        Trade(
+            symbol=t.symbol,
+            trade_date=t.trade_date,
+            side=t.side,
+            quantity=Decimal(t.quantity),
+            price=Decimal(t.price),
+            currency=t.currency,
+            fees=Decimal(t.fees or 0),
+        )
+        for t in trades
+    ]
+    result = compute_fifo(fifo_trades)
+    open_lots = [l for l in result.open_lots if l.symbol == symbol]
+
+    quantity = sum((l.quantity_remaining for l in open_lots), Decimal("0"))
+    if quantity > 0:
+        total_cost = sum(
+            (l.quantity_remaining * l.cost_per_share_native for l in open_lots),
+            Decimal("0"),
+        )
+        avg_cost = (total_cost / quantity).quantize(Decimal("0.00000001"))
+        currency = open_lots[0].currency
+    else:
+        avg_cost = None
+        currency = trades[-1].currency
+
+    last_date = max(t.trade_date for t in trades)
+
+    holding = (
+        db.query(Holding)
+        .filter(Holding.account_id == account.id, Holding.symbol == symbol)
+        .first()
+    )
+    if holding is None:
+        holding = Holding(
+            user_id=account.user_id,
+            account_id=account.id,
+            symbol=symbol,
+            currency=currency,
+            instrument_type="equity",
+            quantity=quantity,
+            avg_cost=avg_cost,
+            as_of_date=last_date,
+            source="trade_import",
+        )
+        db.add(holding)
+    else:
+        holding.quantity = quantity
+        holding.avg_cost = avg_cost
+        holding.as_of_date = last_date
+        holding.source = "trade_import"
+        if not holding.currency:
+            holding.currency = currency

@@ -289,3 +289,34 @@ def test_import_trades_caller_supplied_external_id_wins(db_session, investment_a
         .one()
     )
     assert row.external_id == "BROKER-CONFIRM-001"
+
+
+def test_import_trades_recomputes_holding_quantity_and_avg_cost(db_session, investment_account):
+    """After import, Holding.quantity = sum(buys) - sum(sells); avg_cost = weighted avg of open lots."""
+    payload = [
+        _trade("AAPL", "2024-01-10", "buy", "10", "100"),  # cost 1000
+        _trade("AAPL", "2024-02-10", "buy", "5", "120"),   # cost 600
+        _trade("AAPL", "2024-06-01", "sell", "8", "150"),  # consumes 8 from first lot
+    ]
+    result = import_trades(
+        db_session,
+        user_id=investment_account["user_id"],
+        account_id=investment_account["account_id"],
+        trades=payload,
+        dry_run=False,
+    )
+    assert result["inserted"] == 3
+
+    holding = (
+        db_session.query(Holding)
+        .filter(
+            Holding.account_id == investment_account["account_id"],
+            Holding.symbol == "AAPL",
+        )
+        .one()
+    )
+    # Remaining: 2 from first lot @ 100 + 5 from second lot @ 120 = 7 shares
+    assert holding.quantity == Decimal("7")
+    # Weighted avg of remaining open lots: (2*100 + 5*120) / 7 = 800/7
+    assert holding.avg_cost == (Decimal("800") / Decimal("7")).quantize(Decimal("0.00000001"))
+    assert holding.source == "trade_import"
