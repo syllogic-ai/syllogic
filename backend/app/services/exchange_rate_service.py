@@ -574,3 +574,101 @@ class ExchangeRateService:
             return None
 
         return amount * rate
+
+    def get_exchange_rate_with_fallback(
+        self,
+        base_currency: str,
+        target_currency: str,
+        for_date: date,
+    ) -> Optional[Decimal]:
+        """
+        Resolve an FX rate with progressive fallbacks:
+
+        1. Try the DB lookup at `for_date` (with the existing 7-day backward window).
+        2. If still missing, fetch a small window from Yahoo Finance around
+           `for_date`, store any rates we got, then re-check the DB.
+        3. If still missing, fall back to today's rate (DB or yfinance).
+
+        Returns the rate, or None only if every fallback failed.
+        """
+        if base_currency == target_currency:
+            return Decimal("1.0")
+
+        # 1. Existing DB-with-window lookup.
+        rate = self.get_exchange_rate(base_currency, target_currency, for_date)
+        if rate is not None:
+            return rate
+
+        # 2. On-demand backfill from yfinance for `for_date` ± a few days.
+        try:
+            window_start = for_date - timedelta(days=5)
+            window_end = for_date + timedelta(days=1)
+            fetched = self.fetch_exchange_rates_batch(
+                base_currency=base_currency,
+                target_currencies=[target_currency],
+                start_date=window_start,
+                end_date=window_end,
+            )
+            stored_any = False
+            for rate_date, by_target in fetched.items():
+                rate_value = by_target.get(target_currency)
+                if rate_value is None:
+                    continue
+                self.store_exchange_rates(
+                    target_currency=target_currency,
+                    rates={base_currency: rate_value},
+                    for_date=rate_date,
+                )
+                stored_any = True
+            if stored_any:
+                # Re-check at the exact date (uses the existing 7d backward window).
+                rate = self.get_exchange_rate(base_currency, target_currency, for_date)
+                if rate is not None:
+                    return rate
+                # Also try forward dates: if the only rates returned by yfinance
+                # were for days after for_date (e.g. as_of is a Sunday and only
+                # Monday's rate came back), the backward window won't see them.
+                for days_forward in range(1, 6):
+                    candidate = for_date + timedelta(days=days_forward)
+                    rate = self.get_exchange_rate(base_currency, target_currency, candidate)
+                    if rate is not None:
+                        logger.info(
+                            f"Using forward FX fallback (+{days_forward}d) for "
+                            f"{base_currency}/{target_currency} originally requested for {for_date}"
+                        )
+                        return rate
+        except Exception as e:
+            logger.warning(
+                f"yfinance fallback failed for {base_currency}/{target_currency} "
+                f"on {for_date}: {e}"
+            )
+
+        # 3. Final fallback: today's rate (DB hit first, then yfinance current).
+        today = date.today()
+        if today != for_date:
+            rate = self.get_exchange_rate(base_currency, target_currency, today)
+            if rate is not None:
+                logger.info(
+                    f"Using today's FX as fallback for {base_currency}/{target_currency} "
+                    f"originally requested for {for_date}"
+                )
+                return rate
+            try:
+                current = self.fetch_current_exchange_rates(
+                    base_currency=base_currency,
+                    target_currencies=[target_currency],
+                )
+                rate_value = current.get(target_currency)
+                if rate_value is not None:
+                    self.store_exchange_rates(
+                        target_currency=target_currency,
+                        rates={base_currency: rate_value},
+                        for_date=today,
+                    )
+                    return rate_value
+            except Exception as e:
+                logger.warning(
+                    f"Today-FX fallback failed for {base_currency}/{target_currency}: {e}"
+                )
+
+        return None
