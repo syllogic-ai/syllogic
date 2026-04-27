@@ -751,6 +751,7 @@ class BrokerTrade(Base):
     quantity = Column(Numeric(28, 8), nullable=False)
     price = Column(Numeric(28, 8), nullable=False)
     currency = Column(String(3), nullable=False)
+    fees = Column(Numeric(28, 8), nullable=False, default=0)
     external_id = Column(String(128), nullable=False)
 
     __table_args__ = (
