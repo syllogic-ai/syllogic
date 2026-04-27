@@ -8,6 +8,8 @@ import {
 } from "@/lib/actions/investments";
 import {
   type Holding,
+  type HoldingLot,
+  type HoldingTrade,
   type PortfolioSummary,
   type ValuationPoint,
 } from "@/lib/api/investments";
@@ -42,10 +44,14 @@ export function HoldingDetailView({
   holding,
   portfolio,
   initialHistory,
+  trades = [],
+  lots = [],
 }: {
   holding: Holding;
   portfolio: PortfolioSummary;
   initialHistory: ValuationPoint[];
+  trades?: HoldingTrade[];
+  lots?: HoldingLot[];
 }) {
   const router = useRouter();
   const [range, setRange] = useState<Range>("1M");
@@ -224,15 +230,130 @@ export function HoldingDetailView({
         </TabsList>
         <TabsContent value="overview">
           <Card>
-            <CardContent className="p-4 text-sm text-muted-foreground">
-              Position metadata, cost-basis breakdown and lots will appear here.
+            <CardContent className="p-4">
+              {lots.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No open lots. {holding.source === "trade_import"
+                    ? "All shares for this position have been sold."
+                    : "Position metadata, cost-basis breakdown and lots will appear here once trades are imported."}
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
+                        <th className="py-2 pr-4">Open date</th>
+                        <th className="py-2 pr-4 text-right">Quantity</th>
+                        <th className="py-2 pr-4 text-right">
+                          Cost / share ({holding.currency})
+                        </th>
+                        <th className="py-2 pr-4 text-right">
+                          Lot value ({holdingCurrSym})
+                        </th>
+                        <th className="py-2 pr-4 text-right">Age</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lots.map((lot) => {
+                        const qty = Number(lot.quantity_remaining);
+                        const cps = Number(lot.cost_per_share_native);
+                        const px = Number(holding.current_price ?? 0);
+                        const lotValue = px > 0 ? qty * px : NaN;
+                        return (
+                          <tr
+                            key={`${lot.open_date}-${lot.cost_per_share_native}`}
+                            className="border-b last:border-b-0"
+                          >
+                            <td className="py-2 pr-4 tabular-nums">
+                              {lot.open_date}
+                            </td>
+                            <td className="py-2 pr-4 text-right tabular-nums">
+                              {fmt(qty, qty < 1 ? 4 : 2)}
+                            </td>
+                            <td className="py-2 pr-4 text-right tabular-nums">
+                              {fmt(cps, 4)}
+                            </td>
+                            <td className="py-2 pr-4 text-right tabular-nums">
+                              {Number.isFinite(lotValue)
+                                ? `${holdingCurrSym} ${fmt(lotValue)}`
+                                : "—"}
+                            </td>
+                            <td className="py-2 pr-4 text-right tabular-nums text-muted-foreground">
+                              {lot.age_days}d
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
         <TabsContent value="transactions">
           <Card>
-            <CardContent className="p-4 text-sm text-muted-foreground">
-              Per-holding transaction history is not yet exposed by the backend.
+            <CardContent className="p-4">
+              {trades.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No trades recorded for this holding yet.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
+                        <th className="py-2 pr-4">Date</th>
+                        <th className="py-2 pr-4">Side</th>
+                        <th className="py-2 pr-4 text-right">Qty</th>
+                        <th className="py-2 pr-4 text-right">
+                          Price ({holding.currency})
+                        </th>
+                        <th className="py-2 pr-4 text-right">Fees</th>
+                        <th className="py-2 pr-4 text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {trades.map((t) => {
+                        const total =
+                          t.side === "buy"
+                            ? Number(t.cost_native ?? 0)
+                            : Number(t.proceeds_native ?? 0);
+                        return (
+                          <tr key={t.id} className="border-b last:border-b-0">
+                            <td className="py-2 pr-4 tabular-nums">
+                              {t.trade_date}
+                            </td>
+                            <td className="py-2 pr-4 capitalize">
+                              <span
+                                className={
+                                  t.side === "buy"
+                                    ? "text-emerald-600 dark:text-emerald-400"
+                                    : "text-destructive"
+                                }
+                              >
+                                {t.side}
+                              </span>
+                            </td>
+                            <td className="py-2 pr-4 text-right tabular-nums">
+                              {fmt(Number(t.quantity), 4)}
+                            </td>
+                            <td className="py-2 pr-4 text-right tabular-nums">
+                              {fmt(Number(t.price), 4)}
+                            </td>
+                            <td className="py-2 pr-4 text-right tabular-nums text-muted-foreground">
+                              {Number(t.fees) > 0 ? fmt(Number(t.fees), 2) : "—"}
+                            </td>
+                            <td className="py-2 pr-4 text-right tabular-nums">
+                              {holdingCurrSym} {fmt(total)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

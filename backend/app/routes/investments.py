@@ -18,6 +18,7 @@ from app.models import (
     Account,
     AccountBalance,
     BrokerConnection,
+    BrokerTrade,
     Holding,
     HoldingValuation,
     User,
@@ -25,6 +26,8 @@ from app.models import (
 from app.schemas import (
     BrokerConnectionCreate,
     HoldingCreate,
+    HoldingLot,
+    HoldingTrade,
     HoldingUpdate,
     HoldingResponse,
     ManualAccountCreate,
@@ -32,6 +35,7 @@ from app.schemas import (
     SymbolSearchResult,
     ValuationPoint,
 )
+from app.services.pnl_service import Trade as _FifoTrade, compute_fifo
 from app.services import credentials_crypto
 
 logger = __import__("logging").getLogger(__name__)
@@ -627,6 +631,146 @@ def portfolio_history(
         by_date[d] = by_date.get(d, Decimal("0")) + Decimal(r.balance_in_functional_currency)
 
     return [ValuationPoint(date=d, value=v) for d, v in sorted(by_date.items())]
+
+
+@router.get("/holdings/{holding_id}/trades", response_model=list[HoldingTrade])
+def holding_trades(
+    holding_id: UUID,
+    user_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """Return all BrokerTrade rows behind this holding (account_id, symbol),
+    chronologically. Each row carries a running quantity (post-trade)."""
+    user_id = get_user_id(user_id)
+    holding = (
+        db.query(Holding)
+        .filter(Holding.id == holding_id, Holding.user_id == user_id)
+        .first()
+    )
+    if not holding:
+        raise HTTPException(status_code=404, detail="Holding not found")
+
+    trades = (
+        db.query(BrokerTrade)
+        .filter(
+            BrokerTrade.account_id == holding.account_id,
+            BrokerTrade.symbol == holding.symbol,
+        )
+        .order_by(BrokerTrade.trade_date.asc(), BrokerTrade.id.asc())
+        .all()
+    )
+
+    out: list[HoldingTrade] = []
+    running = Decimal("0")
+    for t in trades:
+        qty = Decimal(t.quantity)
+        price = Decimal(t.price)
+        fees = Decimal(t.fees or 0)
+        if t.side == "buy":
+            running += qty
+            cost_native = qty * price + fees
+            proceeds_native = None
+        else:
+            running -= qty
+            cost_native = None
+            proceeds_native = qty * price - fees
+        out.append(
+            HoldingTrade(
+                id=t.id,
+                trade_date=t.trade_date,
+                symbol=t.symbol,
+                side=t.side,
+                quantity=qty,
+                price=price,
+                currency=t.currency,
+                fees=fees,
+                external_id=t.external_id,
+                cost_native=cost_native,
+                proceeds_native=proceeds_native,
+                running_quantity=running,
+            )
+        )
+    return out
+
+
+@router.get("/holdings/{holding_id}/lots", response_model=list[HoldingLot])
+def holding_lots(
+    holding_id: UUID,
+    user_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """Return the open FIFO lots for this holding."""
+    user_id = get_user_id(user_id)
+    holding = (
+        db.query(Holding)
+        .filter(Holding.id == holding_id, Holding.user_id == user_id)
+        .first()
+    )
+    if not holding:
+        raise HTTPException(status_code=404, detail="Holding not found")
+
+    trades = (
+        db.query(BrokerTrade)
+        .filter(
+            BrokerTrade.account_id == holding.account_id,
+            BrokerTrade.symbol == holding.symbol,
+        )
+        .order_by(BrokerTrade.trade_date.asc(), BrokerTrade.id.asc())
+        .all()
+    )
+    if not trades:
+        return []
+
+    fifo_trades = [
+        _FifoTrade(
+            symbol=t.symbol,
+            trade_date=t.trade_date,
+            side=t.side,
+            quantity=Decimal(t.quantity),
+            price=Decimal(t.price),
+            currency=t.currency,
+            fees=Decimal(t.fees or 0),
+        )
+        for t in trades
+    ]
+    fifo = compute_fifo(fifo_trades)
+
+    user = db.query(User).filter(User.id == user_id).first()
+    user_currency = (
+        getattr(user, "functional_currency", None) or holding.currency or "EUR"
+    ).upper()
+
+    from app.services.exchange_rate_service import ExchangeRateService
+
+    fx_svc = ExchangeRateService(db=db)
+    today = date.today()
+
+    out: list[HoldingLot] = []
+    for lot in fifo.open_lots:
+        if lot.symbol != holding.symbol:
+            continue
+        cost_per_share_user: Optional[Decimal] = None
+        if lot.currency.upper() == user_currency:
+            cost_per_share_user = lot.cost_per_share_native
+        else:
+            rate = fx_svc.get_exchange_rate_with_fallback(
+                lot.currency.upper(), user_currency, lot.open_date
+            )
+            if rate is not None:
+                cost_per_share_user = (
+                    Decimal(lot.cost_per_share_native) * Decimal(rate)
+                ).quantize(Decimal("0.00000001"))
+        out.append(
+            HoldingLot(
+                open_date=lot.open_date,
+                quantity_remaining=lot.quantity_remaining,
+                cost_per_share_native=lot.cost_per_share_native,
+                cost_per_share_user=cost_per_share_user,
+                age_days=(today - lot.open_date).days,
+                currency=lot.currency,
+            )
+        )
+    return out
 
 
 # ---------------------------------------------------------------------------

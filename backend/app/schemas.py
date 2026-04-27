@@ -312,6 +312,32 @@ class ValuationPoint(BaseModel):
     value: Decimal
 
 
+class HoldingTrade(BaseModel):
+    """One BrokerTrade row enriched with running quantity / cost."""
+    id: UUID
+    trade_date: _date_date
+    symbol: str
+    side: str
+    quantity: Decimal
+    price: Decimal
+    currency: str
+    fees: Decimal
+    external_id: Optional[str] = None
+    cost_native: Optional[Decimal] = None
+    proceeds_native: Optional[Decimal] = None
+    running_quantity: Decimal
+
+
+class HoldingLot(BaseModel):
+    """One open FIFO lot for a holding."""
+    open_date: _date_date
+    quantity_remaining: Decimal
+    cost_per_share_native: Decimal
+    cost_per_share_user: Optional[Decimal] = None
+    age_days: int
+    currency: str
+
+
 class SymbolSearchResult(BaseModel):
     symbol: str
     name: str

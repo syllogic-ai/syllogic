@@ -7,7 +7,7 @@ no FX, no I/O. DB- and FX-aware wrappers live below.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Iterable
 
@@ -146,6 +146,51 @@ def compute_fifo(trades: Iterable[Trade]) -> FifoResult:
             ))
 
     return FifoResult(realized=realized, open_lots=open_lots)
+
+
+def compute_open_quantity_series(
+    trades: Iterable[Trade],
+    start: date,
+    end: date,
+) -> dict[str, dict[date, Decimal]]:
+    """
+    For each symbol, return a per-day mapping of end-of-day open quantity
+    over the inclusive range [start, end].
+
+    Buys add to the running quantity on their trade_date; sells subtract
+    (no FIFO matching needed — we only care about totals here). On any day
+    with no activity the prior day's quantity carries forward. The series
+    starts at 0 on `start` and is forward-filled.
+
+    Note: dates earlier than `start` are still applied to the running total
+    (so a holding bought before `start` shows its full quantity on `start`).
+    """
+    by_symbol: dict[str, list[Trade]] = {}
+    for t in trades:
+        by_symbol.setdefault(t.symbol, []).append(t)
+
+    out: dict[str, dict[date, Decimal]] = {}
+    for symbol, sym_trades in by_symbol.items():
+        sym_trades = sorted(sym_trades, key=lambda t: t.trade_date)
+        # Apply trades strictly before `start` to seed the running quantity.
+        running = Decimal("0")
+        idx = 0
+        while idx < len(sym_trades) and sym_trades[idx].trade_date < start:
+            t = sym_trades[idx]
+            running += t.quantity if t.side == "buy" else -t.quantity
+            idx += 1
+
+        series: dict[date, Decimal] = {}
+        cur = start
+        while cur <= end:
+            while idx < len(sym_trades) and sym_trades[idx].trade_date == cur:
+                t = sym_trades[idx]
+                running += t.quantity if t.side == "buy" else -t.quantity
+                idx += 1
+            series[cur] = running
+            cur += timedelta(days=1)
+        out[symbol] = series
+    return out
 
 
 def realized_pnl_from_trades(

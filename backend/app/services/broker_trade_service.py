@@ -15,11 +15,29 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from datetime import timedelta
+import logging
+
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-from app.models import Account, BrokerTrade, Holding
-from app.services.pnl_service import Trade, compute_fifo
+from app.models import (
+    Account,
+    AccountBalance,
+    BrokerTrade,
+    Holding,
+    HoldingValuation,
+    PriceSnapshot,
+    User,
+)
+from app.services.pnl_service import (
+    Trade,
+    compute_fifo,
+    compute_open_quantity_series,
+)
+
+
+logger = logging.getLogger(__name__)
 
 
 VALID_SIDES = ("buy", "sell")
@@ -241,6 +259,20 @@ def import_trades(
         db.rollback()
     else:
         db.commit()
+        # Best-effort: backfill historical valuations so the chart on the
+        # holding detail and the portfolio chart have data going back to the
+        # earliest trade. Failures here must NOT fail the import.
+        # Skippable via env for tests that don't want live yfinance calls.
+        import os
+        if os.getenv("BROKER_BACKFILL_ENABLED", "1") not in ("0", "false", "False"):
+            try:
+                backfill_history(db, account, affected_symbols)
+            except Exception:
+                logger.exception(
+                    "broker_trade_service: backfill_history failed for account %s",
+                    account.id,
+                )
+                db.rollback()
 
     return {
         "inserted": inserted,
@@ -319,3 +351,222 @@ def _recompute_holding(db: Session, account: Account, symbol: str) -> None:
         holding.source = "trade_import"
         if not holding.currency:
             holding.currency = currency
+
+
+def backfill_history(
+    db: Session,
+    account: Account,
+    symbols: list[str],
+    *,
+    price_provider=None,
+    fx_service=None,
+) -> dict[str, int]:
+    """
+    Generate historical HoldingValuation rows for each (account, symbol) in
+    `symbols`, from the earliest trade date through today. Forward-fills
+    weekend/holiday price gaps. Also rebuilds AccountBalance rows per day
+    by summing the user-currency valuations of the touched holdings.
+
+    Best-effort and idempotent: re-running upserts the same rows. Returns
+    counts for observability.
+    """
+    from app.integrations.price_provider import get_price_provider
+    from app.services.exchange_rate_service import ExchangeRateService
+
+    if not symbols:
+        return {"valuations_upserted": 0, "balances_upserted": 0}
+
+    if price_provider is None:
+        price_provider = get_price_provider()
+    if fx_service is None:
+        fx_service = ExchangeRateService(db=db)
+
+    user = db.query(User).filter(User.id == account.user_id).first()
+    user_currency = (
+        getattr(user, "functional_currency", None) or account.currency or "EUR"
+    ).upper()
+    account_currency = (account.currency or user_currency).upper()
+    today = date.today()
+
+    val_count = 0
+    # Per-day aggregation across all touched holdings, in BOTH the user
+    # functional currency and the account currency.
+    daily_user_total: dict[date, Decimal] = {}
+    daily_acct_total: dict[date, Decimal] = {}
+
+    earliest_overall: date | None = None
+
+    for symbol in symbols:
+        sym = symbol.upper()
+        trades = (
+            db.query(BrokerTrade)
+            .filter(BrokerTrade.account_id == account.id, BrokerTrade.symbol == sym)
+            .order_by(BrokerTrade.trade_date)
+            .all()
+        )
+        if not trades:
+            continue
+
+        holding = (
+            db.query(Holding)
+            .filter(
+                Holding.account_id == account.id,
+                Holding.symbol == sym,
+                Holding.instrument_type == "equity",
+            )
+            .first()
+        )
+        if holding is None:
+            continue
+
+        earliest = trades[0].trade_date
+        if earliest_overall is None or earliest < earliest_overall:
+            earliest_overall = earliest
+
+        native_ccy = (trades[0].currency or holding.currency or "USD").upper()
+
+        # Fetch the full price range (best-effort).
+        try:
+            quotes = price_provider.get_daily_closes_range(
+                holding.provider_symbol or sym, earliest, today
+            )
+        except Exception as e:
+            logger.warning(
+                "backfill_history: price fetch failed for %s: %s", sym, e
+            )
+            quotes = []
+
+        # Persist quotes as PriceSnapshot rows for future single-date lookups
+        # and build the forward-fill source.
+        price_by_date: dict[date, Decimal] = {}
+        if quotes:
+            quote_ccy = (quotes[0].currency or native_ccy).upper()
+            rows_to_insert = [
+                {
+                    "symbol": q.symbol,
+                    "currency": q.currency,
+                    "date": q.date,
+                    "close": q.close,
+                    "provider": getattr(price_provider, "name", "unknown"),
+                }
+                for q in quotes
+            ]
+            if rows_to_insert:
+                stmt = (
+                    pg_insert(PriceSnapshot)
+                    .values(rows_to_insert)
+                    .on_conflict_do_nothing(index_elements=["symbol", "date"])
+                )
+                db.execute(stmt)
+            for q in quotes:
+                price_by_date[q.date] = Decimal(q.close)
+        else:
+            quote_ccy = native_ccy
+
+        # Quantity-on-each-date series for this symbol.
+        sym_trades = [
+            Trade(
+                symbol=t.symbol,
+                trade_date=t.trade_date,
+                side=t.side,
+                quantity=Decimal(t.quantity),
+                price=Decimal(t.price),
+                currency=t.currency,
+                fees=Decimal(t.fees or 0),
+            )
+            for t in trades
+        ]
+        qty_series = compute_open_quantity_series(sym_trades, earliest, today).get(sym, {})
+
+        # Walk day-by-day, forward-filling price.
+        last_price: Decimal | None = None
+        val_rows: list[dict] = []
+        cur = earliest
+        while cur <= today:
+            if cur in price_by_date:
+                last_price = price_by_date[cur]
+            qty = qty_series.get(cur, Decimal("0"))
+            if last_price is not None and qty > 0:
+                value_native = (qty * last_price).quantize(Decimal("0.00000001"))
+                rate_user = fx_service.get_exchange_rate_with_fallback(
+                    quote_ccy, user_currency, cur
+                )
+                if rate_user is None:
+                    cur += timedelta(days=1)
+                    continue
+                value_user = (value_native * Decimal(rate_user)).quantize(
+                    Decimal("0.01")
+                )
+                rate_acct = (
+                    Decimal("1")
+                    if quote_ccy == account_currency
+                    else fx_service.get_exchange_rate_with_fallback(
+                        quote_ccy, account_currency, cur
+                    )
+                )
+                if rate_acct is None:
+                    cur += timedelta(days=1)
+                    continue
+                value_acct = (value_native * Decimal(rate_acct)).quantize(
+                    Decimal("0.01")
+                )
+
+                val_rows.append({
+                    "holding_id": holding.id,
+                    "date": cur,
+                    "quantity": qty,
+                    "price": last_price,
+                    "value_user_currency": value_user,
+                    "is_stale": False,
+                })
+                daily_user_total[cur] = daily_user_total.get(cur, Decimal("0")) + value_user
+                daily_acct_total[cur] = daily_acct_total.get(cur, Decimal("0")) + value_acct
+            cur += timedelta(days=1)
+
+        # Bulk upsert HoldingValuation rows in chunks.
+        if val_rows:
+            CHUNK = 500
+            for i in range(0, len(val_rows), CHUNK):
+                chunk = val_rows[i : i + CHUNK]
+                stmt = pg_insert(HoldingValuation).values(chunk)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=["holding_id", "date"],
+                    set_={
+                        "quantity": stmt.excluded.quantity,
+                        "price": stmt.excluded.price,
+                        "value_user_currency": stmt.excluded.value_user_currency,
+                        "is_stale": stmt.excluded.is_stale,
+                    },
+                )
+                db.execute(stmt)
+                val_count += len(chunk)
+
+    # Aggregate per-day AccountBalance rows.
+    bal_count = 0
+    if daily_user_total:
+        bal_rows = [
+            {
+                "account_id": account.id,
+                "date": d,
+                "balance_in_account_currency": daily_acct_total.get(d, Decimal("0")),
+                "balance_in_functional_currency": daily_user_total[d],
+            }
+            for d in sorted(daily_user_total.keys())
+        ]
+        CHUNK = 500
+        for i in range(0, len(bal_rows), CHUNK):
+            chunk = bal_rows[i : i + CHUNK]
+            stmt = pg_insert(AccountBalance).values(chunk)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["account_id", "date"],
+                set_={
+                    "balance_in_account_currency": stmt.excluded.balance_in_account_currency,
+                    "balance_in_functional_currency": stmt.excluded.balance_in_functional_currency,
+                },
+            )
+            db.execute(stmt)
+            bal_count += len(chunk)
+
+    db.commit()
+    return {"valuations_upserted": val_count, "balances_upserted": bal_count}
+

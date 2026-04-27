@@ -870,3 +870,30 @@ def get_unrealized_pnl(
         market_value_native, market_value_base, unrealized_native, unrealized_base, fx_missing}.
     """
     return investments.get_unrealized_pnl(get_mcp_user_id(user_id), account_id, symbol)
+
+
+@mcp.tool
+def get_holding_trades(
+    holding_id: str,
+    user_id: str | None = None,
+) -> list[dict]:
+    """
+    Return all broker trades behind a single holding, in chronological order.
+
+    Useful for showing the user the trade-level transaction history for a
+    position (the dashboard's "Transactions" tab).
+
+    Args:
+        holding_id: UUID of the holding (must belong to the authenticated user).
+        user_id: Optional, defaults to authenticated user.
+
+    Returns:
+        List of trade dicts ordered by trade_date with keys:
+          {id, trade_date, symbol, side, quantity, price, currency, fees,
+           external_id, cost_native, proceeds_native, running_quantity}.
+        `cost_native` is set on buys (qty*price + fees); `proceeds_native`
+        is set on sells (qty*price - fees). `running_quantity` is the open
+        quantity after applying this trade. Returns [] if the holding is
+        not owned by the user or has no trades behind it.
+    """
+    return investments.get_holding_trades(get_mcp_user_id(user_id), holding_id)

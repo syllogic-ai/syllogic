@@ -409,6 +409,66 @@ def get_unrealized_pnl(
         return get_unrealized_pnl_impl(db, user_id, account_id, symbol)
 
 
+def get_holding_trades_impl(db: Session, user_id: str, holding_id: str) -> list[dict]:
+    """Return broker trades behind a holding, chronologically, with running quantity."""
+    holding = (
+        db.query(Holding)
+        .filter(Holding.id == holding_id, Holding.user_id == user_id)
+        .first()
+    )
+    if not holding:
+        return []
+    trades = (
+        db.query(BrokerTrade)
+        .filter(
+            BrokerTrade.account_id == holding.account_id,
+            BrokerTrade.symbol == holding.symbol,
+        )
+        .order_by(BrokerTrade.trade_date.asc(), BrokerTrade.id.asc())
+        .all()
+    )
+    out: list[dict] = []
+    running = Decimal("0")
+    for t in trades:
+        qty = Decimal(t.quantity)
+        price = Decimal(t.price)
+        fees = Decimal(t.fees or 0)
+        if t.side == "buy":
+            running += qty
+            cost_native = qty * price + fees
+            proceeds_native = None
+        else:
+            running -= qty
+            cost_native = None
+            proceeds_native = qty * price - fees
+        out.append(
+            {
+                "id": str(t.id),
+                "trade_date": t.trade_date.isoformat(),
+                "symbol": t.symbol,
+                "side": t.side,
+                "quantity": _dec_str_local(qty),
+                "price": _dec_str_local(price),
+                "currency": t.currency,
+                "fees": _dec_str_local(fees),
+                "external_id": t.external_id,
+                "cost_native": _dec_str_local(cost_native) if cost_native is not None else None,
+                "proceeds_native": _dec_str_local(proceeds_native) if proceeds_native is not None else None,
+                "running_quantity": _dec_str_local(running),
+            }
+        )
+    return out
+
+
+def get_holding_trades(user_id: str, holding_id: str) -> list[dict]:
+    with get_db() as db:
+        return get_holding_trades_impl(db, user_id, holding_id)
+
+
+def _dec_str_local(v: Decimal) -> str:
+    return format(v.normalize(), "f")
+
+
 def _dec_str(v: Decimal) -> str:
     """Stringify a Decimal, stripping trailing zeros (e.g. '500' not '500.0000000000000000')."""
     normalized = v.normalize()

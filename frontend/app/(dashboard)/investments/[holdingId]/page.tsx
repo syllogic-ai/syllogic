@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import {
   listHoldings,
   getHoldingHistory,
+  getHoldingLots,
+  getHoldingTrades,
   getPortfolio,
 } from "@/lib/api/investments";
 import { Header } from "@/components/layout/header";
@@ -24,7 +26,11 @@ export default async function HoldingDetailPage({
   const [holdings, portfolio] = await Promise.all([listHoldings(), getPortfolio()]);
   const holding = holdings.find((h) => h.id === holdingId);
   if (!holding) return notFound();
-  const history = await getHoldingHistory(holdingId, from, to);
+  const [history, trades, lots] = await Promise.all([
+    getHoldingHistory(holdingId, from, to),
+    getHoldingTrades(holdingId).catch(() => []),
+    getHoldingLots(holdingId).catch(() => []),
+  ]);
   return (
     <>
       <Header title={holding.symbol} />
@@ -33,6 +39,8 @@ export default async function HoldingDetailPage({
           holding={holding}
           portfolio={portfolio}
           initialHistory={history}
+          trades={trades}
+          lots={lots}
         />
       </div>
     </>

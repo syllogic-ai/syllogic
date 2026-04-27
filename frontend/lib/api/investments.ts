@@ -15,7 +15,7 @@ export type Holding = {
   quantity: string;
   avg_cost?: string | null;
   as_of_date?: string | null;
-  source: "manual" | "ibkr_flex";
+  source: "manual" | "ibkr_flex" | "trade_import";
   current_price?: string | null;
   current_value_user_currency?: string | null;
   cost_basis_user_currency?: string | null;
@@ -144,6 +144,50 @@ export async function getHoldingHistory(
     { query: { from, to } },
   );
   return readJsonOrThrow<ValuationPoint[]>(resp);
+}
+
+export type HoldingTrade = {
+  id: string;
+  trade_date: string;
+  symbol: string;
+  side: "buy" | "sell";
+  quantity: string;
+  price: string;
+  currency: string;
+  fees: string;
+  external_id?: string | null;
+  cost_native?: string | null;
+  proceeds_native?: string | null;
+  running_quantity: string;
+};
+
+export type HoldingLot = {
+  open_date: string;
+  quantity_remaining: string;
+  cost_per_share_native: string;
+  cost_per_share_user?: string | null;
+  age_days: number;
+  currency: string;
+};
+
+export async function getHoldingTrades(
+  holdingId: string,
+): Promise<HoldingTrade[]> {
+  const resp = await signedFetch(
+    "GET",
+    `/api/investments/holdings/${holdingId}/trades`,
+  );
+  return readJsonOrThrow<HoldingTrade[]>(resp);
+}
+
+export async function getHoldingLots(
+  holdingId: string,
+): Promise<HoldingLot[]> {
+  const resp = await signedFetch(
+    "GET",
+    `/api/investments/holdings/${holdingId}/lots`,
+  );
+  return readJsonOrThrow<HoldingLot[]>(resp);
 }
 
 export async function searchSymbols(q: string): Promise<SymbolSearchResult[]> {
