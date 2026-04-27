@@ -576,7 +576,7 @@ def backfill_history(
             )
             for d, total in rows:
                 # SQLAlchemy may return DateTime here — normalize to date.
-                d_norm = d.date() if hasattr(d, "date") and not isinstance(d, date) else d
+                d_norm = d.date() if hasattr(d, "date") else d
                 full_user_total[d_norm] = Decimal(total or 0)
 
         bal_rows: list[dict] = []
