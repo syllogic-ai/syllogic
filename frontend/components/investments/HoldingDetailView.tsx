@@ -254,14 +254,14 @@ export function HoldingDetailView({
                       </tr>
                     </thead>
                     <tbody>
-                      {lots.map((lot) => {
+                      {lots.map((lot, idx) => {
                         const qty = Number(lot.quantity_remaining);
                         const cps = Number(lot.cost_per_share_native);
                         const px = Number(holding.current_price ?? 0);
                         const lotValue = px > 0 ? qty * px : NaN;
                         return (
                           <tr
-                            key={`${lot.open_date}-${lot.cost_per_share_native}`}
+                            key={`${lot.open_date}-${lot.cost_per_share_native}-${idx}`}
                             className="border-b last:border-b-0"
                           >
                             <td className="py-2 pr-4 tabular-nums">

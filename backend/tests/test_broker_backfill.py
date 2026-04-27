@@ -288,6 +288,68 @@ def test_backfill_history_is_idempotent(db_session, investment_account_with_aapl
     assert first_count == second_count
 
 
+def test_backfill_history_partial_import_preserves_other_holdings_balance(
+    db_session, investment_account_with_aapl
+):
+    """A second backfill with only some symbols must NOT erase other holdings'
+    contributions to AccountBalance — the per-day total must reflect ALL
+    holdings in the account."""
+    ctx = investment_account_with_aapl
+    trade_date = ctx["trade_date"]
+    today = date.today()
+
+    # Add a second holding (MSFT) with a manual valuation row on the same date.
+    msft = Holding(
+        user_id=ctx["user_id"],
+        account_id=ctx["account"].id,
+        symbol="MSFT",
+        currency="USD",
+        instrument_type="equity",
+        quantity=Decimal("5"),
+        avg_cost=Decimal("300"),
+        as_of_date=trade_date,
+        source="manual",
+    )
+    db_session.add(msft)
+    db_session.flush()
+    db_session.add(HoldingValuation(
+        holding_id=msft.id,
+        date=trade_date,
+        quantity=Decimal("5"),
+        price=Decimal("300"),
+        value_user_currency=Decimal("1500.00"),
+        is_stale=False,
+    ))
+    db_session.commit()
+
+    try:
+        # Backfill ONLY AAPL (subset).
+        backfill_history(
+            db_session,
+            ctx["account"],
+            ["AAPL"],
+            price_provider=_FakePriceProvider({trade_date: Decimal("150")}),
+            fx_service=_FakeFx(),
+        )
+
+        # Trade-day balance should sum BOTH holdings: 1500 (AAPL) + 1500 (MSFT) = 3000
+        bal = (
+            db_session.query(AccountBalance)
+            .filter(
+                AccountBalance.account_id == ctx["account"].id,
+                AccountBalance.date == trade_date,
+            )
+            .one()
+        )
+        assert Decimal(bal.balance_in_functional_currency) == Decimal("3000.00")
+    finally:
+        db_session.query(HoldingValuation).filter(
+            HoldingValuation.holding_id == msft.id
+        ).delete()
+        db_session.delete(msft)
+        db_session.commit()
+
+
 def test_backfill_history_no_quotes_no_rows(db_session, investment_account_with_aapl):
     """If the price provider returns no data we do not insert valuations."""
     ctx = investment_account_with_aapl

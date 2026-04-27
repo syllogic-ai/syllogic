@@ -541,18 +541,70 @@ def backfill_history(
                 db.execute(stmt)
                 val_count += len(chunk)
 
-    # Aggregate per-day AccountBalance rows.
+    # Make per-symbol HoldingValuation upserts visible to the SUM query below
+    # (they were issued via core inserts within this same transaction).
+    db.flush()
+
+    # Aggregate per-day AccountBalance rows from the COMPLETE set of
+    # HoldingValuation rows for this account — not just from the symbols we
+    # backfilled. Otherwise a partial re-import would overwrite existing
+    # balances and silently lose other holdings' contributions.
     bal_count = 0
     if daily_user_total:
-        bal_rows = [
-            {
+        from sqlalchemy import func as _sa_func
+        affected_dates = sorted(daily_user_total.keys())
+
+        account_holding_ids = [
+            row[0]
+            for row in db.query(Holding.id)
+            .filter(Holding.account_id == account.id)
+            .all()
+        ]
+        full_user_total: dict[date, Decimal] = {}
+        if account_holding_ids:
+            rows = (
+                db.query(
+                    HoldingValuation.date,
+                    _sa_func.sum(HoldingValuation.value_user_currency).label("total"),
+                )
+                .filter(
+                    HoldingValuation.holding_id.in_(account_holding_ids),
+                    HoldingValuation.date.in_(affected_dates),
+                )
+                .group_by(HoldingValuation.date)
+                .all()
+            )
+            for d, total in rows:
+                # SQLAlchemy may return DateTime here — normalize to date.
+                d_norm = d.date() if hasattr(d, "date") and not isinstance(d, date) else d
+                full_user_total[d_norm] = Decimal(total or 0)
+
+        bal_rows: list[dict] = []
+        for d in affected_dates:
+            functional_total = full_user_total.get(d, daily_user_total[d])
+            # Derive account-currency total from functional via FX. Only the
+            # rows we just backfilled contributed account-currency data, so
+            # falling back to FX-conversion of the functional total keeps
+            # other holdings' contributions reflected (they were originally
+            # written via HoldingValuationService using FX too).
+            if account_currency == user_currency:
+                acct_total = functional_total
+            else:
+                rate = fx_service.get_exchange_rate_with_fallback(
+                    user_currency, account_currency, d
+                )
+                acct_total = (
+                    (functional_total * Decimal(rate)).quantize(Decimal("0.01"))
+                    if rate is not None
+                    else daily_acct_total.get(d, Decimal("0"))
+                )
+            bal_rows.append({
                 "account_id": account.id,
                 "date": d,
-                "balance_in_account_currency": daily_acct_total.get(d, Decimal("0")),
-                "balance_in_functional_currency": daily_user_total[d],
-            }
-            for d in sorted(daily_user_total.keys())
-        ]
+                "balance_in_account_currency": acct_total,
+                "balance_in_functional_currency": functional_total,
+            })
+
         CHUNK = 500
         for i in range(0, len(bal_rows), CHUNK):
             chunk = bal_rows[i : i + CHUNK]
