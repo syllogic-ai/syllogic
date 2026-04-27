@@ -52,23 +52,28 @@ export function InvestmentsOverview({
   const totalValue = Number(portfolio.total_value);
 
   // Real cost basis & unrealized P&L from per-holding cost_basis_user_currency
-  // (server-side derived from FIFO avg_cost × FX). Falls back to the chart-
-  // range delta only when cost basis is unavailable for ALL active positions
-  // — using partial cost basis would understate it and overstate P&L.
+  // (server-side derived from FIFO avg_cost × FX).
   //
-  // "Active position" = one that contributes to total value. Fully-closed
-  // positions (qty=0, avg_cost=null, value=0) are expected to have null cost
-  // and contribute zero to both sides; we deliberately ignore them in the
-  // completeness check.
+  // "Active position" = one we still hold (quantity > 0). This INCLUDES
+  // holdings that are currently worth zero (e.g. delisted/worthless stock
+  // we haven't sold) — those are real unrealized losses and must be
+  // counted. EXCLUDES fully-sold positions (qty=0, avg_cost=null), whose
+  // P&L is already realized.
+  //
+  // Falls back to the chart-range delta only when cost basis is unavailable
+  // for some active position — using partial cost basis would understate
+  // it and overstate P&L. An empty portfolio (no holdings, no active
+  // positions) reports zero P&L, not the chart delta.
   let activePositions = 0;
   let activeWithCost = 0;
   let costBasisFromHoldings = 0;
   let valueFromHoldings = 0;
   for (const h of holdings) {
-    const v = Number(h.current_value_user_currency ?? 0);
-    if (!Number.isFinite(v) || v === 0) continue;
+    const qty = Number(h.quantity ?? 0);
+    if (!Number.isFinite(qty) || qty <= 0) continue;
     activePositions += 1;
-    valueFromHoldings += v;
+    const v = Number(h.current_value_user_currency ?? 0);
+    if (Number.isFinite(v)) valueFromHoldings += v;
     const c = h.cost_basis_user_currency;
     if (c != null) {
       const cn = Number(c);
@@ -78,9 +83,18 @@ export function InvestmentsOverview({
       }
     }
   }
-  const useHoldingsBased = activePositions > 0 && activeWithCost === activePositions;
-  const costBasis = useHoldingsBased ? costBasisFromHoldings : totalValue - absChange;
-  const unrealizedPnl = useHoldingsBased ? valueFromHoldings - costBasisFromHoldings : absChange;
+  const isEmptyPortfolio = activePositions === 0;
+  const hasCompleteCost = !isEmptyPortfolio && activeWithCost === activePositions;
+  const costBasis = isEmptyPortfolio
+    ? 0
+    : hasCompleteCost
+      ? costBasisFromHoldings
+      : totalValue - absChange;
+  const unrealizedPnl = isEmptyPortfolio
+    ? 0
+    : hasCompleteCost
+      ? valueFromHoldings - costBasisFromHoldings
+      : absChange;
   const accountNames = Object.fromEntries(
     portfolio.accounts.map((a) => [a.id, a.name]),
   );
