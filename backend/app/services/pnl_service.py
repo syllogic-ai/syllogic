@@ -109,10 +109,11 @@ def compute_fifo(trades: Iterable[Trade]) -> FifoResult:
         # sell — fees reduce proceeds, prorated by consumed quantity vs total sell qty
         remaining = t.quantity
         sell_total_qty = t.quantity
+        # Pre-compute available quantity before iterating (for oversell error reporting)
+        available_at_start = sum((l.quantity_remaining for l in lots), Decimal("0"))
         while remaining > 0:
             if not lots:
-                available = sum((l.quantity_remaining for l in lots), Decimal("0"))
-                raise OverSellError(t.symbol, t.trade_date, t.quantity, available)
+                raise OverSellError(t.symbol, t.trade_date, t.quantity, available_at_start)
             lot = lots[0]
             consumed = min(lot.quantity_remaining, remaining)
             cost = consumed * lot.cost_per_share_native
