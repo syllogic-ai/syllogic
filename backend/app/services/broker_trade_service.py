@@ -53,3 +53,107 @@ def _generate_external_id(
     ])
     digest = hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
     return f"{digest}#{ordinal}"
+
+
+class ImportError(Exception):
+    """Raised for import-level (not per-trade) failures."""
+
+
+@dataclass
+class _ValidatedTrade:
+    index: int
+    symbol: str
+    trade_date: date
+    side: str
+    quantity: Decimal
+    price: Decimal
+    currency: str
+    fees: Decimal
+    external_id: str | None
+    broker_ref: str | None
+
+
+def _validate_trade(index: int, raw: dict[str, Any]) -> tuple[_ValidatedTrade | None, dict | None]:
+    """Returns (validated, None) on success or (None, error_dict) on failure."""
+    try:
+        symbol = str(raw["symbol"]).strip()
+        if not symbol:
+            raise ValueError("symbol required")
+        trade_date = date.fromisoformat(str(raw["trade_date"]))
+        side = str(raw["side"]).lower()
+        if side not in VALID_SIDES:
+            raise ValueError(f"side must be one of {VALID_SIDES}, got {side!r}")
+        quantity = Decimal(str(raw["quantity"]))
+        if quantity <= 0:
+            raise ValueError("quantity must be positive")
+        price = Decimal(str(raw["price"]))
+        if price < 0:
+            raise ValueError("price must be non-negative")
+        currency = str(raw["currency"]).upper()
+        if len(currency) != 3:
+            raise ValueError("currency must be a 3-letter ISO code")
+        fees_raw = raw.get("fees")
+        fees = Decimal(str(fees_raw)) if fees_raw is not None else Decimal("0")
+        if fees < 0:
+            raise ValueError("fees must be non-negative")
+        external_id = raw.get("external_id")
+        broker_ref = raw.get("broker_ref")
+    except (KeyError, ValueError, TypeError, ArithmeticError) as e:
+        return None, {"index": index, "trade": raw, "reason": str(e)}
+
+    return _ValidatedTrade(
+        index=index,
+        symbol=symbol,
+        trade_date=trade_date,
+        side=side,
+        quantity=quantity,
+        price=price,
+        currency=currency,
+        fees=fees,
+        external_id=external_id,
+        broker_ref=broker_ref,
+    ), None
+
+
+def import_trades(
+    db: Session,
+    user_id: str,
+    account_id: str,
+    trades: list[dict[str, Any]],
+    dry_run: bool,
+) -> dict[str, Any]:
+    """Import a batch of broker trades. See spec §"New MCP tools"."""
+    account = (
+        db.query(Account)
+        .filter(Account.id == account_id, Account.user_id == user_id)
+        .first()
+    )
+    if account is None:
+        raise ImportError(f"account not found or not owned by user: {account_id}")
+    if account.account_type not in ("investment_manual", "investment_brokerage"):
+        raise ImportError(f"account is not an investment account: {account.account_type}")
+
+    validated: list[_ValidatedTrade] = []
+    errors: list[dict] = []
+    for i, raw in enumerate(trades):
+        ok, err = _validate_trade(i, raw)
+        if err is not None:
+            errors.append(err)
+        else:
+            validated.append(ok)
+
+    if not validated:
+        return {
+            "inserted": 0,
+            "skipped_duplicate": 0,
+            "errors": errors,
+            "affected_symbols": [],
+        }
+
+    # Step 4 (next task) implements the actual insert + holding recompute.
+    return {
+        "inserted": 0,
+        "skipped_duplicate": 0,
+        "errors": errors,
+        "affected_symbols": [],
+    }
