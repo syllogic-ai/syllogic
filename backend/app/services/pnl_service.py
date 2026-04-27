@@ -203,3 +203,67 @@ def realized_pnl_from_trades(
             "lots_closed": lot_dicts,
         })
     return out
+
+
+def unrealized_pnl_from_trades(
+    trades: Iterable[Trade],
+    base_currency: str,
+    fx_service,
+    latest_prices: dict[str, Decimal],
+    as_of_date: date,
+) -> list[dict]:
+    """
+    Run FIFO; for each remaining open lot group by symbol; compute:
+      cost_basis_native  = sum(qty_remaining * cost_per_share)
+      market_value_native = sum(qty_remaining) * latest_price[symbol]
+      unrealized_native   = market_value_native - cost_basis_native
+      *_base via fx_service.get_exchange_rate(symbol_ccy, base_currency, as_of_date)
+
+    Symbols with no entry in `latest_prices` are skipped (caller logs them).
+    Symbols whose FX lookup fails set `fx_missing=True` and base values to 0.
+    """
+    fifo = compute_fifo(trades)
+
+    by_symbol: dict[str, list[OpenLot]] = {}
+    for lot in fifo.open_lots:
+        by_symbol.setdefault(lot.symbol, []).append(lot)
+
+    out: list[dict] = []
+    for symbol, lots in by_symbol.items():
+        price = latest_prices.get(symbol)
+        if price is None:
+            continue
+        symbol_currency = lots[0].currency
+        quantity = sum((l.quantity_remaining for l in lots), Decimal("0"))
+        cost_basis_native = sum(
+            (l.quantity_remaining * l.cost_per_share_native for l in lots),
+            Decimal("0"),
+        )
+        market_value_native = quantity * price
+        unrealized_native = market_value_native - cost_basis_native
+
+        rate = fx_service.get_exchange_rate(symbol_currency, base_currency, as_of_date)
+        if rate is None:
+            fx_missing = True
+            cost_basis_base = Decimal("0")
+            market_value_base = Decimal("0")
+            unrealized_base = Decimal("0")
+        else:
+            fx_missing = False
+            cost_basis_base = (cost_basis_native * rate).quantize(Decimal("0.01"))
+            market_value_base = (market_value_native * rate).quantize(Decimal("0.01"))
+            unrealized_base = (unrealized_native * rate).quantize(Decimal("0.01"))
+
+        out.append({
+            "symbol": symbol,
+            "currency": symbol_currency,
+            "quantity": quantity,
+            "cost_basis_native": cost_basis_native,
+            "cost_basis_base": cost_basis_base,
+            "market_value_native": market_value_native,
+            "market_value_base": market_value_base,
+            "unrealized_native": unrealized_native,
+            "unrealized_base": unrealized_base,
+            "fx_missing": fx_missing,
+        })
+    return out

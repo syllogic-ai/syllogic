@@ -150,3 +150,37 @@ def test_realized_pnl_enriches_with_base_currency_fx():
     assert len(row["lots_closed"]) == 1
     assert row["lots_closed"][0]["pnl_base"] == Decimal("460.00")
     fx.get_exchange_rate.assert_called_with("USD", "EUR", date.fromisoformat("2024-06-01"))
+
+
+def test_unrealized_pnl_uses_latest_price_and_fx():
+    """Unrealized P&L = (market_value - cost_basis), in native and base currency."""
+    from app.services.pnl_service import unrealized_pnl_from_trades
+
+    trades = [
+        _t("AAPL", "2024-01-10", "buy", 10, 150, currency="USD"),
+        _t("AAPL", "2024-02-10", "buy", 5, 180, currency="USD"),
+    ]
+
+    # Latest price: 200 USD/share. 15 shares total. Cost basis = 1500 + 900 = 2400.
+    latest_prices = {"AAPL": Decimal("200")}
+
+    fx = MagicMock()
+    fx.get_exchange_rate.return_value = Decimal("0.90")  # USD -> EUR
+
+    result = unrealized_pnl_from_trades(
+        trades,
+        base_currency="EUR",
+        fx_service=fx,
+        latest_prices=latest_prices,
+        as_of_date=date.fromisoformat("2024-12-31"),
+    )
+
+    assert len(result) == 1
+    row = result[0]
+    assert row["symbol"] == "AAPL"
+    assert row["quantity"] == Decimal("15")
+    assert row["cost_basis_native"] == Decimal("2400")
+    assert row["market_value_native"] == Decimal("3000")
+    assert row["unrealized_native"] == Decimal("600")
+    # 600 USD * 0.90 = 540 EUR
+    assert row["unrealized_base"] == Decimal("540.00")
