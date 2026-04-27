@@ -348,15 +348,18 @@ def list_holdings(
         if src == user_currency:
             return cost_native.quantize(Decimal("0.01"))
         for_date = on or date.today()
-        converted = fx_svc.convert_amount(
-            amount=cost_native,
-            from_currency=src,
-            to_currency=user_currency,
+        # Use the fallback resolver: DB → yfinance backfill at as_of date →
+        # today's FX. Avoids `cost_basis_user_currency = null` (which
+        # makes the dashboard render P&L as "—") for older as_of dates
+        # that don't have FX history yet.
+        rate = fx_svc.get_exchange_rate_with_fallback(
+            base_currency=src,
+            target_currency=user_currency,
             for_date=for_date,
         )
-        if converted is None:
+        if rate is None:
             return None
-        return Decimal(converted).quantize(Decimal("0.01"))
+        return (cost_native * Decimal(rate)).quantize(Decimal("0.01"))
 
     query = db.query(Holding).filter(Holding.user_id == user_id)
     if account_id is not None:
