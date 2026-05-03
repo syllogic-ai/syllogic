@@ -63,17 +63,25 @@ export async function deletePerson(input: { userId: string; id: string }) {
       .where(eq(table.personId, input.id));
     for (const row of ownedRows) {
       const peers = await db
-        .select({ pid: table.personId })
+        .select({ pid: table.personId, share: table.share })
         .from(table)
         .where(eq(idCol, row.id));
       if (peers.length === 1) {
+        // Sole owner — cannot delete.
+        blockers.push({ entityType, entityId: row.id });
+        continue;
+      }
+      // If all owners have explicit shares, removing this person would leave the
+      // remaining shares not summing to 1 — block the delete.
+      const explicit = peers.filter((r) => r.share !== null);
+      if (explicit.length === peers.length) {
         blockers.push({ entityType, entityId: row.id });
       }
     }
   }
 
   if (blockers.length > 0) {
-    const err = new Error("person is sole owner of one or more entities");
+    const err = new Error("person is sole owner or holds an explicit share that would leave others unbalanced");
     (err as any).blockers = blockers;
     (err as any).code = "SOLE_OWNER";
     throw err;

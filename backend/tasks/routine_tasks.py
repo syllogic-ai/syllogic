@@ -134,7 +134,11 @@ def _mark_send_failed(run_id, reason: str) -> None:
         if run is None:
             return
         # Keep status='succeeded' (the agent succeeded) but record the send error.
-        run.error_message = (run.error_message or "") + f"\nsend: {reason}"
+        existing = run.error_message or ""
+        combined = (existing + f"\nsend: {reason}").lstrip()
+        if len(combined) > 4000:
+            combined = combined[-4000:]
+        run.error_message = combined
         db.commit()
     finally:
         db.close()
@@ -182,7 +186,12 @@ def _mark_send_failed_plan(run_id, reason: str) -> None:
         run = db.query(InvestmentPlanRun).filter(InvestmentPlanRun.id == run_id).first()
         if run is None:
             return
-        run.error_message = (run.error_message or "") + f"\nsend: {reason}"
+        existing = run.error_message or ""
+        # Cap accumulated send errors to keep the column from growing unbounded.
+        combined = (existing + f"\nsend: {reason}").lstrip()
+        if len(combined) > 4000:
+            combined = combined[-4000:]
+        run.error_message = combined
         db.commit()
     finally:
         db.close()

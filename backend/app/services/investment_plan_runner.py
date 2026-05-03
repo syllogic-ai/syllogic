@@ -53,12 +53,19 @@ def _mcp_tool_defs() -> list[dict]:
 
 def _build_system_prompt(plan: InvestmentPlan, grounding: dict) -> str:
     slot_lines = []
-    for s in plan.slots:
-        if s.get("kind") == "pinned":
-            slot_lines.append(f"- pinned slot {s['id']}: {s['symbol']} for {s['amount']} {plan.currency}")
+    for s in (plan.slots or []):
+        sid = s.get("id", "?")
+        kind = s.get("kind")
+        amount = s.get("amount", 0)
+        if kind == "pinned":
+            symbol = s.get("symbol", "?")
+            slot_lines.append(f"- pinned slot {sid}: {symbol} for {amount} {plan.currency}")
+        elif kind == "discretionary":
+            label = s.get("label") or s.get("theme", "?")
+            theme = s.get("theme", "")
+            slot_lines.append(f"- discretionary slot {sid} ({label}): {amount} {plan.currency} — theme: {theme}")
         else:
-            label = s.get("label") or s.get("theme", "")
-            slot_lines.append(f"- discretionary slot {s['id']} ({label}): {s['amount']} {plan.currency} — theme: {s.get('theme')}")
+            slot_lines.append(f"- (unknown slot kind {kind} id={sid})")
     slot_block = "\n".join(slot_lines)
 
     grounding_json = json.dumps(grounding, default=str)
