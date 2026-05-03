@@ -2,8 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getOwners, setOwners, type EntityType } from "@/lib/people";
 import { requireAuth } from "@/lib/auth-helpers";
+import { db } from "@/lib/db";
+import { accounts, properties, vehicles } from "@/lib/db/schema";
+import { eq, and } from "drizzle-orm";
 
 const ENTITY_TYPES = ["account", "property", "vehicle"] as const;
+
+async function userOwnsEntity(userId: string, entityType: EntityType, entityId: string): Promise<boolean> {
+  const table = entityType === "account" ? accounts : entityType === "property" ? properties : vehicles;
+  const [row] = await db.select({ id: table.id }).from(table)
+    .where(and(eq(table.id, entityId), eq(table.userId, userId))).limit(1);
+  return !!row;
+}
 
 export async function GET(
   _req: NextRequest,
@@ -14,6 +24,9 @@ export async function GET(
   const { entityType, entityId } = await ctx.params;
   if (!ENTITY_TYPES.includes(entityType as EntityType)) {
     return NextResponse.json({ error: "invalid entityType" }, { status: 400 });
+  }
+  if (!(await userOwnsEntity(userId, entityType as EntityType, entityId))) {
+    return NextResponse.json({ error: "not found" }, { status: 404 });
   }
   const owners = await getOwners(entityType as EntityType, entityId);
   return NextResponse.json({ owners });
@@ -39,6 +52,9 @@ export async function PUT(
   const { entityType, entityId } = await ctx.params;
   if (!ENTITY_TYPES.includes(entityType as EntityType)) {
     return NextResponse.json({ error: "invalid entityType" }, { status: 400 });
+  }
+  if (!(await userOwnsEntity(userId, entityType as EntityType, entityId))) {
+    return NextResponse.json({ error: "not found" }, { status: 404 });
   }
   const body = putSchema.parse(await req.json());
   try {
