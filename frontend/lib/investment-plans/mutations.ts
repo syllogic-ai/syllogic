@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { investmentPlans, investmentPlanRuns } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import type { SlotConfig } from "./schema";
 import { validateSlots } from "./schema";
 import { nextFireAfter } from "@/lib/scheduling/next-run";
@@ -83,18 +83,18 @@ export type ExecutionMark = { executedAt: string | null; note?: string };
 export async function setExecutionMark(
   userId: string, runId: string, slotId: string, mark: ExecutionMark
 ) {
-  const [run] = await db.select({ marks: investmentPlanRuns.executionMarks })
-    .from(investmentPlanRuns)
-    .where(and(eq(investmentPlanRuns.id, runId), eq(investmentPlanRuns.userId, userId)))
-    .limit(1);
-  if (!run) throw new Error("run not found");
-  const current = (run.marks as Record<string, ExecutionMark>) ?? {};
   if (mark.executedAt === null) {
-    delete current[slotId];
+    // Delete the key atomically.
+    await db.update(investmentPlanRuns)
+      .set({ executionMarks: sql`${investmentPlanRuns.executionMarks} - ${slotId}` })
+      .where(and(eq(investmentPlanRuns.id, runId), eq(investmentPlanRuns.userId, userId)));
   } else {
-    current[slotId] = mark;
+    // Set the key atomically. jsonb_set takes path as text[]; the new value as jsonb.
+    const value = JSON.stringify({ executedAt: mark.executedAt, ...(mark.note ? { note: mark.note } : {}) });
+    await db.update(investmentPlanRuns)
+      .set({
+        executionMarks: sql`jsonb_set(${investmentPlanRuns.executionMarks}, ARRAY[${slotId}], ${value}::jsonb, true)`,
+      })
+      .where(and(eq(investmentPlanRuns.id, runId), eq(investmentPlanRuns.userId, userId)));
   }
-  await db.update(investmentPlanRuns)
-    .set({ executionMarks: current })
-    .where(and(eq(investmentPlanRuns.id, runId), eq(investmentPlanRuns.userId, userId)));
 }
