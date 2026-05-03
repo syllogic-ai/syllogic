@@ -836,3 +836,57 @@ class VehicleOwner(Base):
     person_id = Column(UUID(as_uuid=True), ForeignKey("people.id", ondelete="CASCADE"), primary_key=True)
     share = Column(Numeric(5, 4), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class Routine(Base):
+    __tablename__ = "routines"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(Text, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    prompt = Column(Text, nullable=False)
+    cron = Column(String(100), nullable=False)
+    timezone = Column(String(64), nullable=False, default="UTC")
+    schedule_human = Column(Text, nullable=False)
+    recipient_email = Column(String(320), nullable=False)
+    model = Column(String(100), nullable=False, default="claude-sonnet-4-6")
+    enabled = Column(Boolean, nullable=False, default=True)
+    next_run_at = Column(DateTime, nullable=True)
+    last_run_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    user = relationship("User", backref="routines")
+    runs = relationship("RoutineRun", back_populates="routine", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("idx_routines_user", "user_id"),
+        Index("idx_routines_due", "enabled", "next_run_at"),
+    )
+
+
+class RoutineRun(Base):
+    __tablename__ = "routine_runs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    routine_id = Column(UUID(as_uuid=True), ForeignKey("routines.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Text, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    status = Column(String(20), nullable=False, default="queued")
+    prompt_snapshot = Column(Text, nullable=False)
+    model_snapshot = Column(String(100), nullable=False)
+    output = Column(JSONB, nullable=True)
+    transcript = Column(JSONB, nullable=True)
+    email_message_id = Column(String(255), nullable=True)
+    error_message = Column(Text, nullable=True)
+    cost_cents = Column(Integer, nullable=True)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    routine = relationship("Routine", back_populates="runs")
+
+    __table_args__ = (
+        Index("idx_routine_runs_routine", "routine_id", "created_at"),
+        Index("idx_routine_runs_user", "user_id", "created_at"),
+    )
