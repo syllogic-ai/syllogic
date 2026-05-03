@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,9 @@ import {
 import { CURRENCIES } from "@/lib/constants/currencies";
 import { createVehicle } from "@/lib/actions/vehicles";
 import { VEHICLE_TYPES } from "./types";
+import { OwnersField, type OwnerValue } from "@/components/household/owners-field";
+
+type Person = { id: string; name: string; kind: string; color?: string | null; avatarUrl?: string | null };
 
 interface AddVehicleFormProps {
   onSuccess?: () => void;
@@ -33,6 +36,60 @@ export function AddVehicleForm({ onSuccess, onCancel }: AddVehicleFormProps) {
   const [currentValue, setCurrentValue] = useState("");
   const [currency, setCurrency] = useState("EUR");
 
+  // Ownership state
+  const [people, setPeople] = useState<Person[]>([]);
+  const [owners, setOwners] = useState<OwnerValue[]>([]);
+  const [ownersError, setOwnersError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/people")
+      .then((r) => r.json())
+      .then((data: { people: Person[] }) => {
+        setPeople(data.people);
+        const self = data.people.find((p) => p.kind === "self");
+        if (self) {
+          setOwners([{ personId: self.id, share: null }]);
+        }
+      })
+      .catch(() => {
+        // Non-fatal: owners field will be empty
+      });
+  }, []);
+
+  const validateOwners = (): boolean => {
+    if (owners.length === 0) {
+      setOwnersError("Select at least one owner.");
+      return false;
+    }
+    const allNull = owners.every((o) => o.share === null);
+    const allSet = owners.every((o) => o.share !== null);
+    if (!allNull && !allSet) {
+      setOwnersError("All owners must either split equally or specify shares.");
+      return false;
+    }
+    if (allSet) {
+      const sum = owners.reduce((acc, o) => acc + (o.share as number), 0);
+      if (Math.abs(sum - 1) > 0.0001) {
+        setOwnersError(`Shares must sum to 100% (currently ${Math.round(sum * 100)}%).`);
+        return false;
+      }
+    }
+    setOwnersError(null);
+    return true;
+  };
+
+  const putOwners = async (entityId: string) => {
+    try {
+      await fetch(`/api/owners/vehicle/${entityId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ owners }),
+      });
+    } catch {
+      toast.error("Vehicle created, but failed to save ownership. You can update it later.");
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -50,6 +107,8 @@ export function AddVehicleForm({ onSuccess, onCancel }: AddVehicleFormProps) {
       toast.error("Please select a currency");
       return;
     }
+
+    if (!validateOwners()) return;
 
     setIsLoading(true);
 
@@ -79,6 +138,9 @@ export function AddVehicleForm({ onSuccess, onCancel }: AddVehicleFormProps) {
       });
 
       if (result.success) {
+        if (result.vehicleId) {
+          await putOwners(result.vehicleId);
+        }
         toast.success("Vehicle added successfully");
         onSuccess?.();
       } else {
@@ -185,6 +247,24 @@ export function AddVehicleForm({ onSuccess, onCancel }: AddVehicleFormProps) {
             </SelectContent>
           </Select>
         </div>
+
+        {/* Owners */}
+        {people.length > 0 && (
+          <div className="space-y-2">
+            <OwnersField
+              people={people}
+              value={owners}
+              onChange={(next) => {
+                setOwners(next);
+                setOwnersError(null);
+              }}
+              disabled={isLoading}
+            />
+            {ownersError && (
+              <p className="text-sm text-destructive">{ownersError}</p>
+            )}
+          </div>
+        )}
       </div>
       <div className="flex justify-end gap-2">
         <Button

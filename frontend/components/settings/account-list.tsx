@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
   RiDeleteBinLine,
@@ -55,7 +55,10 @@ import { CURRENCIES } from "@/lib/constants/currencies";
 import { updateAccount, deleteAccount, recalculateAccountTimeseries } from "@/lib/actions/accounts";
 import { UpdateBalanceDialog } from "@/components/accounts/update-balance-dialog";
 import { AccountLogo } from "@/components/ui/account-logo";
+import { OwnersField, type OwnerValue } from "@/components/household/owners-field";
 import type { Account } from "@/lib/db/schema";
+
+type Person = { id: string; name: string; kind: string; color?: string | null; avatarUrl?: string | null };
 
 const ACCOUNT_TYPES = [
   { value: "checking", label: "Checking Account" },
@@ -97,6 +100,17 @@ export function AccountList({ accounts, onAccountUpdated }: AccountListProps) {
   const [editCurrency, setEditCurrency] = useState("");
   const [editBalance, setEditBalance] = useState("");
 
+  // Ownership state
+  const [people, setPeople] = useState<Person[]>([]);
+  const [editOwners, setEditOwners] = useState<OwnerValue[]>([]);
+
+  useEffect(() => {
+    fetch("/api/people")
+      .then((r) => r.json())
+      .then((data: { people: Person[] }) => setPeople(data.people))
+      .catch(() => {});
+  }, []);
+
   const openEditDialog = (account: AccountWithLogo) => {
     setEditingAccount(account);
     setEditName(account.name);
@@ -104,6 +118,14 @@ export function AccountList({ accounts, onAccountUpdated }: AccountListProps) {
     setEditInstitution(account.institution || "");
     setEditCurrency(account.currency || "EUR");
     setEditBalance(account.startingBalance || "0");
+    // Fetch current owners for this account
+    fetch(`/api/owners/account/${account.id}`)
+      .then((r) => r.json())
+      .then((data: { owners: OwnerValue[] }) => setEditOwners(data.owners))
+      .catch(() => {
+        const self = people.find((p) => p.kind === "self");
+        setEditOwners(self ? [{ personId: self.id, share: null }] : []);
+      });
   };
 
   const handleEdit = async (e: React.FormEvent) => {
@@ -128,6 +150,18 @@ export function AccountList({ accounts, onAccountUpdated }: AccountListProps) {
       });
 
       if (result.success) {
+        // Update owners (best-effort)
+        if (editOwners.length > 0) {
+          try {
+            await fetch(`/api/owners/account/${editingAccount.id}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ owners: editOwners }),
+            });
+          } catch {
+            toast.error("Account updated, but failed to save ownership.");
+          }
+        }
         toast.success("Account updated successfully");
         setEditingAccount(null);
         onAccountUpdated?.();
@@ -357,6 +391,14 @@ export function AccountList({ accounts, onAccountUpdated }: AccountListProps) {
                   className="flex-1"
                 />
               </div>
+              {people.length > 1 && (
+                <OwnersField
+                  people={people}
+                  value={editOwners}
+                  onChange={setEditOwners}
+                  disabled={isLoading}
+                />
+              )}
             </div>
             <DialogFooter>
               <Button
