@@ -86,8 +86,8 @@ def _build_beat_schedule() -> dict:
         "schedule": crontab(minute=0, hour=investment_hour),
     }
 
-    schedule["routines-poll-due"] = {
-        "task": "routines.poll_due_routines",
+    schedule["scheduled-poll-due"] = {
+        "task": "scheduled.poll_due",
         "schedule": 60.0,  # every 60 seconds
     }
 
