@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import ValidationError
@@ -83,10 +84,11 @@ def _mcp_tool_defs() -> list[dict]:
 
 
 
-def _agent_loop(routine: Routine, transcript: list[dict]) -> tuple[dict | None, Any]:
+def _agent_loop(routine: Routine, transcript: list[dict], usage_totals: dict) -> tuple[dict | None, Any]:
     """Run the agent loop until emit_routine_output is called or MAX_AGENT_STEPS reached.
 
-    Returns (final_output_dict_or_None, last_message_object_for_usage)."""
+    Returns (final_output_dict_or_None, last_message_object).
+    Accumulates token counts into usage_totals["input"] and usage_totals["output"]."""
     # client=None causes call_agent_step to obtain the real client lazily,
     # which means test patches on call_agent_step work without a real API key.
     client = None
@@ -109,6 +111,8 @@ def _agent_loop(routine: Routine, transcript: list[dict]) -> tuple[dict | None, 
     last_message = None
     for step in range(MAX_AGENT_STEPS):
         last_message = call_agent_step(client, routine.model, system, messages, tools)
+        usage_totals["input"] += int(getattr(last_message.usage, "input_tokens", 0))
+        usage_totals["output"] += int(getattr(last_message.usage, "output_tokens", 0))
         transcript.append({"step": step, "stop_reason": getattr(last_message, "stop_reason", None)})
         assistant_blocks = last_message.content
         messages.append({"role": "assistant", "content": [
@@ -182,8 +186,9 @@ def run_routine(routine_id: str) -> RoutineRun:
         db.refresh(run)
 
         transcript: list[dict] = []
+        usage_totals: dict = {"input": 0, "output": 0}
         try:
-            payload, last = _agent_loop(routine, transcript)
+            payload, last = _agent_loop(routine, transcript, usage_totals)
             if payload is None:
                 run.status = "failed"
                 run.error_message = "agent did not emit output within MAX_AGENT_STEPS"
@@ -191,7 +196,7 @@ def run_routine(routine_id: str) -> RoutineRun:
                 validated, errors = _validate_or_downgrade(payload)
                 if errors:
                     # Retry once.
-                    second_payload, last = _agent_loop(routine, transcript)
+                    second_payload, last = _agent_loop(routine, transcript, usage_totals)
                     if second_payload is None:
                         run.status = "failed"
                         run.error_message = f"validation failed and retry produced no output: {errors}"
@@ -208,8 +213,8 @@ def run_routine(routine_id: str) -> RoutineRun:
                     run.output = validated
 
             usage = anthropic_client.TokenUsage(
-                input_tokens=int(getattr(last.usage, "input_tokens", 0)),
-                output_tokens=int(getattr(last.usage, "output_tokens", 0)),
+                input_tokens=usage_totals["input"],
+                output_tokens=usage_totals["output"],
             )
             run.cost_cents = usage.cost_cents(routine.model)
             run.transcript = transcript

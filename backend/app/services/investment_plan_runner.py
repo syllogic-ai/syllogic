@@ -90,7 +90,7 @@ User name / household context: not provided here — call list_people if needed.
 """
 
 
-def _agent_loop(plan: InvestmentPlan, transcript: list[dict]) -> tuple[dict | None, Any]:
+def _agent_loop(plan: InvestmentPlan, transcript: list[dict], usage_totals: dict) -> tuple[dict | None, Any]:
     grounding = collect_grounding(plan.user_id)
     user_id = plan.user_id
     tools = _mcp_tool_defs() + [
@@ -105,6 +105,8 @@ def _agent_loop(plan: InvestmentPlan, transcript: list[dict]) -> tuple[dict | No
     last_message = None
     for step in range(MAX_AGENT_STEPS):
         last_message = call_agent_step(None, plan.model, system, messages, tools)
+        usage_totals["input"] += int(getattr(last_message.usage, "input_tokens", 0))
+        usage_totals["output"] += int(getattr(last_message.usage, "output_tokens", 0))
         transcript.append({"step": step, "stop_reason": getattr(last_message, "stop_reason", None)})
         assistant_blocks = last_message.content
         messages.append({"role": "assistant", "content": [serialize_block(b) for b in assistant_blocks]})
@@ -168,15 +170,16 @@ def run_investment_plan(plan_id: str) -> InvestmentPlanRun:
         db.refresh(run)
 
         transcript: list[dict] = []
+        usage_totals: dict = {"input": 0, "output": 0}
         try:
-            payload, last = _agent_loop(plan, transcript)
+            payload, last = _agent_loop(plan, transcript, usage_totals)
             if payload is None:
                 run.status = "failed"
                 run.error_message = "agent did not emit output within MAX_AGENT_STEPS"
             else:
                 validated, errors = _validate(payload)
                 if errors:
-                    second_payload, last = _agent_loop(plan, transcript)
+                    second_payload, last = _agent_loop(plan, transcript, usage_totals)
                     if second_payload is None:
                         run.status = "failed"
                         run.error_message = f"validation failed and retry produced no output: {errors}"
@@ -193,8 +196,8 @@ def run_investment_plan(plan_id: str) -> InvestmentPlanRun:
                     run.output = validated
 
             usage = anthropic_client.TokenUsage(
-                input_tokens=int(getattr(last.usage, "input_tokens", 0)),
-                output_tokens=int(getattr(last.usage, "output_tokens", 0)),
+                input_tokens=usage_totals["input"],
+                output_tokens=usage_totals["output"],
             )
             run.cost_cents = usage.cost_cents(plan.model)
             run.transcript = transcript
