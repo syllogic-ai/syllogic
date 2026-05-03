@@ -15,7 +15,7 @@ from app.services import anthropic_client
 from app.schemas_routines import ParseScheduleRequest, ParseScheduleResponse
 
 
-router = APIRouter(prefix="/internal/routines", tags=["routines-internal"])
+router = APIRouter(prefix="/internal", tags=["internal"])
 
 
 def _verify(request: Request) -> str:
@@ -89,7 +89,7 @@ def parse_schedule_text(text: str) -> dict[str, str]:
     raise ValueError("Anthropic response did not include a tool_use block")
 
 
-@router.post("/parse-schedule", response_model=ParseScheduleResponse)
+@router.post("/routines/parse-schedule", response_model=ParseScheduleResponse)
 async def parse_schedule(request: Request, body: ParseScheduleRequest) -> ParseScheduleResponse:
     _verify(request)
     try:
@@ -99,7 +99,7 @@ async def parse_schedule(request: Request, body: ParseScheduleRequest) -> ParseS
     return ParseScheduleResponse(cron=out["cron"], timezone=out["timezone"], humanReadable=out["humanReadable"])
 
 
-@router.post("/{routine_id}/test-run")
+@router.post("/routines/{routine_id}/test-run")
 async def test_run(request: Request, routine_id: str):
     user_id = _verify(request)
     db = SessionLocal()
@@ -116,3 +116,38 @@ async def test_run(request: Request, routine_id: str):
     from tasks.routine_tasks import run_routine as run_routine_task
     async_result = run_routine_task.delay(routine_id)
     return {"taskId": async_result.id}
+
+
+from app.models import InvestmentPlan
+from app.mcp.tools import investments as investment_tools
+from pydantic import BaseModel as _PBaseModel
+
+
+@router.post("/investment-plans/{plan_id}/test-run")
+async def investment_plan_test_run(request: Request, plan_id: str):
+    user_id = _verify(request)
+    db = SessionLocal()
+    try:
+        plan = db.query(InvestmentPlan).filter(
+            InvestmentPlan.id == UUID(plan_id),
+            InvestmentPlan.user_id == user_id,
+        ).first()
+        if plan is None:
+            raise HTTPException(status_code=404, detail="investment plan not found")
+    finally:
+        db.close()
+    from tasks.routine_tasks import run_investment_plan as run_investment_plan_task
+    async_result = run_investment_plan_task.delay(plan_id)
+    return {"taskId": async_result.id}
+
+
+class SymbolSearchRequest(_PBaseModel):
+    query: str
+
+
+@router.post("/symbols/search")
+async def symbols_search(request: Request, body: SymbolSearchRequest) -> list[dict]:
+    user_id = _verify(request)
+    if not body.query.strip():
+        return []
+    return investment_tools.search_symbol(user_id, body.query.strip())
