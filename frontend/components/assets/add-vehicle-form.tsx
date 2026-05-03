@@ -80,13 +80,17 @@ export function AddVehicleForm({ onSuccess, onCancel }: AddVehicleFormProps) {
 
   const putOwners = async (entityId: string) => {
     try {
-      await fetch(`/api/owners/vehicle/${entityId}`, {
+      const r = await fetch(`/api/owners/vehicle/${entityId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ owners }),
       });
-    } catch {
-      toast.error("Vehicle created, but failed to save ownership. You can update it later.");
+      if (!r.ok) {
+        const text = await r.text().catch(() => "request failed");
+        throw new Error(`Failed to save owners: ${text.slice(0, 200)}`);
+      }
+    } catch (err) {
+      toast.error((err as Error).message || "Vehicle created, but failed to save ownership. You can update it later.");
     }
   };
 

@@ -78,13 +78,17 @@ export function AddPropertyForm({ onSuccess, onCancel }: AddPropertyFormProps) {
 
   const putOwners = async (entityId: string) => {
     try {
-      await fetch(`/api/owners/property/${entityId}`, {
+      const r = await fetch(`/api/owners/property/${entityId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ owners }),
       });
-    } catch {
-      toast.error("Property created, but failed to save ownership. You can update it later.");
+      if (!r.ok) {
+        const text = await r.text().catch(() => "request failed");
+        throw new Error(`Failed to save owners: ${text.slice(0, 200)}`);
+      }
+    } catch (err) {
+      toast.error((err as Error).message || "Property created, but failed to save ownership. You can update it later.");
     }
   };
 
