@@ -8,6 +8,8 @@ import { getCsvImportHistory } from "@/lib/actions/csv-import";
 import { getBankConnections } from "@/lib/actions/bank-connections";
 import { resolveMcpServerUrlForSnippet } from "@/lib/mcp/server-url";
 import { isDemoRestrictedUserEmail } from "@/lib/demo-access";
+import { getPeople } from "@/lib/people";
+import { avatarUrl } from "@/lib/people/avatars";
 
 export default async function SettingsPage({
   searchParams,
@@ -20,14 +22,23 @@ export default async function SettingsPage({
     redirect("/login");
   }
 
-  const [categories, apiKeysResult, csvImports, bankConnections, resolvedSearchParams] =
+  const [categories, apiKeysResult, csvImports, bankConnections, peopleRows, resolvedSearchParams] =
     await Promise.all([
       getCategories(),
       listApiKeys(),
       getCsvImportHistory(),
       getBankConnections(),
+      getPeople(user.id),
       searchParams,
     ]);
+
+  const people = peopleRows.map((p) => ({
+    id: p.id,
+    name: p.name,
+    kind: p.kind,
+    color: p.color,
+    avatarUrl: avatarUrl(p.avatarPath),
+  }));
 
   const apiKeys = apiKeysResult.success && apiKeysResult.keys ? apiKeysResult.keys : [];
   const isDemoUser = isDemoRestrictedUserEmail(user.email);
@@ -54,6 +65,7 @@ export default async function SettingsPage({
           defaultTab={resolvedSearchParams.tab || "profile"}
           csvImports={csvImports}
           bankConnections={bankConnections}
+          people={people}
         />
       </div>
     </>
