@@ -32,12 +32,23 @@ def call_agent_step(client, model: str, system: str, messages: list[dict], tools
 
 
 def serialize_block(b) -> dict:
-    """Convert an Anthropic SDK content block into a dict suitable for re-sending."""
+    """Convert an Anthropic SDK content block into a dict suitable for re-sending.
+
+    The Anthropic SDK returns Pydantic models. For known types we hand-build the
+    minimal dict; for everything else (server_tool_use, web_search_tool_result,
+    thinking, etc.) we round-trip via model_dump() so the API accepts the block
+    when re-sent in messages."""
     btype = getattr(b, "type", None)
     if btype == "text":
         return {"type": "text", "text": b.text}
     if btype == "tool_use":
         return {"type": "tool_use", "id": b.id, "name": b.name, "input": b.input}
+    # Unknown / server-side block (e.g. server_tool_use, web_search_tool_result):
+    # round-trip via Pydantic model_dump so the SDK can re-validate when re-sent.
+    if hasattr(b, "model_dump"):
+        return b.model_dump(mode="json", exclude_none=True)
+    if hasattr(b, "to_dict"):
+        return b.to_dict()
     return {"type": btype}
 
 
