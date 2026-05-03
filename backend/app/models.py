@@ -790,3 +790,49 @@ class HoldingValuation(Base):
     __table_args__ = (
         UniqueConstraint("holding_id", "date", name="holding_valuations_holding_date_uq"),
     )
+
+
+class Person(Base):
+    __tablename__ = "people"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(Text, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(255), nullable=False)
+    kind = Column(String(20), nullable=False, default="member")
+    color = Column(String(7), nullable=True)
+    avatar_path = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    user = relationship("User", backref="people")
+
+    __table_args__ = (
+        Index("idx_people_user", "user_id"),
+    )
+
+
+class AccountOwner(Base):
+    __tablename__ = "account_owners"
+
+    account_id = Column(UUID(as_uuid=True), ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True)
+    person_id = Column(UUID(as_uuid=True), ForeignKey("people.id", ondelete="CASCADE"), primary_key=True)
+    share = Column(Numeric(5, 4), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class PropertyOwner(Base):
+    __tablename__ = "property_owners"
+
+    property_id = Column(UUID(as_uuid=True), ForeignKey("properties.id", ondelete="CASCADE"), primary_key=True)
+    person_id = Column(UUID(as_uuid=True), ForeignKey("people.id", ondelete="CASCADE"), primary_key=True)
+    share = Column(Numeric(5, 4), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class VehicleOwner(Base):
+    __tablename__ = "vehicle_owners"
+
+    vehicle_id = Column(UUID(as_uuid=True), ForeignKey("vehicles.id", ondelete="CASCADE"), primary_key=True)
+    person_id = Column(UUID(as_uuid=True), ForeignKey("people.id", ondelete="CASCADE"), primary_key=True)
+    share = Column(Numeric(5, 4), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
