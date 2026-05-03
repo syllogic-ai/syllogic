@@ -8,7 +8,7 @@ from pydantic import AnyHttpUrl
 
 from app.db_helpers import get_mcp_user_id
 from app.mcp.auth import CompositeAuthProvider, AS_ISSUER, MCP_PUBLIC_URL
-from app.mcp.tools import accounts, categories, transactions, analytics, recurring, investments
+from app.mcp.tools import accounts, categories, transactions, analytics, recurring, investments, people as people_tools
 
 _auth = RemoteAuthProvider(
     token_verifier=CompositeAuthProvider(),
@@ -945,3 +945,41 @@ def get_holding_trades(
         not owned by the user or has no trades behind it.
     """
     return investments.get_holding_trades(get_mcp_user_id(user_id), holding_id)
+
+
+# ============================================================================
+# People & Household Tools
+# ============================================================================
+
+@mcp.tool
+def list_people(user_id: str | None = None) -> list[dict]:
+    """
+    List all people in the user's household.
+
+    Args:
+        user_id: The user's ID (optional, defaults to configured user)
+
+    Returns:
+        List of person dicts with id, name, kind (self|member), color.
+    """
+    return people_tools.list_people(get_mcp_user_id(user_id))
+
+
+@mcp.tool
+def get_household_summary(
+    person_ids: list[str] | None = None,
+    user_id: str | None = None,
+) -> dict:
+    """
+    Per-person net worth breakdown across cash, investments, properties, vehicles.
+
+    Args:
+        person_ids: Optional list of person UUIDs. When provided, only returns
+            entries for those specific people.
+        user_id: The user's ID (optional, defaults to configured user)
+
+    Returns:
+        Dict with a ``people`` list; each entry has person_id, name, cash,
+        investments, properties, vehicles, total (all share-attributed).
+    """
+    return people_tools.get_household_summary(get_mcp_user_id(user_id), person_ids)
