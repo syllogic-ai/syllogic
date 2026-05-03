@@ -73,7 +73,7 @@ def test_runner_persists_succeeded_run(seeded_routine, db_session):
     routine, person_id = seeded_routine
     payload = _green_payload(person_id)
     final = _final_message([_emit_block(payload)])
-    with patch("app.services.routine_runner._call_agent_step", return_value=final):
+    with patch("app.services.routine_runner.call_agent_step", return_value=final):
         run = routine_runner.run_routine(str(routine.id))
     # run comes from a separate closed session — fetch it fresh via the test session
     fresh_run = db_session.get(RoutineRun, run.id)
@@ -89,7 +89,7 @@ def test_runner_downgrades_amber_without_enough_evidence(seeded_routine, db_sess
     bad["evidence"] = [{"source": "X", "url": "https://x.example", "quote": "q", "relevance": "r"}]
     final = _final_message([_emit_block(bad)])
     # Two calls return the same AMBER-with-1-evidence; runner should downgrade.
-    with patch("app.services.routine_runner._call_agent_step", side_effect=[final, final]):
+    with patch("app.services.routine_runner.call_agent_step", side_effect=[final, final]):
         run = routine_runner.run_routine(str(routine.id))
     fresh_run = db_session.get(RoutineRun, run.id)
     assert fresh_run.status == "succeeded"
@@ -106,7 +106,7 @@ def test_runner_records_failure_on_invalid_output(seeded_routine, db_session):
     bad_block.id = "toolu_bad"
     final = _final_message([bad_block])
     # Two calls, both invalid → run fails.
-    with patch("app.services.routine_runner._call_agent_step", side_effect=[final, final]):
+    with patch("app.services.routine_runner.call_agent_step", side_effect=[final, final]):
         run = routine_runner.run_routine(str(routine.id))
     fresh_run = db_session.get(RoutineRun, run.id)
     assert fresh_run.status == "failed"
