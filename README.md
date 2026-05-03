@@ -185,6 +185,12 @@ Both services share a single PostgreSQL database. The frontend handles all CRUD 
 
 Syllogic models a household as a set of `people` belonging to one user. Accounts, properties, and vehicles can have one or more owners with optional shares (a `NULL` share means equal split). Holdings inherit ownership from their account. The Syllogic MCP read tools accept `person_ids` to scope results and attribute share-weighted amounts. See [docs/superpowers/specs/2026-05-03-people-household-ownership-design.md](docs/superpowers/specs/2026-05-03-people-household-ownership-design.md).
 
+### Routines (weekly digest)
+
+Users can define agentic Routines — scheduled prompts that run against the Syllogic MCP and produce React Email digests sent via Resend. The first template is a household investment-strategy review based on the audit prompt in `household-investment-strategy-risk-review.md`. A Celery Beat poller checks for due routines every 60 seconds. See [docs/superpowers/specs/2026-05-03-routines-weekly-digest-design.md](docs/superpowers/specs/2026-05-03-routines-weekly-digest-design.md).
+
+Required env vars: `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, plus the existing `INTERNAL_AUTH_SECRET` for backend↔frontend HMAC.
+
 ## Development
 
 Quick start for contributors:
