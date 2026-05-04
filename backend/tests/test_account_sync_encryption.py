@@ -4,6 +4,7 @@ Integration-style test for encrypted account external_id dedupe in SyncService.
 import base64
 import os
 import sys
+import uuid
 from decimal import Decimal
 from typing import Optional
 from datetime import datetime
@@ -18,12 +19,26 @@ from app.db_helpers import (  # noqa: E402
     set_request_user_id,
 )
 from app.integrations.base import AccountData, BankAdapter, TransactionData  # noqa: E402
-from app.models import Account  # noqa: E402
+from app.models import Account, User  # noqa: E402
 from app.security.data_encryption import (  # noqa: E402
     decrypt_with_fallback,
     reset_encryption_config_cache,
 )
 from app.services.sync_service import SyncService  # noqa: E402
+
+
+def _make_user(db) -> User:
+    uid = f"sync-iban-test-user-{uuid.uuid4().hex[:8]}"
+    user = User(
+        id=uid,
+        email=f"{uid}@example.com",
+        name="Sync IBAN Test User",
+        email_verified=True,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 def _set_encryption_env() -> None:
@@ -232,9 +247,173 @@ def test_sync_service_persists_encrypted_counterparty_iban() -> bool:
         reset_encryption_config_cache()
 
 
+def _cleanup_user(db, user_id: str) -> None:
+    """Best-effort cleanup of a synthetic test user and its accounts."""
+    try:
+        from app.models import Transaction
+        accs = db.query(Account).filter(Account.user_id == user_id).all()
+        for acc in accs:
+            db.query(Transaction).filter(Transaction.account_id == acc.id).delete()
+        db.query(Account).filter(Account.user_id == user_id).delete()
+        db.query(User).filter(User.id == user_id).delete()
+        db.commit()
+    except Exception:
+        db.rollback()
+
+
+def test_sync_service_persists_iban_on_synced_account_first_sync() -> bool:
+    """When AccountData.iban is set on a fresh sync, the synced account row is
+    persisted with iban_ciphertext (enc:v1: envelope) + iban_hash (blind index)."""
+    _set_encryption_env()
+    Base.metadata.create_all(bind=engine)
+
+    db = SessionLocal()
+    user_id: Optional[str] = None
+    try:
+        from app.security.data_encryption import blind_index, decrypt_value
+
+        user = _make_user(db)
+        user_id = str(user.id)
+        service = SyncService(db, user_id=user_id, use_llm_categorization=False)
+
+        from unittest.mock import MagicMock
+        adapter = MagicMock()
+        adapter.fetch_accounts.return_value = [
+            AccountData(
+                external_id="ext-iban-1",
+                name="ABN Checking",
+                account_type="checking",
+                institution="ABN AMRO",
+                currency="EUR",
+                iban="NL91ABNA0417164300",
+            ),
+        ]
+
+        service.sync_accounts(adapter, provider="enable_banking")
+        db.commit()
+
+        row = db.query(Account).filter_by(user_id=user_id, external_id="ext-iban-1").one()
+        assert row.iban_ciphertext is not None
+        assert row.iban_ciphertext.startswith("enc:v1:")
+        assert decrypt_value(row.iban_ciphertext) == "NL91ABNA0417164300"
+        assert row.iban_hash == blind_index("NL91ABNA0417164300")
+
+        print("✓ sync service persists iban on first sync")
+        return True
+    finally:
+        if user_id:
+            _cleanup_user(db, user_id)
+        db.close()
+        reset_encryption_config_cache()
+
+
+def test_sync_service_does_not_overwrite_existing_iban() -> bool:
+    """If iban_hash is already set on the account, sync must NOT overwrite it."""
+    _set_encryption_env()
+    Base.metadata.create_all(bind=engine)
+
+    db = SessionLocal()
+    user_id: Optional[str] = None
+    try:
+        from app.security.data_encryption import encrypt_value, blind_index
+
+        user = _make_user(db)
+        user_id = str(user.id)
+
+        # Pre-create an account with a different IBAN already set.
+        original_iban = "NL01PRESET0000000000"
+        existing = Account(
+            user_id=user_id,
+            name="ABN Checking",
+            account_type="checking",
+            institution="ABN AMRO",
+            currency="EUR",
+            provider="enable_banking",
+            external_id="ext-iban-2",
+            iban_ciphertext=encrypt_value(original_iban),
+            iban_hash=blind_index(original_iban),
+            starting_balance=Decimal("0"),
+            is_active=True,
+        )
+        db.add(existing)
+        db.commit()
+
+        service = SyncService(db, user_id=user_id, use_llm_categorization=False)
+        from unittest.mock import MagicMock
+        adapter = MagicMock()
+        adapter.fetch_accounts.return_value = [
+            AccountData(
+                external_id="ext-iban-2",
+                name="ABN Checking",
+                account_type="checking",
+                institution="ABN AMRO",
+                currency="EUR",
+                iban="NL99DIFFERENT0000000",  # different IBAN — must be ignored
+            ),
+        ]
+
+        service.sync_accounts(adapter, provider="enable_banking")
+        db.commit()
+
+        db.refresh(existing)
+        assert existing.iban_hash == blind_index(original_iban), (
+            "iban_hash must NOT be overwritten when already set"
+        )
+
+        print("✓ sync service preserves existing iban_hash")
+        return True
+    finally:
+        if user_id:
+            _cleanup_user(db, user_id)
+        db.close()
+        reset_encryption_config_cache()
+
+
+def test_sync_service_skips_iban_when_account_data_iban_is_none() -> bool:
+    """Accounts without an IBAN (some credit cards) must not trigger encryption."""
+    _set_encryption_env()
+    Base.metadata.create_all(bind=engine)
+
+    db = SessionLocal()
+    user_id: Optional[str] = None
+    try:
+        user = _make_user(db)
+        user_id = str(user.id)
+        service = SyncService(db, user_id=user_id, use_llm_categorization=False)
+        from unittest.mock import MagicMock
+        adapter = MagicMock()
+        adapter.fetch_accounts.return_value = [
+            AccountData(
+                external_id="ext-noiban",
+                name="Credit Card",
+                account_type="credit",
+                institution="ABN AMRO",
+                currency="EUR",
+                iban=None,
+            ),
+        ]
+        service.sync_accounts(adapter, provider="enable_banking")
+        db.commit()
+
+        row = db.query(Account).filter_by(user_id=user_id, external_id="ext-noiban").one()
+        assert row.iban_ciphertext is None
+        assert row.iban_hash is None
+
+        print("✓ sync service skips iban encryption when iban is None")
+        return True
+    finally:
+        if user_id:
+            _cleanup_user(db, user_id)
+        db.close()
+        reset_encryption_config_cache()
+
+
 if __name__ == "__main__":
     success = test_account_sync_dedupes_on_encrypted_external_id()
     success2 = test_sync_service_persists_encrypted_counterparty_iban()
-    all_passed = success and success2
+    success3 = test_sync_service_persists_iban_on_synced_account_first_sync()
+    success4 = test_sync_service_does_not_overwrite_existing_iban()
+    success5 = test_sync_service_skips_iban_when_account_data_iban_is_none()
+    all_passed = success and success2 and success3 and success4 and success5
     print("All encrypted account sync tests passed." if all_passed else "Encrypted account sync tests failed.")
     sys.exit(0 if all_passed else 1)

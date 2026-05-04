@@ -3,6 +3,7 @@
 import { db } from "@/lib/db";
 import { accounts, transactions, categories, users, properties, vehicles, accountBalances, transactionLinks } from "@/lib/db/schema";
 import { getAuthenticatedSession } from "@/lib/auth-helpers";
+import { getCachedUserAccounts } from "@/lib/data/cached";
 import { eq, sql, gte, lte, and, desc, inArray, isNull } from "drizzle-orm";
 import { buildConservativeSankey } from "@/lib/dashboard/sankey";
 import {
@@ -10,6 +11,14 @@ import {
   resolveIncomeExpenseGrouping,
   type IncomeExpenseGrouping,
 } from "@/lib/dashboard/income-expense-buckets";
+import {
+  type AssetCategoryKey,
+  ASSET_CATEGORY_LABELS,
+  ASSET_CATEGORY_COLORS,
+  ASSET_CATEGORY_ORDER,
+  getAssetCategory,
+} from "@/lib/assets/asset-category";
+import { getPortfolio } from "@/lib/api/investments";
 
 async function getUserCurrency(userId: string): Promise<string> {
   const result = await db
@@ -65,24 +74,7 @@ async function getLatestTransactionDate(userId: string, accountIds?: string[]): 
 
 // Get user accounts for filter dropdown
 export async function getUserAccounts() {
-  const session = await getAuthenticatedSession();
-
-  if (!session?.user?.id) {
-    return [];
-  }
-
-  const result = await db
-    .select({
-      id: accounts.id,
-      name: accounts.name,
-      institution: accounts.institution,
-      accountType: accounts.accountType,
-    })
-    .from(accounts)
-    .where(and(eq(accounts.userId, session.user.id), eq(accounts.isActive, true)))
-    .orderBy(accounts.name);
-
-  return result;
+  return getCachedUserAccounts();
 }
 
 // Get available months/years for the date selector
@@ -745,41 +737,6 @@ export async function getSpendingByCategory(
   }
 }
 
-// Asset category types and mapping
-type AssetCategoryKey = "cash" | "investment" | "crypto" | "property" | "vehicle" | "other";
-
-const ASSET_CATEGORY_COLORS: Record<AssetCategoryKey, string> = {
-  cash: "#3B82F6",
-  investment: "#10B981",
-  crypto: "#F59E0B",
-  property: "#8B5CF6",
-  vehicle: "#EC4899",
-  other: "#6B7280",
-};
-
-const ASSET_CATEGORY_LABELS: Record<AssetCategoryKey, string> = {
-  cash: "Cash",
-  investment: "Investment",
-  crypto: "Crypto",
-  property: "Property",
-  vehicle: "Vehicle",
-  other: "Other",
-};
-
-// Map account types to asset categories
-function getAssetCategory(accountType: string): AssetCategoryKey {
-  const typeMap: Record<string, AssetCategoryKey> = {
-    checking: "cash",
-    savings: "cash",
-    credit: "other",
-    investment: "investment",
-    brokerage: "investment",
-    crypto: "crypto",
-    property: "property",
-    vehicle: "vehicle",
-  };
-  return typeMap[accountType.toLowerCase()] || "other";
-}
 
 interface AssetAccount {
   id: string;
@@ -826,7 +783,7 @@ export async function getAssetsOverview(): Promise<AssetsOverviewData> {
     };
   }
 
-  const [userAccounts, userProperties, userVehicles, currency] = await Promise.all([
+  const [userAccounts, userProperties, userVehicles, currency, portfolio] = await Promise.all([
     db
       .select({
         id: accounts.id,
@@ -863,6 +820,7 @@ export async function getAssetsOverview(): Promise<AssetsOverviewData> {
       .from(vehicles)
       .where(and(eq(vehicles.userId, session.user.id), eq(vehicles.isActive, true))),
     getUserCurrency(session.user.id),
+    getPortfolio().catch(() => null),
   ]);
 
   // Group accounts by asset category
@@ -947,8 +905,35 @@ export async function getAssetsOverview(): Promise<AssetsOverviewData> {
     }
   }
 
+  // Process investment accounts from portfolio
+  if (portfolio?.accounts?.length) {
+    for (const invAccount of portfolio.accounts) {
+      const value = typeof invAccount.value === "number"
+        ? invAccount.value
+        : parseFloat(String(invAccount.value) || "0");
+
+      if (value > 0) {
+        total += value;
+
+        if (!categoryMap.has("investment")) {
+          categoryMap.set("investment", []);
+        }
+
+        categoryMap.get("investment")!.push({
+          id: invAccount.id,
+          name: invAccount.name,
+          institution: invAccount.type || null,
+          value,
+          percentage: 0,
+          currency: portfolio.currency || currency,
+          initial: invAccount.name.charAt(0).toUpperCase(),
+        });
+      }
+    }
+  }
+
   // Build categories with percentages
-  const categoryOrder: AssetCategoryKey[] = ["cash", "investment", "crypto", "property", "vehicle", "other"];
+  const categoryOrder = ASSET_CATEGORY_ORDER;
 
   const categories: AssetCategory[] = categoryOrder.map((key) => {
     const accountsInCategory = categoryMap.get(key) || [];

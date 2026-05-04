@@ -4,6 +4,7 @@ Enable Banking adapter implementing the BankAdapter interface.
 Fetches accounts, transactions, and balances from the Enable Banking REST API.
 """
 
+import hashlib
 import logging
 from typing import List, Optional
 from decimal import Decimal
@@ -80,6 +81,7 @@ class EnableBankingAdapter(BankAdapter):
                 account_type=self._map_account_type(acc.get("cash_account_type")),
                 institution=aspsp_name,
                 currency=acc.get("currency", "EUR"),
+                iban=_extract_iban(acc),
                 balance_available=None,  # Fetched separately via fetch_balances
             ))
         return accounts
@@ -128,9 +130,6 @@ class EnableBankingAdapter(BankAdapter):
 
     def normalize_transaction(self, raw: dict) -> TransactionData:
         """Map EB transaction to canonical format."""
-        import logging as _logging
-        _log = _logging.getLogger(__name__)
-
         amount = Decimal(str(raw["transaction_amount"]["amount"]))
         # EB uses entry_reference as primary ID; fall back to transaction_id.
         # Some banks (e.g. ABN AMRO fee transactions) provide neither — generate a
@@ -138,7 +137,6 @@ class EnableBankingAdapter(BankAdapter):
         # syncs produce the same ID for the same transaction.
         external_id = raw.get("entry_reference") or raw.get("transaction_id") or None
         if not external_id:
-            import hashlib as _hashlib
             _ri = raw.get("remittance_information")
             _ri_str = "|".join(_ri) if isinstance(_ri, list) and _ri else (_ri or "")
             _parts = "|".join([
@@ -147,26 +145,7 @@ class EnableBankingAdapter(BankAdapter):
                 raw["transaction_amount"].get("currency", ""),
                 _ri_str,
             ])
-            external_id = "synth-" + _hashlib.sha256(_parts.encode()).hexdigest()[:16]
-
-        # Log raw text fields to debug missing descriptions (TEMPORARY - remove after diagnosis)
-        _log.info(
-            "[EB_DEBUG] txn=%s amount=%s fields: riu=%r riua=%r ri=%r ai=%r note=%r refnum=%r "
-            "cn=%r dn=%r creditor=%r debtor=%r keys=%s",
-            external_id,
-            amount,
-            raw.get("remittance_information_unstructured"),
-            raw.get("remittance_information_unstructured_array"),
-            raw.get("remittance_information"),
-            raw.get("additional_information"),
-            raw.get("note"),
-            raw.get("reference_number"),
-            raw.get("creditor_name"),
-            raw.get("debtor_name"),
-            raw.get("creditor"),
-            raw.get("debtor"),
-            sorted(raw.keys()),
-        )
+            external_id = "synth-" + hashlib.sha256(_parts.encode()).hexdigest()[:16]
 
         # Resolve nested creditor/debtor names (EB may use objects or flat fields)
         creditor_name = (
@@ -266,3 +245,38 @@ class EnableBankingAdapter(BankAdapter):
         """
         resp = self.client.get(f"/accounts/{account_uid}/balances")
         return resp.json()
+
+    def fetch_account_iban(self, account_uid: str) -> Optional[str]:
+        """Fetch the canonical IBAN for a single connected account.
+
+        Why this exists: ``GET /sessions/{session_id}`` returns rich account
+        objects only at OAuth time. On subsequent calls (post-mapping, post-
+        sync) the ``accounts`` field collapses to a list of UID strings, so
+        ``fetch_accounts`` can't be relied on for IBAN. ``GET /accounts/{uid}/
+        details`` is the per-account endpoint that always returns the IBAN.
+
+        The response shape nests the IBAN under ``account_id``:
+
+            {"account_id": {"iban": "FI04..."}, ...}
+
+        We try that path first, and fall back to ``all_account_ids`` (which
+        carries any non-IBAN scheme like BBAN as a separate entry) for ASPSPs
+        that omit the primary ``account_id.iban`` field.
+
+        Returns the normalized IBAN (spaces stripped, upper-cased) or None if
+        the account doesn't expose an IBAN at all (rare — some credit cards).
+        """
+        resp = self.client.get(f"/accounts/{account_uid}/details")
+        data = resp.json()
+        if not isinstance(data, dict):
+            return None
+        iban = _extract_iban(data.get("account_id"))
+        if iban:
+            return iban
+        # Some ASPSPs only put the IBAN inside all_account_ids[]. Iterate
+        # looking for the first IBAN-scheme entry.
+        for entry in data.get("all_account_ids") or []:
+            iban = _extract_iban(entry)
+            if iban:
+                return iban
+        return None

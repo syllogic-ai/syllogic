@@ -181,6 +181,20 @@ Full variable reference is available in [`deploy/compose/.env.example`](deploy/c
 
 Both services share a single PostgreSQL database. The frontend handles all CRUD via Server Actions; the backend handles data enrichment, bank sync, and background jobs.
 
+### People & ownership
+
+Syllogic models a household as a set of `people` belonging to one user. Accounts, properties, and vehicles can have one or more owners with optional shares (a `NULL` share means equal split). Holdings inherit ownership from their account. The Syllogic MCP read tools accept `person_ids` to scope results and attribute share-weighted amounts.
+
+### Routines (weekly digest)
+
+Users can define agentic Routines — scheduled prompts that run against the Syllogic MCP and produce React Email digests sent via Resend. The first template is a household investment-strategy review based on the audit prompt in `household-investment-strategy-risk-review.md`. A Celery Beat poller checks for due routines every 60 seconds.
+
+Required env vars: `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, plus the existing `INTERNAL_AUTH_SECRET` for backend↔frontend HMAC.
+
+### Investment plans
+
+Configure a recurring monthly amount split into pinned (specific symbol) and discretionary (theme the agent picks from) slots. Each month a Celery-Beat poller fires the agent, which grounds itself in your real cash + last-30-day broker activity (via MCP) and returns per-slot verdicts plus a top-10 ranked list per discretionary theme. The "this month's suggested buys" card on the run-detail page lets you tick off trades as you place them in your broker manually — no order execution from this app.
+
 ## Development
 
 Quick start for contributors:

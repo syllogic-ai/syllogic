@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   RiHomeLine,
@@ -10,8 +11,11 @@ import {
   RiWallet3Line,
   RiArrowUpDownLine,
   RiLoopRightLine,
+  RiLineChartLine,
   RiArrowRightSLine,
   RiArrowLeftSLine,
+  RiCalendarTodoLine,
+  RiCoinsLine,
 } from "@remixicon/react";
 import { HelpButton } from "@/components/walkthrough/help-button";
 import { signOut, useSession } from "@/lib/auth-client";
@@ -67,9 +71,24 @@ const navItems = [
     icon: RiLoopRightLine,
   },
   {
+    title: "Investments",
+    href: "/investments",
+    icon: RiLineChartLine,
+  },
+  {
     title: "Assets",
     href: "/assets",
     icon: RiWallet3Line,
+  },
+  {
+    title: "Routines",
+    href: "/routines",
+    icon: RiCalendarTodoLine,
+  },
+  {
+    title: "Investment plans",
+    href: "/investment-plans",
+    icon: RiCoinsLine,
   },
   {
     title: "Settings",
@@ -173,20 +192,26 @@ export function AppSidebar({ initialUser }: AppSidebarProps) {
         <SidebarGroup>
           <SidebarMenu>
             {navItems.map((item) => {
-              const isActive = pathname === item.href;
+              const isActive =
+                item.href === "/"
+                  ? pathname === "/"
+                  : pathname === item.href || pathname.startsWith(item.href + "/");
               return (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
                     isActive={isActive}
-                    tooltip={item.title}
-                    onClick={() =>
-                      router.push(
-                        item.href === "/"
-                          ? getHomePathWithFilters()
-                          : item.href === "/transactions"
-                          ? getTransactionsPathWithFilters()
-                          : item.href
-                      )
+                    render={
+                      <Link
+                        href={
+                          item.href === "/"
+                            ? getHomePathWithFilters()
+                            : item.href === "/transactions"
+                            ? getTransactionsPathWithFilters()
+                            : item.href
+                        }
+                        prefetch
+                        title={isCollapsed ? item.title : undefined}
+                      />
                     }
                   >
                     <item.icon className="shrink-0" />

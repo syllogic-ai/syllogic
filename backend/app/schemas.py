@@ -232,3 +232,114 @@ class DailyBalanceImport(BaseModel):
     """Daily balance data extracted from CSV for import."""
     date: str  # ISO date format YYYY-MM-DD
     balance: Decimal
+
+
+# Investment Schemas
+from datetime import date as _date_date
+from typing import Literal
+
+
+class BrokerConnectionCreate(BaseModel):
+    provider: Literal["ibkr_flex"]
+    flex_token: str
+    query_id_positions: str
+    query_id_trades: str
+    account_name: str
+    base_currency: str = "EUR"
+
+
+class BrokerConnectionResponse(BaseModel):
+    id: UUID
+    account_id: UUID
+    provider: str
+    last_sync_at: Optional[datetime]
+    last_sync_status: Optional[str]
+    last_sync_error: Optional[str]
+
+
+class ManualAccountCreate(BaseModel):
+    name: str
+    base_currency: str = "EUR"
+
+
+class HoldingCreate(BaseModel):
+    symbol: str
+    provider_symbol: Optional[str] = None
+    quantity: Decimal
+    instrument_type: Literal["equity", "etf", "cash"]
+    currency: str
+    as_of_date: Optional[_date_date] = None
+    avg_cost: Optional[Decimal] = None
+
+
+class HoldingUpdate(BaseModel):
+    symbol: Optional[str] = None
+    quantity: Optional[Decimal] = None
+    as_of_date: Optional[_date_date] = None
+    avg_cost: Optional[Decimal] = None
+    provider_symbol: Optional[str] = None
+
+
+class HoldingResponse(BaseModel):
+    id: UUID
+    account_id: UUID
+    symbol: str
+    provider_symbol: Optional[str] = None
+    name: Optional[str]
+    currency: str
+    instrument_type: str
+    quantity: Decimal
+    avg_cost: Optional[Decimal]
+    as_of_date: Optional[_date_date]
+    source: str
+    current_price: Optional[Decimal] = None
+    current_value_user_currency: Optional[Decimal] = None
+    cost_basis_user_currency: Optional[Decimal] = None
+    is_stale: bool = False
+
+
+class PortfolioSummary(BaseModel):
+    total_value: Decimal
+    total_value_today_change: Decimal
+    currency: str
+    accounts: list[dict]
+    allocation_by_type: dict[str, Decimal]
+    allocation_by_currency: dict[str, Decimal]
+
+
+class ValuationPoint(BaseModel):
+    date: _date_date
+    value: Decimal
+
+
+class HoldingTrade(BaseModel):
+    """One BrokerTrade row enriched with running quantity / cost."""
+    id: UUID
+    trade_date: _date_date
+    symbol: str
+    side: str
+    quantity: Decimal
+    price: Decimal
+    currency: str
+    fees: Decimal
+    external_id: Optional[str] = None
+    cost_native: Optional[Decimal] = None
+    proceeds_native: Optional[Decimal] = None
+    running_quantity: Decimal
+
+
+class HoldingLot(BaseModel):
+    """One open FIFO lot for a holding."""
+    open_date: _date_date
+    quantity_remaining: Decimal
+    cost_per_share_native: Decimal
+    cost_per_share_user: Optional[Decimal] = None
+    age_days: int
+    currency: str
+
+
+class SymbolSearchResult(BaseModel):
+    symbol: str
+    name: str
+    exchange: Optional[str] = None
+    currency: Optional[str] = None

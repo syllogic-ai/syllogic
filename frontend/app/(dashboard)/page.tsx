@@ -160,6 +160,7 @@ export default async function HomePage({ searchParams }: PageProps) {
         <div className="grid gap-4">
           <AssetsOverviewCard data={data.assetsOverview} />
         </div>
+
       </div>
     </>
   );

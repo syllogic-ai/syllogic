@@ -177,5 +177,124 @@ class TestCounterpartyIban(unittest.TestCase):
         self.assertEqual(txn.counterparty_iban, "NL91ABNA0417164300")
 
 
+class TestFetchAccountsIban(unittest.TestCase):
+    """fetch_accounts must populate AccountData.iban from the raw EB session response."""
+
+    def setUp(self):
+        # Bypass __init__ — we don't need the real HTTP client to test transformation
+        self.adapter = EnableBankingAdapter.__new__(EnableBankingAdapter)
+        self.adapter.session_id = "session-123"
+
+    def test_fetch_accounts_extracts_iban_from_raw(self):
+        """A session-data response with iban populated must surface it on AccountData."""
+        from unittest.mock import MagicMock
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "aspsp": {"name": "ABN AMRO"},
+            "accounts": [
+                {
+                    "uid": "acc-1",
+                    "iban": "NL91 ABNA 0417 1643 00",
+                    "account_name": "Main Checking",
+                    "cash_account_type": "CACC",
+                    "currency": "EUR",
+                },
+            ],
+        }
+        self.adapter.client = MagicMock()
+        self.adapter.client.get.return_value = mock_response
+
+        accounts = self.adapter.fetch_accounts()
+
+        self.assertEqual(len(accounts), 1)
+        # IBAN is normalized at the adapter layer via _extract_iban (spaces
+        # stripped, upper-cased) so downstream consumers always see the
+        # canonical form.
+        self.assertEqual(accounts[0].iban, "NL91ABNA0417164300")
+
+    def test_fetch_accounts_iban_is_none_when_missing(self):
+        """Accounts without an IBAN (e.g. some credit cards) must yield iban=None."""
+        from unittest.mock import MagicMock
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "aspsp": {"name": "ABN AMRO"},
+            "accounts": [
+                {
+                    "uid": "acc-2",
+                    "account_name": "Credit Card",
+                    "cash_account_type": "CARD",
+                    "currency": "EUR",
+                },
+            ],
+        }
+        self.adapter.client = MagicMock()
+        self.adapter.client.get.return_value = mock_response
+
+        accounts = self.adapter.fetch_accounts()
+
+        self.assertEqual(len(accounts), 1)
+        self.assertIsNone(accounts[0].iban)
+
+
+class TestFetchAccountIban(unittest.TestCase):
+    """fetch_account_iban must extract IBAN from the nested
+    ``account_id.iban`` shape returned by GET /accounts/{uid}/details."""
+
+    def setUp(self):
+        self.adapter = EnableBankingAdapter.__new__(EnableBankingAdapter)
+        self.adapter.session_id = "session-123"
+
+    def test_extracts_iban_from_nested_account_id(self):
+        """The /details endpoint nests IBAN under account_id, not at top level."""
+        from unittest.mock import MagicMock
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "account_id": {"iban": "NL91 ABNA 0417 1643 00"},
+            "all_account_ids": [{"identification": "12345", "scheme_name": "BBAN"}],
+            "name": "Main Checking",
+            "uid": "abc-123",
+        }
+        self.adapter.client = MagicMock()
+        self.adapter.client.get.return_value = mock_response
+
+        iban = self.adapter.fetch_account_iban("abc-123")
+
+        self.assertEqual(iban, "NL91ABNA0417164300")
+        self.adapter.client.get.assert_called_once_with("/accounts/abc-123/details")
+
+    def test_falls_back_to_all_account_ids_when_primary_missing(self):
+        """If account_id.iban isn't present, all_account_ids[] may carry it."""
+        from unittest.mock import MagicMock
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "account_id": {"identification": "fallback", "scheme_name": "BBAN"},
+            "all_account_ids": [
+                {"identification": "fallback", "scheme_name": "BBAN"},
+                {"iban": "DE89 3704 0044 0532 0130 00"},
+            ],
+        }
+        self.adapter.client = MagicMock()
+        self.adapter.client.get.return_value = mock_response
+
+        iban = self.adapter.fetch_account_iban("uid-2")
+
+        self.assertEqual(iban, "DE89370400440532013000")
+
+    def test_returns_none_when_no_iban_anywhere(self):
+        """Some accounts (rare credit cards) genuinely don't have an IBAN."""
+        from unittest.mock import MagicMock
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "account_id": {"identification": "1234", "scheme_name": "BBAN"},
+            "all_account_ids": [],
+        }
+        self.adapter.client = MagicMock()
+        self.adapter.client.get.return_value = mock_response
+
+        iban = self.adapter.fetch_account_iban("uid-3")
+
+        self.assertIsNone(iban)
+
+
 if __name__ == "__main__":
     unittest.main()

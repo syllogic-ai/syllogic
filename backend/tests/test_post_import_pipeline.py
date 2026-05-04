@@ -34,7 +34,7 @@ _set_test_env()
 
 from app.database import Base, SessionLocal, engine
 from app.models import Account, Category, InternalTransfer, Transaction, User
-from app.security.data_encryption import blind_index, reset_encryption_config_cache
+from app.security.data_encryption import blind_index, encrypt_value, reset_encryption_config_cache
 
 
 # Refresh the lru_cache so the encryption config picks up our env vars.
@@ -206,8 +206,20 @@ def test_pipeline_calls_all_steps_in_order():
         mock_fa.assert_called_once_with(mock_db, user_id, transaction_ids)
         mock_it.assert_called_once_with(mock_db, user_id, transaction_ids)
         mock_cat.assert_called_once_with(mock_db, user_id, transaction_ids)
-        mock_balances.assert_called_once_with(mock_db, user_id, account_ids)
-        mock_timeseries.assert_called_once_with(mock_db, user_id, account_ids)
+        # Balance/timeseries recalc account list is deduped via a set; order is not
+        # guaranteed, so compare as sets.
+        assert mock_balances.call_count == 1
+        bal_args = mock_balances.call_args
+        assert bal_args[0][0] is mock_db
+        assert bal_args[0][1] == user_id
+        assert set(bal_args[0][2]) == set(account_ids)
+
+        assert mock_timeseries.call_count == 1
+        ts_args = mock_timeseries.call_args
+        assert ts_args[0][0] is mock_db
+        assert ts_args[0][1] == user_id
+        assert set(ts_args[0][2]) == set(account_ids)
+
         mock_subs.assert_called_once_with(mock_db, user_id, transaction_ids, account_ids)
 
         # Verify cleanup
@@ -402,6 +414,116 @@ def test_pipeline_runs_internal_transfer_detection_before_llm() -> None:
                 db3.close()
 
 
+def test_pipeline_synced_to_synced_tags_transfer_no_mirror() -> None:
+    """End-to-end: a sync delivers a checking transaction whose counterparty IBAN
+    matches another synced account. Pipeline detection must:
+      - tag source transaction as Transfer + include_in_analytics=False
+      - create internal_transfers link with mirror_txn_id=NULL
+      - NOT add any transaction to the destination account
+      - NOT extend balance recalc to the destination account
+    """
+    _ensure_schema()
+    db = SessionLocal()
+    user_id: Optional[str] = None
+    try:
+        from tasks.post_import_pipeline import _run_post_import_pipeline
+        from app.services.category_matcher import CategoryMatcher
+
+        user = _make_user(db)
+        user_id = user.id
+
+        # Two synced accounts: ABN checking (source), Revo Pocket (synced savings dest).
+        # Both have iban_hash populated as if the upstream sync wrote them.
+        checking_iban = "NL11ABNA0000000001"
+        pocket_iban = "NL22REVO0000000002"
+
+        checking = Account(
+            user_id=user_id, name="ABN Checking", account_type="checking",
+            institution="ABN AMRO", currency="EUR",
+            provider="enable_banking", external_id="ext-checking-" + uuid.uuid4().hex[:8],
+            iban_ciphertext=encrypt_value(checking_iban),
+            iban_hash=blind_index(checking_iban),
+            is_active=True, starting_balance=Decimal("0"),
+        )
+        pocket = Account(
+            user_id=user_id, name="Revo Pocket", account_type="savings",
+            institution="Revolut", currency="EUR",
+            provider="enable_banking", external_id="ext-pocket-" + uuid.uuid4().hex[:8],
+            iban_ciphertext=encrypt_value(pocket_iban),
+            iban_hash=blind_index(pocket_iban),
+            is_active=True, starting_balance=Decimal("0"),
+        )
+        cat = Category(
+            user_id=user_id, name="Transfer", category_type="transfer", is_system=True,
+        )
+        db.add_all([checking, pocket, cat])
+        db.commit()
+
+        src = Transaction(
+            user_id=user_id, account_id=checking.id, external_id="src-synced-" + uuid.uuid4().hex[:8],
+            amount=Decimal("-200.00"), currency="EUR",
+            functional_amount=Decimal("-200.00"),
+            description="Transfer to savings", merchant=None,
+            booked_at=datetime(2026, 4, 25, tzinfo=timezone.utc),
+            transaction_type="debit",
+            counterparty_iban_ciphertext=encrypt_value(pocket_iban),
+            counterparty_iban_hash=blind_index(pocket_iban),
+            include_in_analytics=True,
+        )
+        db.add(src)
+        db.commit()
+
+        checking_id = str(checking.id)
+        pocket_id = str(pocket.id)
+        src_id = str(src.id)
+
+        # Patch the LLM step so the test stays hermetic
+        with patch.object(CategoryMatcher, "match_categories_batch_llm",
+                          return_value=({}, 0, 0.0)):
+            _run_post_import_pipeline(
+                user_id=user_id,
+                account_ids=[checking_id],  # only source in scope (typical sync)
+                transaction_ids=[src_id],
+                is_initial_sync=False,
+            )
+
+        # Source flipped
+        db.refresh(src)
+        assert src.include_in_analytics is False, (
+            "Source transaction include_in_analytics must be False after synced->synced detection"
+        )
+        assert src.internal_transfer_id is not None, (
+            "Source transaction must have an internal_transfer_id after detection"
+        )
+
+        # Link with mirror_txn_id=NULL (no mirror because destination is also synced)
+        link = (
+            db.query(InternalTransfer)
+            .filter(InternalTransfer.id == src.internal_transfer_id)
+            .one()
+        )
+        assert link.mirror_txn_id is None, (
+            "mirror_txn_id must be NULL when destination is a synced account"
+        )
+        assert link.pocket_account_id == pocket.id, (
+            f"pocket_account_id must point to the synced destination account"
+        )
+
+        # No transaction added to the synced destination
+        dest_count = (
+            db.query(Transaction)
+            .filter(Transaction.account_id == pocket.id)
+            .count()
+        )
+        assert dest_count == 0, (
+            f"No transaction should be added to the synced destination, got {dest_count}"
+        )
+    finally:
+        if user_id:
+            _cleanup_user_data(db, user_id)
+        db.close()
+
+
 if __name__ == "__main__":
     results = []
 
@@ -410,6 +532,7 @@ if __name__ == "__main__":
         test_pipeline_initial_sync_passes_none_to_subscription_detector,
         test_pipeline_cleans_up_on_error,
         test_pipeline_runs_internal_transfer_detection_before_llm,
+        test_pipeline_synced_to_synced_tags_transfer_no_mirror,
     ]
 
     for test_fn in tests:

@@ -1,11 +1,14 @@
 import { redirect } from "next/navigation";
-import { cookies, headers } from "next/headers";
-import { auth } from "@/lib/auth";
+import { cookies } from "next/headers";
+import { JetBrains_Mono } from "next/font/google";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/app-sidebar";
-import { getOnboardingStatus, getOnboardingRedirectPath } from "@/lib/actions/onboarding";
+import { getOnboardingRedirectPath } from "@/lib/actions/onboarding";
+import { getCachedSession, getCachedOnboardingStatus } from "@/lib/data/cached";
 import { ImportStatusNotifier } from "@/components/import-status-notifier";
 import { WalkthroughProvider } from "@/components/walkthrough/walkthrough-provider";
+
+const jbMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jb-mono", weight: ["400","500","600","700"] });
 
 export default async function DashboardLayout({
   children,
@@ -16,9 +19,7 @@ export default async function DashboardLayout({
   const sidebarCookie = cookieStore.get("syllogic.sidebar.open")?.value;
   const defaultSidebarOpen = sidebarCookie === "true";
 
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await getCachedSession();
 
   if (!session) {
     redirect("/login");
@@ -28,7 +29,7 @@ export default async function DashboardLayout({
   //
   // Note: `redirect()` throws a special Next.js error to trigger navigation.
   // Do NOT wrap this in a broad try/catch, or the redirect will be swallowed.
-  const onboardingStatus = await getOnboardingStatus();
+  const onboardingStatus = await getCachedOnboardingStatus();
   if (onboardingStatus && !onboardingStatus.isCompleted) {
     const redirectPath = await getOnboardingRedirectPath(onboardingStatus.status);
     redirect(redirectPath);
@@ -38,7 +39,7 @@ export default async function DashboardLayout({
     <SidebarProvider defaultOpen={defaultSidebarOpen}>
       <WalkthroughProvider>
         <AppSidebar initialUser={session.user} />
-        <SidebarInset>{children}</SidebarInset>
+        <SidebarInset className={jbMono.variable}>{children}</SidebarInset>
         <ImportStatusNotifier />
       </WalkthroughProvider>
     </SidebarProvider>

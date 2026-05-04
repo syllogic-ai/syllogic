@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { eq, and, lte, gte, lt, desc, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { accounts, accountBalances, transactions, recurringTransactions, subscriptionSuggestions, type NewAccount } from "@/lib/db/schema";
@@ -8,10 +8,8 @@ import { requireAuth, getAuthenticatedSession } from "@/lib/auth-helpers";
 import { isDemoRestrictedUserEmail, DEMO_RESTRICTED_ACTION_ERROR } from "@/lib/demo-access";
 import { getBackendBaseUrl } from "@/lib/backend-url";
 import { createInternalAuthHeaders } from "@/lib/internal-auth";
-import {
-  resolveMissingAccountLogo,
-  resolveMissingAccountLogos,
-} from "@/lib/actions/account-logos";
+import { resolveMissingAccountLogo } from "@/lib/actions/account-logos";
+import { getCachedFullUserAccounts, CACHE_TAGS } from "@/lib/data/cached";
 
 export interface CreateAccountInput {
   name: string;
@@ -52,6 +50,7 @@ export async function createAccount(
 
     revalidatePath("/settings");
     revalidatePath("/transactions/import");
+    updateTag(CACHE_TAGS.accounts(userId));
     return { success: true, accountId: result.id };
   } catch (error) {
     console.error("Failed to create account:", error);
@@ -109,6 +108,7 @@ export async function updateAccount(
     revalidatePath("/transactions");
     revalidatePath("/settings");
     revalidatePath("/");
+    updateTag(CACHE_TAGS.accounts(userId));
     return { success: true };
   } catch (error) {
     console.error("Failed to update account:", error);
@@ -147,6 +147,7 @@ export async function deleteAccount(
 
     revalidatePath("/settings");
     revalidatePath("/");
+    updateTag(CACHE_TAGS.accounts(userId));
     return { success: true };
   } catch (error) {
     console.error("Failed to delete account:", error);
@@ -223,6 +224,7 @@ export async function hardDeleteAccount(
     revalidatePath("/");
     revalidatePath("/transactions");
     revalidatePath("/assets");
+    updateTag(CACHE_TAGS.accounts(userId));
 
     return {
       success: true,
@@ -236,27 +238,7 @@ export async function hardDeleteAccount(
 }
 
 export async function getAccounts() {
-  const userId = await requireAuth();
-
-  if (!userId) {
-    return [];
-  }
-
-  const accountRows = await db.query.accounts.findMany({
-    where: and(eq(accounts.userId, userId), eq(accounts.isActive, true)),
-    orderBy: (accounts, { asc }) => [asc(accounts.name)],
-    with: {
-      logo: {
-        columns: {
-          id: true,
-          logoUrl: true,
-          updatedAt: true,
-        },
-      },
-    },
-  });
-
-  return resolveMissingAccountLogos(accountRows);
+  return getCachedFullUserAccounts();
 }
 
 export async function recalculateStartingBalance(
@@ -325,6 +307,7 @@ export async function recalculateStartingBalance(
     revalidatePath("/transactions");
     revalidatePath("/");
     revalidatePath("/assets");
+    updateTag(CACHE_TAGS.accounts(userId));
 
     return { success: true, newStartingBalance };
   } catch (error) {

@@ -8,6 +8,7 @@ from sqlalchemy import (
     Column,
     String,
     Boolean,
+    Date,
     DateTime,
     Numeric,
     Text,
@@ -699,4 +700,257 @@ class ApiKey(Base):
     __table_args__ = (
         Index("idx_api_keys_user", "user_id"),
         Index("idx_api_keys_hash", "key_hash"),
+    )
+
+
+class BrokerConnection(Base):
+    __tablename__ = "broker_connections"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    account_id = Column(UUID(as_uuid=True), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
+    provider = Column(String(50), nullable=False)
+    credentials_encrypted = Column(Text, nullable=False)
+    last_sync_at = Column(DateTime, nullable=True)
+    last_sync_status = Column(String(20), default="pending")
+    last_sync_error = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    account = relationship("Account")
+
+
+class Holding(Base):
+    __tablename__ = "holdings"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    account_id = Column(UUID(as_uuid=True), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
+    symbol = Column(String(64), nullable=False)
+    provider_symbol = Column(String(64), nullable=True)
+    name = Column(String(255))
+    currency = Column(String(3), nullable=False)
+    instrument_type = Column(String(20), nullable=False)
+    quantity = Column(Numeric(28, 8), nullable=False)
+    avg_cost = Column(Numeric(28, 8), nullable=True)
+    as_of_date = Column(Date, nullable=True)
+    source = Column(String(20), nullable=False)
+    last_price_error = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    valuations = relationship("HoldingValuation", back_populates="holding", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        UniqueConstraint("account_id", "symbol", "instrument_type", name="holdings_account_symbol_type_uq"),
+        Index("idx_holdings_account", "account_id"),
+    )
+
+
+class BrokerTrade(Base):
+    __tablename__ = "broker_trades"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id = Column(UUID(as_uuid=True), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
+    symbol = Column(String(64), nullable=False)
+    trade_date = Column(Date, nullable=False)
+    side = Column(String(10), nullable=False)
+    quantity = Column(Numeric(28, 8), nullable=False)
+    price = Column(Numeric(28, 8), nullable=False)
+    currency = Column(String(3), nullable=False)
+    fees = Column(Numeric(28, 8), nullable=False, default=0)
+    external_id = Column(String(128), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("account_id", "external_id", name="broker_trades_account_external_uq"),
+    )
+
+
+class PriceSnapshot(Base):
+    __tablename__ = "price_snapshots"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    symbol = Column(String(64), nullable=False)
+    currency = Column(String(3), nullable=False)
+    date = Column(Date, nullable=False)
+    close = Column(Numeric(28, 8), nullable=False)
+    provider = Column(String(20), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("symbol", "date", name="price_snapshots_symbol_date_uq"),
+    )
+
+
+class HoldingValuation(Base):
+    __tablename__ = "holding_valuations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    holding_id = Column(UUID(as_uuid=True), ForeignKey("holdings.id", ondelete="CASCADE"), nullable=False)
+    date = Column(Date, nullable=False)
+    quantity = Column(Numeric(28, 8), nullable=False)
+    price = Column(Numeric(28, 8), nullable=False)
+    value_user_currency = Column(Numeric(15, 2), nullable=False)
+    is_stale = Column(Boolean, default=False)
+
+    holding = relationship("Holding", back_populates="valuations")
+
+    __table_args__ = (
+        UniqueConstraint("holding_id", "date", name="holding_valuations_holding_date_uq"),
+    )
+
+
+class Person(Base):
+    __tablename__ = "people"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(Text, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(255), nullable=False)
+    kind = Column(String(20), nullable=False, default="member")
+    color = Column(String(7), nullable=True)
+    avatar_path = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    user = relationship("User", backref="people")
+
+    __table_args__ = (
+        Index("idx_people_user", "user_id"),
+    )
+
+
+class AccountOwner(Base):
+    __tablename__ = "account_owners"
+
+    account_id = Column(UUID(as_uuid=True), ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True)
+    person_id = Column(UUID(as_uuid=True), ForeignKey("people.id", ondelete="CASCADE"), primary_key=True)
+    share = Column(Numeric(5, 4), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class PropertyOwner(Base):
+    __tablename__ = "property_owners"
+
+    property_id = Column(UUID(as_uuid=True), ForeignKey("properties.id", ondelete="CASCADE"), primary_key=True)
+    person_id = Column(UUID(as_uuid=True), ForeignKey("people.id", ondelete="CASCADE"), primary_key=True)
+    share = Column(Numeric(5, 4), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class VehicleOwner(Base):
+    __tablename__ = "vehicle_owners"
+
+    vehicle_id = Column(UUID(as_uuid=True), ForeignKey("vehicles.id", ondelete="CASCADE"), primary_key=True)
+    person_id = Column(UUID(as_uuid=True), ForeignKey("people.id", ondelete="CASCADE"), primary_key=True)
+    share = Column(Numeric(5, 4), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class Routine(Base):
+    __tablename__ = "routines"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(Text, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    prompt = Column(Text, nullable=False)
+    cron = Column(String(100), nullable=False)
+    timezone = Column(String(64), nullable=False, default="UTC")
+    schedule_human = Column(Text, nullable=False)
+    recipient_email = Column(String(320), nullable=False)
+    model = Column(String(100), nullable=False, default="claude-sonnet-4-6")
+    enabled = Column(Boolean, nullable=False, default=True)
+    next_run_at = Column(DateTime, nullable=True)
+    last_run_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    user = relationship("User", backref="routines")
+    runs = relationship("RoutineRun", back_populates="routine", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("idx_routines_user", "user_id"),
+        Index("idx_routines_due", "enabled", "next_run_at"),
+    )
+
+
+class RoutineRun(Base):
+    __tablename__ = "routine_runs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    routine_id = Column(UUID(as_uuid=True), ForeignKey("routines.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Text, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    status = Column(String(20), nullable=False, default="queued")
+    prompt_snapshot = Column(Text, nullable=False)
+    model_snapshot = Column(String(100), nullable=False)
+    output = Column(JSONB, nullable=True)
+    transcript = Column(JSONB, nullable=True)
+    email_message_id = Column(String(255), nullable=True)
+    error_message = Column(Text, nullable=True)
+    cost_cents = Column(Integer, nullable=True)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    routine = relationship("Routine", back_populates="runs")
+
+    __table_args__ = (
+        Index("idx_routine_runs_routine", "routine_id", "created_at"),
+        Index("idx_routine_runs_user", "user_id", "created_at"),
+    )
+
+
+class InvestmentPlan(Base):
+    __tablename__ = "investment_plans"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(Text, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    total_monthly = Column(Numeric(15, 2), nullable=False)
+    currency = Column(String(3), nullable=False, default="EUR")
+    slots = Column(JSONB, nullable=False, default=list)
+    cron = Column(String(100), nullable=False)
+    timezone = Column(String(64), nullable=False, default="UTC")
+    schedule_human = Column(Text, nullable=False)
+    recipient_email = Column(String(320), nullable=True)
+    model = Column(String(100), nullable=False, default="claude-sonnet-4-6")
+    enabled = Column(Boolean, nullable=False, default=True)
+    next_run_at = Column(DateTime, nullable=True)
+    last_run_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    user = relationship("User", backref="investment_plans")
+    runs = relationship("InvestmentPlanRun", back_populates="plan", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("idx_investment_plans_user", "user_id"),
+        Index("idx_investment_plans_due", "enabled", "next_run_at"),
+    )
+
+
+class InvestmentPlanRun(Base):
+    __tablename__ = "investment_plan_runs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    plan_id = Column(UUID(as_uuid=True), ForeignKey("investment_plans.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Text, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    status = Column(String(20), nullable=False, default="queued")
+    plan_snapshot = Column(JSONB, nullable=False)
+    model_snapshot = Column(String(100), nullable=False)
+    output = Column(JSONB, nullable=True)
+    transcript = Column(JSONB, nullable=True)
+    email_message_id = Column(String(255), nullable=True)
+    error_message = Column(Text, nullable=True)
+    cost_cents = Column(Integer, nullable=True)
+    execution_marks = Column(JSONB, nullable=False, default=dict)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    plan = relationship("InvestmentPlan", back_populates="runs")
+
+    __table_args__ = (
+        Index("idx_investment_plan_runs_plan", "plan_id", "created_at"),
+        Index("idx_investment_plan_runs_user", "user_id", "created_at"),
     )

@@ -8,6 +8,7 @@ from sqlalchemy.orm import aliased
 
 from app.mcp.dependencies import get_db, validate_uuid, validate_date
 from app.models import Transaction, Category, Account, TransactionLink
+from app.services.ownership_service import attribute_amount, entity_ids_for_people, get_owners
 
 
 def _get_link_group_nets_cte(user_id: str) -> str:
@@ -31,6 +32,7 @@ def get_spending_by_category(
     to_date: Optional[str] = None,
     account_id: Optional[str] = None,
     include_uncategorized: bool = False,
+    person_ids: Optional[list[str]] = None,
 ) -> list[dict]:
     """
     Get spending breakdown by category.
@@ -44,6 +46,8 @@ def get_spending_by_category(
         account_id: Filter by account ID (optional)
         include_uncategorized: If True, include an "Uncategorized" bucket for
             transactions with no category assigned (default: False)
+        person_ids: Optional list of person UUIDs. When provided, only includes
+            transactions from accounts owned by any of the specified people.
 
     Returns:
         List of categories with total spending amount, transaction count, and
@@ -64,6 +68,16 @@ def get_spending_by_category(
     account_filter = ""
     if account_uuid:
         account_filter = f" AND t.account_id = '{account_uuid}'"
+
+    # person_ids ownership filter — builds an IN clause over allowed account ids
+    _person_ids_filter_spending = ""
+    if person_ids is not None and len(person_ids) > 0:
+        with get_db() as _db:
+            _allowed = [str(uid) for uid in entity_ids_for_people(_db, "account", person_ids)]
+        if not _allowed:
+            return []
+        _ids_literal = ", ".join(f"'{a}'" for a in _allowed)
+        _person_ids_filter_spending = f" AND t.account_id IN ({_ids_literal})"
 
     join_type = "LEFT JOIN" if include_uncategorized else "INNER JOIN"
     # With INNER JOIN we already exclude null-category rows, so restrict to
@@ -103,6 +117,7 @@ def get_spending_by_category(
                 {uncategorized_filter}
                 {date_filter}
                 {account_filter}
+                {_person_ids_filter_spending}
             GROUP BY COALESCE(t.category_id, t.category_system_id), c.name, c.color
             ORDER BY total DESC
         """)
@@ -126,7 +141,8 @@ def get_income_by_category(
     user_id: str,
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
-    account_id: Optional[str] = None
+    account_id: Optional[str] = None,
+    person_ids: Optional[list[str]] = None,
 ) -> list[dict]:
     """
     Get income breakdown by category.
@@ -138,6 +154,8 @@ def get_income_by_category(
         from_date: Start date in ISO format (optional)
         to_date: End date in ISO format (optional)
         account_id: Filter by account ID (optional)
+        person_ids: Optional list of person UUIDs. When provided, only includes
+            transactions from accounts owned by any of the specified people.
 
     Returns:
         List of categories with total income amount and transaction count
@@ -157,6 +175,16 @@ def get_income_by_category(
     account_filter = ""
     if account_uuid:
         account_filter = f" AND t.account_id = '{account_uuid}'"
+
+    # person_ids ownership filter
+    _person_ids_filter_income = ""
+    if person_ids is not None and len(person_ids) > 0:
+        with get_db() as _db:
+            _allowed = [str(uid) for uid in entity_ids_for_people(_db, "account", person_ids)]
+        if not _allowed:
+            return []
+        _ids_literal = ", ".join(f"'{a}'" for a in _allowed)
+        _person_ids_filter_income = f" AND t.account_id IN ({_ids_literal})"
 
     with get_db() as db:
         sql = text(f"""
@@ -184,6 +212,7 @@ def get_income_by_category(
                 AND c.category_type = 'income'
                 {date_filter}
                 {account_filter}
+                {_person_ids_filter_income}
             GROUP BY COALESCE(t.category_id, t.category_system_id), c.name, c.color
             ORDER BY total DESC
         """)
@@ -205,7 +234,8 @@ def get_income_by_category(
 def get_monthly_cashflow(
     user_id: str,
     from_date: Optional[str] = None,
-    to_date: Optional[str] = None
+    to_date: Optional[str] = None,
+    person_ids: Optional[list[str]] = None,
 ) -> list[dict]:
     """
     Get monthly income vs expenses breakdown.
@@ -219,6 +249,8 @@ def get_monthly_cashflow(
         user_id: The user's ID
         from_date: Start date in ISO format (optional)
         to_date: End date in ISO format (optional)
+        person_ids: Optional list of person UUIDs. When provided, only includes
+            transactions from accounts owned by any of the specified people.
 
     Returns:
         List of monthly data with income, expenses, and net for each month
@@ -233,6 +265,16 @@ def get_monthly_cashflow(
         date_filter += f" AND t.booked_at >= '{from_dt.isoformat()}'"
     if to_dt:
         date_filter += f" AND t.booked_at <= '{to_dt.isoformat()}'"
+
+    # person_ids ownership filter
+    _person_ids_filter_cashflow = ""
+    if person_ids is not None and len(person_ids) > 0:
+        with get_db() as _db:
+            _allowed = [str(uid) for uid in entity_ids_for_people(_db, "account", person_ids)]
+        if not _allowed:
+            return []
+        _ids_literal = ", ".join(f"'{a}'" for a in _allowed)
+        _person_ids_filter_cashflow = f" AND t.account_id IN ({_ids_literal})"
 
     with get_db() as db:
         sql = text(f"""
@@ -271,6 +313,7 @@ def get_monthly_cashflow(
             WHERE t.user_id = '{user_id}'
                 AND t.include_in_analytics = true
                 {date_filter}
+                {_person_ids_filter_cashflow}
             GROUP BY EXTRACT(YEAR FROM t.booked_at), EXTRACT(MONTH FROM t.booked_at)
             ORDER BY EXTRACT(YEAR FROM t.booked_at), EXTRACT(MONTH FROM t.booked_at)
         """)
@@ -291,7 +334,8 @@ def get_monthly_cashflow(
 def get_financial_summary(
     user_id: str,
     from_date: Optional[str] = None,
-    to_date: Optional[str] = None
+    to_date: Optional[str] = None,
+    person_ids: Optional[list[str]] = None,
 ) -> dict:
     """
     Get a financial summary with totals and net worth.
@@ -305,6 +349,10 @@ def get_financial_summary(
         user_id: The user's ID
         from_date: Start date in ISO format (optional)
         to_date: End date in ISO format (optional)
+        person_ids: Optional list of person UUIDs. When provided, only includes
+            transactions and balances from accounts owned by any of the specified
+            people. When exactly one person_id is given, account balances are
+            share-weighted to that person's ownership fraction.
 
     Returns:
         Summary with total income, total expenses, net, and account balances
@@ -319,6 +367,27 @@ def get_financial_summary(
         date_filter += f" AND t.booked_at >= '{from_dt.isoformat()}'"
     if to_dt:
         date_filter += f" AND t.booked_at <= '{to_dt.isoformat()}'"
+
+    # person_ids ownership filter
+    filter_by_person = person_ids is not None and len(person_ids) > 0
+    single_person = filter_by_person and len(person_ids) == 1
+    _allowed_account_ids: list[str] = []
+    _person_ids_filter_summary = ""
+    if filter_by_person:
+        with get_db() as _db:
+            _allowed_account_ids = [str(uid) for uid in entity_ids_for_people(_db, "account", person_ids)]
+        if not _allowed_account_ids:
+            return {
+                "period": {"from_date": from_date, "to_date": to_date},
+                "total_income": 0,
+                "total_expenses": 0,
+                "net_cashflow": 0,
+                "savings_rate": 0,
+                "total_balance": 0,
+                "accounts": [],
+            }
+        _ids_literal = ", ".join(f"'{a}'" for a in _allowed_account_ids)
+        _person_ids_filter_summary = f" AND t.account_id IN ({_ids_literal})"
 
     with get_db() as db:
         sql = text(f"""
@@ -355,6 +424,7 @@ def get_financial_summary(
             WHERE t.user_id = '{user_id}'
                 AND t.include_in_analytics = true
                 {date_filter}
+                {_person_ids_filter_summary}
         """)
 
         result = db.execute(sql).fetchone()
@@ -363,21 +433,33 @@ def get_financial_summary(
         total_expenses = float(result.total_expenses or 0)
 
         # Get account balances (current)
-        accounts = db.query(Account).filter(
+        accounts_query = db.query(Account).filter(
             Account.user_id == user_id,
             Account.is_active == True
-        ).all()
-
-        total_balance = sum(
-            float(acc.functional_balance or acc.balance_available or 0)
-            for acc in accounts
         )
+        if filter_by_person and _allowed_account_ids:
+            accounts_query = accounts_query.filter(Account.id.in_(_allowed_account_ids))
+        accounts = accounts_query.all()
+
+        # Cache owners for share-weighted attribution
+        owners_cache: dict = {}
+        if single_person:
+            for acc in accounts:
+                owners_cache[str(acc.id)] = get_owners(db, "account", acc.id)
+
+        def _acc_balance(acc) -> float:
+            full = float(acc.functional_balance or acc.balance_available or 0)
+            if single_person:
+                return attribute_amount(full, owners_cache[str(acc.id)], person_ids[0])
+            return full
+
+        total_balance = sum(_acc_balance(acc) for acc in accounts)
 
         account_balances = [
             {
                 "id": str(acc.id),
                 "name": acc.name,
-                "balance": float(acc.functional_balance or acc.balance_available or 0),
+                "balance": _acc_balance(acc),
                 "currency": acc.currency,
                 "account_type": acc.account_type,
             }

@@ -81,3 +81,5 @@ backend/fastmcp.json
 docs/
 marketing/
 deploy/railway/V1_TO_V2_MIGRATION.md
+
+.claude/scheduled_tasks.lock

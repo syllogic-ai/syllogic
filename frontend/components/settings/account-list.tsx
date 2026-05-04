@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
   RiDeleteBinLine,
@@ -55,7 +55,11 @@ import { CURRENCIES } from "@/lib/constants/currencies";
 import { updateAccount, deleteAccount, recalculateAccountTimeseries } from "@/lib/actions/accounts";
 import { UpdateBalanceDialog } from "@/components/accounts/update-balance-dialog";
 import { AccountLogo } from "@/components/ui/account-logo";
+import { OwnersField, type OwnerValue } from "@/components/household/owners-field";
+import { OwnerBadges } from "@/components/household/owner-badges";
 import type { Account } from "@/lib/db/schema";
+
+type Person = { id: string; name: string; kind: string; color?: string | null; avatarUrl?: string | null };
 
 const ACCOUNT_TYPES = [
   { value: "checking", label: "Checking Account" },
@@ -97,6 +101,17 @@ export function AccountList({ accounts, onAccountUpdated }: AccountListProps) {
   const [editCurrency, setEditCurrency] = useState("");
   const [editBalance, setEditBalance] = useState("");
 
+  // Ownership state
+  const [people, setPeople] = useState<Person[]>([]);
+  const [editOwners, setEditOwners] = useState<OwnerValue[]>([]);
+
+  useEffect(() => {
+    fetch("/api/people")
+      .then((r) => r.json())
+      .then((data: { people: Person[] }) => setPeople(data.people))
+      .catch(() => {});
+  }, []);
+
   const openEditDialog = (account: AccountWithLogo) => {
     setEditingAccount(account);
     setEditName(account.name);
@@ -104,6 +119,16 @@ export function AccountList({ accounts, onAccountUpdated }: AccountListProps) {
     setEditInstitution(account.institution || "");
     setEditCurrency(account.currency || "EUR");
     setEditBalance(account.startingBalance || "0");
+    // Reset owners immediately to prevent stale state during fetch
+    setEditOwners([]);
+    // Fetch current owners for this account
+    fetch(`/api/owners/account/${account.id}`)
+      .then((r) => r.json())
+      .then((data: { owners: OwnerValue[] }) => setEditOwners(data.owners ?? []))
+      .catch(() => {
+        const self = people.find((p) => p.kind === "self");
+        setEditOwners(self ? [{ personId: self.id, share: null }] : []);
+      });
   };
 
   const handleEdit = async (e: React.FormEvent) => {
@@ -128,6 +153,27 @@ export function AccountList({ accounts, onAccountUpdated }: AccountListProps) {
       });
 
       if (result.success) {
+        // Update owners — require at least one owner WHEN the picker was visible
+        if (people.length >= 2 && editOwners.length === 0) {
+          toast.error("Select at least one owner.");
+          setIsLoading(false);
+          return;
+        }
+        try {
+          const ownersResp = await fetch(`/api/owners/account/${editingAccount.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ owners: editOwners }),
+          });
+          if (!ownersResp.ok) {
+            const text = await ownersResp.text().catch(() => "request failed");
+            throw new Error(`Failed to save owners: ${text.slice(0, 200)}`);
+          }
+        } catch (ownersErr) {
+          toast.error((ownersErr as Error).message || "Account updated, but failed to save ownership.");
+          setIsLoading(false);
+          return;
+        }
         toast.success("Account updated successfully");
         setEditingAccount(null);
         onAccountUpdated?.();
@@ -230,6 +276,7 @@ export function AccountList({ accounts, onAccountUpdated }: AccountListProps) {
                       {account.provider === "manual" && account.ibanHash ? (
                         <Badge variant="secondary">Pocket</Badge>
                       ) : null}
+                      <OwnerBadges entityType="account" entityId={account.id} size={20} />
                     </div>
                     <p className="text-sm text-muted-foreground">
                       {getAccountTypeLabel(account.accountType)}
@@ -357,6 +404,14 @@ export function AccountList({ accounts, onAccountUpdated }: AccountListProps) {
                   className="flex-1"
                 />
               </div>
+              {people.length > 1 && (
+                <OwnersField
+                  people={people}
+                  value={editOwners}
+                  onChange={setEditOwners}
+                  disabled={isLoading}
+                />
+              )}
             </div>
             <DialogFooter>
               <Button

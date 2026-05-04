@@ -67,7 +67,11 @@ import { AddAssetDialog } from "@/components/assets/add-asset-dialog";
 import { UpdateBalanceDialog } from "@/components/accounts/update-balance-dialog";
 import { PROPERTY_TYPES, VEHICLE_TYPES } from "@/components/assets/types";
 import { AccountLogo } from "@/components/ui/account-logo";
+import { OwnersField, type OwnerValue } from "@/components/household/owners-field";
+import { OwnerBadges } from "@/components/household/owner-badges";
 import type { Account, Property, Vehicle } from "@/lib/db/schema";
+
+type Person = { id: string; name: string; kind: string; color?: string | null; avatarUrl?: string | null };
 
 const ACCOUNT_TYPES = [
   { value: "checking", label: "Checking Account" },
@@ -175,6 +179,20 @@ export function AssetManagement({
   const [editVehicleValue, setEditVehicleValue] = useState("");
   const [editVehicleCurrency, setEditVehicleCurrency] = useState("");
 
+  // Shared ownership state for edit dialogs
+  const [people, setPeople] = useState<Person[]>([]);
+  const [editAccountOwners, setEditAccountOwners] = useState<OwnerValue[]>([]);
+  const [editPropertyOwners, setEditPropertyOwners] = useState<OwnerValue[]>([]);
+  const [editVehicleOwners, setEditVehicleOwners] = useState<OwnerValue[]>([]);
+
+  // Load people list once
+  useEffect(() => {
+    fetch("/api/people")
+      .then((r) => r.json())
+      .then((data: { people: Person[] }) => setPeople(data.people))
+      .catch(() => {});
+  }, []);
+
   const handleRefresh = () => {
     router.refresh();
   };
@@ -195,6 +213,14 @@ export function AssetManagement({
     setEditLogoUrl(account.logo?.logoUrl || null);
     setEditLogoUpdatedAt(account.logo?.updatedAt || null);
     setLogoSearch("");
+    // Fetch current owners for this account
+    fetch(`/api/owners/account/${account.id}`)
+      .then((r) => r.json())
+      .then((data: { owners: OwnerValue[] }) => setEditAccountOwners(data.owners))
+      .catch(() => {
+        const self = people.find((p) => p.kind === "self");
+        setEditAccountOwners(self ? [{ personId: self.id, share: null }] : []);
+      });
   };
 
   const handleAccountLogoSearch = useCallback(async (query: string) => {
@@ -247,6 +273,27 @@ export function AssetManagement({
       });
 
       if (result.success) {
+        // Update owners — require at least one owner
+        if (editAccountOwners.length === 0) {
+          toast.error("Select at least one owner.");
+          setIsLoading(false);
+          return;
+        }
+        try {
+          const ownersResp = await fetch(`/api/owners/account/${editingAccount.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ owners: editAccountOwners }),
+          });
+          if (!ownersResp.ok) {
+            const text = await ownersResp.text().catch(() => "request failed");
+            throw new Error(`Failed to save owners: ${text.slice(0, 200)}`);
+          }
+        } catch (ownersErr) {
+          toast.error((ownersErr as Error).message || "Account updated, but failed to save ownership.");
+          setIsLoading(false);
+          return;
+        }
         toast.success("Account updated");
         setEditingAccount(null);
         handleRefresh();
@@ -308,6 +355,14 @@ export function AssetManagement({
     setEditPropertyAddress(property.address || "");
     setEditPropertyValue(property.currentValue || "0");
     setEditPropertyCurrency(property.currency || "EUR");
+    // Fetch current owners for this property
+    fetch(`/api/owners/property/${property.id}`)
+      .then((r) => r.json())
+      .then((data: { owners: OwnerValue[] }) => setEditPropertyOwners(data.owners))
+      .catch(() => {
+        const self = people.find((p) => p.kind === "self");
+        setEditPropertyOwners(self ? [{ personId: self.id, share: null }] : []);
+      });
   };
 
   const handleEditProperty = async (e: React.FormEvent) => {
@@ -326,6 +381,27 @@ export function AssetManagement({
       });
 
       if (result.success) {
+        // Update owners — require at least one owner
+        if (editPropertyOwners.length === 0) {
+          toast.error("Select at least one owner.");
+          setIsLoading(false);
+          return;
+        }
+        try {
+          const ownersResp = await fetch(`/api/owners/property/${editingProperty.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ owners: editPropertyOwners }),
+          });
+          if (!ownersResp.ok) {
+            const text = await ownersResp.text().catch(() => "request failed");
+            throw new Error(`Failed to save owners: ${text.slice(0, 200)}`);
+          }
+        } catch (ownersErr) {
+          toast.error((ownersErr as Error).message || "Property updated, but failed to save ownership.");
+          setIsLoading(false);
+          return;
+        }
         toast.success("Property updated");
         setEditingProperty(null);
         handleRefresh();
@@ -368,6 +444,14 @@ export function AssetManagement({
     setEditVehicleYear(vehicle.year?.toString() || "");
     setEditVehicleValue(vehicle.currentValue || "0");
     setEditVehicleCurrency(vehicle.currency || "EUR");
+    // Fetch current owners for this vehicle
+    fetch(`/api/owners/vehicle/${vehicle.id}`)
+      .then((r) => r.json())
+      .then((data: { owners: OwnerValue[] }) => setEditVehicleOwners(data.owners))
+      .catch(() => {
+        const self = people.find((p) => p.kind === "self");
+        setEditVehicleOwners(self ? [{ personId: self.id, share: null }] : []);
+      });
   };
 
   const handleEditVehicle = async (e: React.FormEvent) => {
@@ -389,6 +473,27 @@ export function AssetManagement({
       });
 
       if (result.success) {
+        // Update owners — require at least one owner
+        if (editVehicleOwners.length === 0) {
+          toast.error("Select at least one owner.");
+          setIsLoading(false);
+          return;
+        }
+        try {
+          const ownersResp = await fetch(`/api/owners/vehicle/${editingVehicle.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ owners: editVehicleOwners }),
+          });
+          if (!ownersResp.ok) {
+            const text = await ownersResp.text().catch(() => "request failed");
+            throw new Error(`Failed to save owners: ${text.slice(0, 200)}`);
+          }
+        } catch (ownersErr) {
+          toast.error((ownersErr as Error).message || "Vehicle updated, but failed to save ownership.");
+          setIsLoading(false);
+          return;
+        }
         toast.success("Vehicle updated");
         setEditingVehicle(null);
         handleRefresh();
@@ -461,7 +566,10 @@ export function AssetManagement({
                       className="!size-10"
                     />
                     <div>
-                      <p className="font-medium">{account.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">{account.name}</p>
+                        <OwnerBadges entityType="account" entityId={account.id} size={20} />
+                      </div>
                       <p className="text-sm text-muted-foreground">
                         {getAccountTypeLabel(account.accountType)}
                         {account.institution && ` • ${account.institution}`}
@@ -529,7 +637,10 @@ export function AssetManagement({
                       <RiHome4Line className="h-5 w-5 text-muted-foreground" />
                     </div>
                     <div>
-                      <p className="font-medium">{property.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">{property.name}</p>
+                        <OwnerBadges entityType="property" entityId={property.id} size={20} />
+                      </div>
                       <p className="text-sm text-muted-foreground">
                         {getPropertyTypeLabel(property.propertyType)}
                         {property.address && ` • ${property.address}`}
@@ -586,7 +697,10 @@ export function AssetManagement({
                       <RiCarLine className="h-5 w-5 text-muted-foreground" />
                     </div>
                     <div>
-                      <p className="font-medium">{vehicle.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">{vehicle.name}</p>
+                        <OwnerBadges entityType="vehicle" entityId={vehicle.id} size={20} />
+                      </div>
                       <p className="text-sm text-muted-foreground">
                         {getVehicleTypeLabel(vehicle.vehicleType)}
                         {vehicle.make && ` • ${vehicle.make}`}
@@ -737,6 +851,14 @@ export function AssetManagement({
                   </SelectContent>
                 </Select>
               </div>
+              {people.length > 1 && (
+                <OwnersField
+                  people={people}
+                  value={editAccountOwners}
+                  onChange={setEditAccountOwners}
+                  disabled={isLoading}
+                />
+              )}
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setEditingAccount(null)} disabled={isLoading}>Cancel</Button>
@@ -789,6 +911,14 @@ export function AssetManagement({
                   </SelectContent>
                 </Select>
               </div>
+              {people.length > 1 && (
+                <OwnersField
+                  people={people}
+                  value={editPropertyOwners}
+                  onChange={setEditPropertyOwners}
+                  disabled={isLoading}
+                />
+              )}
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setEditingProperty(null)} disabled={isLoading}>Cancel</Button>
@@ -851,6 +981,14 @@ export function AssetManagement({
                   </SelectContent>
                 </Select>
               </div>
+              {people.length > 1 && (
+                <OwnersField
+                  people={people}
+                  value={editVehicleOwners}
+                  onChange={setEditVehicleOwners}
+                  disabled={isLoading}
+                />
+              )}
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setEditingVehicle(null)} disabled={isLoading}>Cancel</Button>

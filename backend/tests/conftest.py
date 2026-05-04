@@ -26,6 +26,10 @@ def _set_test_env() -> None:
     os.environ.setdefault("DATA_ENCRYPTION_KEY_CURRENT", key)
     os.environ.setdefault("DATA_ENCRYPTION_KEY_ID", "k-test-conftest")
     os.environ.pop("DATA_ENCRYPTION_KEY_PREVIOUS", None)
+    # The broker-trade import runs a yfinance + FX backfill in production to
+    # populate historical HoldingValuation / AccountBalance rows. Disable it
+    # by default in tests; tests that exercise backfill set it explicitly.
+    os.environ.setdefault("BROKER_BACKFILL_ENABLED", "0")
 
 
 _set_test_env()

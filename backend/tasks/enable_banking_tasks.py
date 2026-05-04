@@ -143,6 +143,42 @@ def sync_bank_connection(self, connection_id: str):
             Account.bank_connection_id == connection.id,
         ).all()
 
+        # Backfill account-level IBAN on synced accounts that don't have it yet.
+        # This is independent of the per-account sync_transactions loop below;
+        # SyncService._set_account_iban_fields treats IBAN as immutable (no
+        # overwrite once set), so we skip accounts that already have it.
+        # Without this hook, InternalTransferService can't recognize transfers
+        # between two synced accounts because it won't know which IBANs are
+        # the user's.
+        #
+        # NOTE: we cannot use adapter.fetch_accounts() here. EB's GET
+        # /sessions/{uid} returns rich account objects only at OAuth time;
+        # on subsequent calls the "accounts" field collapses to a list of
+        # UID strings. We fetch each account's IBAN individually via
+        # /accounts/{uid}/details which always returns the canonical form.
+        for acc in accounts:
+            if acc.iban_hash is not None:
+                continue  # Skip accounts that already have IBAN persisted
+            acc_uid = decrypt_with_fallback(
+                acc.external_id_ciphertext, acc.external_id
+            )
+            if not acc_uid:
+                continue
+            try:
+                iban = adapter.fetch_account_iban(acc_uid)
+                if iban:
+                    sync_service._set_account_iban_fields(acc, iban)
+                    db.commit()
+            except Exception as e:
+                # One account's failure must not block the others, nor the
+                # downstream transaction sync. Skip and move on; backfill
+                # retries on the next sync.
+                logger.warning(
+                    "[SYNC] IBAN backfill skipped for account %s on connection %s: %s",
+                    acc.id, connection_id, e, exc_info=True,
+                )
+                db.rollback()
+
         total_created = 0
         total_updated = 0
         all_created_ids: list[str] = []
