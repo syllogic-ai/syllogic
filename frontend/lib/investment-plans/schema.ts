@@ -65,7 +65,9 @@ export const pinnedResultSchema = z.object({
   rationale: z.string(),
   riskFlags: z.array(z.string()).default([]),
   newsRefs: z.array(z.number()).default([]),
-  proposedReplacement: z.object({ symbol: z.string(), reason: z.string() }).optional(),
+  // Use .nullish() so the agent can emit either `null` (common) or omit the
+  // field entirely. `.optional()` alone rejects `null` and crashes Zod parsing.
+  proposedReplacement: z.object({ symbol: z.string(), reason: z.string() }).nullish(),
 });
 
 export const topPickSchema = z.object({
