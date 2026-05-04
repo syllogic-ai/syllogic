@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS "routines" (
   "created_at" timestamp DEFAULT now() NOT NULL,
   "updated_at" timestamp DEFAULT now() NOT NULL
 );
-
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "routine_runs" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
   "routine_id" uuid NOT NULL REFERENCES "routines"("id") ON DELETE CASCADE,
@@ -34,8 +34,11 @@ CREATE TABLE IF NOT EXISTS "routine_runs" (
   "completed_at" timestamp,
   "created_at" timestamp DEFAULT now() NOT NULL
 );
-
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_routines_user" ON "routines" ("user_id");
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_routines_due" ON "routines" ("enabled", "next_run_at");
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_routine_runs_routine" ON "routine_runs" ("routine_id", "created_at");
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_routine_runs_user" ON "routine_runs" ("user_id", "created_at");
