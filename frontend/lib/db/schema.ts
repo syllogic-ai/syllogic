@@ -14,6 +14,7 @@ import {
   numeric,
   date,
   uniqueIndex,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
@@ -698,6 +699,199 @@ export const holdingValuations = pgTable("holding_valuations", {
 }));
 
 // ============================================================================
+// People & Household Ownership
+// ============================================================================
+
+export const people = pgTable(
+  "people",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    // 'self' = auto-created person representing the operator (one per user)
+    // 'member' = anyone else in the household
+    kind: varchar("kind", { length: 20 }).notNull().default("member"),
+    color: varchar("color", { length: 7 }),
+    // Storage path inside the configured storage provider (e.g. "people/<id>.jpg").
+    // null = no avatar; UI falls back to a colored initial badge.
+    avatarPath: text("avatar_path"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_people_user").on(t.userId),
+    uniqueIndex("people_user_self_uq")
+      .on(t.userId)
+      .where(sql`${t.kind} = 'self'`),
+  ]
+);
+
+export const accountOwners = pgTable(
+  "account_owners",
+  {
+    accountId: uuid("account_id")
+      .references(() => accounts.id, { onDelete: "cascade" })
+      .notNull(),
+    personId: uuid("person_id")
+      .references(() => people.id, { onDelete: "cascade" })
+      .notNull(),
+    share: decimal("share", { precision: 5, scale: 4 }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.accountId, t.personId] }),
+    index("idx_account_owners_person").on(t.personId),
+  ]
+);
+
+export const propertyOwners = pgTable(
+  "property_owners",
+  {
+    propertyId: uuid("property_id")
+      .references(() => properties.id, { onDelete: "cascade" })
+      .notNull(),
+    personId: uuid("person_id")
+      .references(() => people.id, { onDelete: "cascade" })
+      .notNull(),
+    share: decimal("share", { precision: 5, scale: 4 }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.propertyId, t.personId] }),
+    index("idx_property_owners_person").on(t.personId),
+  ]
+);
+
+export const vehicleOwners = pgTable(
+  "vehicle_owners",
+  {
+    vehicleId: uuid("vehicle_id")
+      .references(() => vehicles.id, { onDelete: "cascade" })
+      .notNull(),
+    personId: uuid("person_id")
+      .references(() => people.id, { onDelete: "cascade" })
+      .notNull(),
+    share: decimal("share", { precision: 5, scale: 4 }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.vehicleId, t.personId] }),
+    index("idx_vehicle_owners_person").on(t.personId),
+  ]
+);
+
+// ============================================================================
+// Routines & Digests
+// ============================================================================
+
+export const routines = pgTable(
+  "routines",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    description: text("description"),
+    prompt: text("prompt").notNull(),
+    cron: varchar("cron", { length: 100 }).notNull(),
+    timezone: varchar("timezone", { length: 64 }).notNull().default("UTC"),
+    scheduleHuman: text("schedule_human").notNull(),
+    recipientEmail: varchar("recipient_email", { length: 320 }).notNull(),
+    model: varchar("model", { length: 100 }).notNull().default("claude-sonnet-4-6"),
+    enabled: boolean("enabled").notNull().default(true),
+    nextRunAt: timestamp("next_run_at"),
+    lastRunAt: timestamp("last_run_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_routines_user").on(t.userId),
+    index("idx_routines_due").on(t.enabled, t.nextRunAt),
+  ]
+);
+
+export const routineRuns = pgTable(
+  "routine_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    routineId: uuid("routine_id").references(() => routines.id, { onDelete: "cascade" }).notNull(),
+    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+    status: varchar("status", { length: 20 }).notNull().default("queued"),
+    promptSnapshot: text("prompt_snapshot").notNull(),
+    modelSnapshot: varchar("model_snapshot", { length: 100 }).notNull(),
+    output: jsonb("output"),
+    transcript: jsonb("transcript"),
+    emailMessageId: varchar("email_message_id", { length: 255 }),
+    errorMessage: text("error_message"),
+    costCents: integer("cost_cents"),
+    startedAt: timestamp("started_at"),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_routine_runs_routine").on(t.routineId, t.createdAt),
+    index("idx_routine_runs_user").on(t.userId, t.createdAt),
+  ]
+);
+
+// ============================================================================
+// Investment Plans
+// ============================================================================
+
+export const investmentPlans = pgTable(
+  "investment_plans",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    description: text("description"),
+    totalMonthly: decimal("total_monthly", { precision: 15, scale: 2 }).notNull(),
+    currency: char("currency", { length: 3 }).notNull().default("EUR"),
+    slots: jsonb("slots").$type<unknown[]>().notNull().default([]),
+    cron: varchar("cron", { length: 100 }).notNull(),
+    timezone: varchar("timezone", { length: 64 }).notNull().default("UTC"),
+    scheduleHuman: text("schedule_human").notNull(),
+    recipientEmail: varchar("recipient_email", { length: 320 }),
+    model: varchar("model", { length: 100 }).notNull().default("claude-sonnet-4-6"),
+    enabled: boolean("enabled").notNull().default(true),
+    nextRunAt: timestamp("next_run_at"),
+    lastRunAt: timestamp("last_run_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_investment_plans_user").on(t.userId),
+    index("idx_investment_plans_due").on(t.enabled, t.nextRunAt),
+  ]
+);
+
+export const investmentPlanRuns = pgTable(
+  "investment_plan_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    planId: uuid("plan_id").references(() => investmentPlans.id, { onDelete: "cascade" }).notNull(),
+    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+    status: varchar("status", { length: 20 }).notNull().default("queued"),
+    planSnapshot: jsonb("plan_snapshot").notNull(),
+    modelSnapshot: varchar("model_snapshot", { length: 100 }).notNull(),
+    output: jsonb("output"),
+    transcript: jsonb("transcript"),
+    emailMessageId: varchar("email_message_id", { length: 255 }),
+    errorMessage: text("error_message"),
+    costCents: integer("cost_cents"),
+    executionMarks: jsonb("execution_marks").notNull().default({}),
+    startedAt: timestamp("started_at"),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_investment_plan_runs_plan").on(t.planId, t.createdAt),
+    index("idx_investment_plan_runs_user").on(t.userId, t.createdAt),
+  ]
+);
+
+// ============================================================================
 // Relations
 // ============================================================================
 
@@ -715,6 +909,11 @@ export const usersRelations = relations(users, ({ many }) => ({
   apiKeys: many(apiKeys),
   transactionLinks: many(transactionLinks),
   bankConnections: many(bankConnections),
+  people: many(people),
+  routines: many(routines),
+  routineRuns: many(routineRuns),
+  investmentPlans: many(investmentPlans),
+  investmentPlanRuns: many(investmentPlanRuns),
 }));
 
 export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
@@ -755,6 +954,7 @@ export const accountsRelations = relations(accounts, ({ one, many }) => ({
   csvImports: many(csvImports),
   balances: many(accountBalances),
   recurringTransactions: many(recurringTransactions),
+  owners: many(accountOwners),
 }));
 
 export const bankConnectionsRelations = relations(bankConnections, ({ one, many }) => ({
@@ -895,18 +1095,20 @@ export const csvImportsRelations = relations(csvImports, ({ one, many }) => ({
   transactions: many(transactions),
 }));
 
-export const propertiesRelations = relations(properties, ({ one }) => ({
+export const propertiesRelations = relations(properties, ({ one, many }) => ({
   user: one(users, {
     fields: [properties.userId],
     references: [users.id],
   }),
+  owners: many(propertyOwners),
 }));
 
-export const vehiclesRelations = relations(vehicles, ({ one }) => ({
+export const vehiclesRelations = relations(vehicles, ({ one, many }) => ({
   user: one(users, {
     fields: [vehicles.userId],
     references: [users.id],
   }),
+  owners: many(vehicleOwners),
 }));
 
 export const exchangeRatesRelations = relations(exchangeRates, () => ({}));
@@ -940,6 +1142,48 @@ export const transactionLinksRelations = relations(transactionLinks, ({ one }) =
 export const companyLogosRelations = relations(companyLogos, ({ many }) => ({
   accounts: many(accounts),
   recurringTransactions: many(recurringTransactions),
+}));
+
+export const peopleRelations = relations(people, ({ one, many }) => ({
+  user: one(users, { fields: [people.userId], references: [users.id] }),
+  accountOwners: many(accountOwners),
+  propertyOwners: many(propertyOwners),
+  vehicleOwners: many(vehicleOwners),
+}));
+
+export const accountOwnersRelations = relations(accountOwners, ({ one }) => ({
+  account: one(accounts, { fields: [accountOwners.accountId], references: [accounts.id] }),
+  person: one(people, { fields: [accountOwners.personId], references: [people.id] }),
+}));
+
+export const propertyOwnersRelations = relations(propertyOwners, ({ one }) => ({
+  property: one(properties, { fields: [propertyOwners.propertyId], references: [properties.id] }),
+  person: one(people, { fields: [propertyOwners.personId], references: [people.id] }),
+}));
+
+export const vehicleOwnersRelations = relations(vehicleOwners, ({ one }) => ({
+  vehicle: one(vehicles, { fields: [vehicleOwners.vehicleId], references: [vehicles.id] }),
+  person: one(people, { fields: [vehicleOwners.personId], references: [people.id] }),
+}));
+
+export const routinesRelations = relations(routines, ({ one, many }) => ({
+  user: one(users, { fields: [routines.userId], references: [users.id] }),
+  runs: many(routineRuns),
+}));
+
+export const routineRunsRelations = relations(routineRuns, ({ one }) => ({
+  routine: one(routines, { fields: [routineRuns.routineId], references: [routines.id] }),
+  user: one(users, { fields: [routineRuns.userId], references: [users.id] }),
+}));
+
+export const investmentPlansRelations = relations(investmentPlans, ({ one, many }) => ({
+  user: one(users, { fields: [investmentPlans.userId], references: [users.id] }),
+  runs: many(investmentPlanRuns),
+}));
+
+export const investmentPlanRunsRelations = relations(investmentPlanRuns, ({ one }) => ({
+  plan: one(investmentPlans, { fields: [investmentPlanRuns.planId], references: [investmentPlans.id] }),
+  user: one(users, { fields: [investmentPlanRuns.userId], references: [users.id] }),
 }));
 
 // ============================================================================

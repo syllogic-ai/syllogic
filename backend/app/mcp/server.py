@@ -8,7 +8,7 @@ from pydantic import AnyHttpUrl
 
 from app.db_helpers import get_mcp_user_id
 from app.mcp.auth import CompositeAuthProvider, AS_ISSUER, MCP_PUBLIC_URL
-from app.mcp.tools import accounts, categories, transactions, analytics, recurring, investments
+from app.mcp.tools import accounts, categories, transactions, analytics, recurring, investments, people as people_tools
 
 _auth = RemoteAuthProvider(
     token_verifier=CompositeAuthProvider(),
@@ -120,6 +120,7 @@ def list_accounts(
     user_id: str | None = None,
     include_inactive: bool = False,
     asset_class: str | None = None,
+    person_ids: list[str] | None = None,
 ) -> list[dict]:
     """
     List all accounts for a user.
@@ -129,12 +130,16 @@ def list_accounts(
         include_inactive: Whether to include inactive accounts (default: False)
         asset_class: Optional asset-class filter, one of "cash", "savings",
             "investment", "crypto", "property", "vehicle", "other".
+        person_ids: Optional list of person UUIDs. When provided, only returns
+            accounts owned by any of those people. When exactly one person_id
+            is given, each account also includes `owners` and `attributed_balance`
+            (share-weighted to that person's ownership fraction).
 
     Returns:
         List of account dictionaries with id, name, account_type, asset_class,
         institution, currency, balance, etc.
     """
-    return accounts.list_accounts(get_mcp_user_id(user_id), include_inactive, asset_class)
+    return accounts.list_accounts(get_mcp_user_id(user_id), include_inactive, asset_class, person_ids)
 
 
 @mcp.tool
@@ -157,7 +162,8 @@ def get_account_balance_history(
     account_id: str,
     from_date: str | None = None,
     to_date: str | None = None,
-    user_id: str | None = None
+    user_id: str | None = None,
+    person_ids: list[str] | None = None,
 ) -> list[dict]:
     """
     Get daily balance history for an account.
@@ -167,11 +173,15 @@ def get_account_balance_history(
         from_date: Start date (ISO format YYYY-MM-DD, optional)
         to_date: End date (ISO format YYYY-MM-DD, optional)
         user_id: The user's ID (optional, defaults to configured user)
+        person_ids: Optional list of person UUIDs. When provided, returns an
+            empty list if the account is not owned by any of those people.
 
     Returns:
         List of balance snapshots with date, balance in account currency, and functional currency
     """
-    return accounts.get_account_balance_history(get_mcp_user_id(user_id), account_id, from_date, to_date)
+    return accounts.get_account_balance_history(
+        get_mcp_user_id(user_id), account_id, from_date, to_date, person_ids
+    )
 
 
 # ============================================================================
@@ -525,6 +535,7 @@ def get_spending_by_category(
     account_id: str | None = None,
     include_uncategorized: bool = False,
     user_id: str | None = None,
+    person_ids: list[str] | None = None,
 ) -> list[dict]:
     """
     Get spending breakdown by category.
@@ -536,13 +547,15 @@ def get_spending_by_category(
         include_uncategorized: If True, include an "Uncategorized" bucket for
             transactions with no category assigned (default: False)
         user_id: The user's ID (optional, defaults to configured user)
+        person_ids: Optional list of person UUIDs. When provided, only includes
+            transactions from accounts owned by any of those people.
 
     Returns:
         List of categories with total spending amount, transaction count, and
         merchant_count
     """
     return analytics.get_spending_by_category(
-        get_mcp_user_id(user_id), from_date, to_date, account_id, include_uncategorized
+        get_mcp_user_id(user_id), from_date, to_date, account_id, include_uncategorized, person_ids
     )
 
 
@@ -551,7 +564,8 @@ def get_income_by_category(
     from_date: str | None = None,
     to_date: str | None = None,
     account_id: str | None = None,
-    user_id: str | None = None
+    user_id: str | None = None,
+    person_ids: list[str] | None = None,
 ) -> list[dict]:
     """
     Get income breakdown by category.
@@ -561,18 +575,23 @@ def get_income_by_category(
         to_date: End date in ISO format YYYY-MM-DD (optional)
         account_id: Filter by account ID (optional)
         user_id: The user's ID (optional, defaults to configured user)
+        person_ids: Optional list of person UUIDs. When provided, only includes
+            transactions from accounts owned by any of those people.
 
     Returns:
         List of categories with total income amount and transaction count
     """
-    return analytics.get_income_by_category(get_mcp_user_id(user_id), from_date, to_date, account_id)
+    return analytics.get_income_by_category(
+        get_mcp_user_id(user_id), from_date, to_date, account_id, person_ids
+    )
 
 
 @mcp.tool
 def get_monthly_cashflow(
     from_date: str | None = None,
     to_date: str | None = None,
-    user_id: str | None = None
+    user_id: str | None = None,
+    person_ids: list[str] | None = None,
 ) -> list[dict]:
     """
     Get monthly income vs expenses breakdown.
@@ -581,18 +600,21 @@ def get_monthly_cashflow(
         from_date: Start date in ISO format YYYY-MM-DD (optional)
         to_date: End date in ISO format YYYY-MM-DD (optional)
         user_id: The user's ID (optional, defaults to configured user)
+        person_ids: Optional list of person UUIDs. When provided, only includes
+            transactions from accounts owned by any of those people.
 
     Returns:
         List of monthly data with income, expenses, and net for each month
     """
-    return analytics.get_monthly_cashflow(get_mcp_user_id(user_id), from_date, to_date)
+    return analytics.get_monthly_cashflow(get_mcp_user_id(user_id), from_date, to_date, person_ids)
 
 
 @mcp.tool
 def get_financial_summary(
     from_date: str | None = None,
     to_date: str | None = None,
-    user_id: str | None = None
+    user_id: str | None = None,
+    person_ids: list[str] | None = None,
 ) -> dict:
     """
     Get a financial summary with totals and account balances.
@@ -601,11 +623,15 @@ def get_financial_summary(
         from_date: Start date in ISO format YYYY-MM-DD (optional)
         to_date: End date in ISO format YYYY-MM-DD (optional)
         user_id: The user's ID (optional, defaults to configured user)
+        person_ids: Optional list of person UUIDs. When provided, only includes
+            transactions and balances from accounts owned by any of those people.
+            When exactly one person_id is given, account balances are
+            share-weighted to that person's ownership fraction.
 
     Returns:
         Summary with total income, total expenses, net, savings rate, and account balances
     """
-    return analytics.get_financial_summary(get_mcp_user_id(user_id), from_date, to_date)
+    return analytics.get_financial_summary(get_mcp_user_id(user_id), from_date, to_date, person_ids)
 
 
 @mcp.tool
@@ -697,6 +723,7 @@ def get_recurring_summary(user_id: str | None = None) -> dict:
 def list_holdings(
     account_id: str | None = None,
     user_id: str | None = None,
+    person_ids: list[str] | None = None,
 ) -> list[dict]:
     """
     List investment holdings for a user, with the latest available valuation.
@@ -704,16 +731,23 @@ def list_holdings(
     Args:
         account_id: Filter to a single investment account (optional)
         user_id: The user's ID (optional, defaults to configured user)
+        person_ids: Optional list of person UUIDs. When provided, only returns
+            holdings from accounts owned by any of those people. When exactly
+            one person_id is given, current_value_user_currency is
+            share-weighted to that person's ownership fraction.
 
     Returns:
         List of holdings with symbol, quantity, latest price, and current value
         in the user's functional currency.
     """
-    return investments.list_holdings(get_mcp_user_id(user_id), account_id)
+    return investments.list_holdings(get_mcp_user_id(user_id), account_id, person_ids)
 
 
 @mcp.tool
-def get_portfolio_summary(user_id: str | None = None) -> dict:
+def get_portfolio_summary(
+    user_id: str | None = None,
+    person_ids: list[str] | None = None,
+) -> dict:
     """
     Get a summary of the user's investment portfolio.
 
@@ -722,12 +756,16 @@ def get_portfolio_summary(user_id: str | None = None) -> dict:
 
     Args:
         user_id: The user's ID (optional, defaults to configured user)
+        person_ids: Optional list of person UUIDs. When provided, only includes
+            investment accounts owned by any of those people. When exactly one
+            person_id is given, values are share-weighted by that person's
+            ownership fraction.
 
     Returns:
         Dict with currency, total_value, holdings_count, stale_valuations,
         and a per-account breakdown.
     """
-    return investments.get_portfolio_summary(get_mcp_user_id(user_id))
+    return investments.get_portfolio_summary(get_mcp_user_id(user_id), person_ids)
 
 
 @mcp.tool
@@ -735,6 +773,7 @@ def get_portfolio_history(
     from_date: str | None = None,
     to_date: str | None = None,
     user_id: str | None = None,
+    person_ids: list[str] | None = None,
 ) -> list[dict]:
     """
     Get daily portfolio value history (sum across investment accounts) in
@@ -744,11 +783,14 @@ def get_portfolio_history(
         from_date: Start date (ISO YYYY-MM-DD, optional)
         to_date: End date (ISO YYYY-MM-DD, optional)
         user_id: The user's ID (optional, defaults to configured user)
+        person_ids: Optional list of person UUIDs. When provided, only includes
+            investment accounts owned by any of those people. When exactly one
+            person_id is given, daily values are share-weighted.
 
     Returns:
         List of {date, value_user_currency} entries sorted by date.
     """
-    return investments.get_portfolio_history(get_mcp_user_id(user_id), from_date, to_date)
+    return investments.get_portfolio_history(get_mcp_user_id(user_id), from_date, to_date, person_ids)
 
 
 @mcp.tool
@@ -826,6 +868,7 @@ def get_realized_pnl(
     start_date: str | None = None,
     end_date: str | None = None,
     user_id: str | None = None,
+    person_ids: list[str] | None = None,
 ) -> list[dict]:
     """
     Compute FIFO realized P&L from imported broker trades.
@@ -839,12 +882,14 @@ def get_realized_pnl(
         start_date: ISO YYYY-MM-DD; only count trades on/after this date.
         end_date: ISO YYYY-MM-DD; only count trades on/before this date.
         user_id: Optional, defaults to authenticated user.
+        person_ids: Optional list of person UUIDs. When provided, only includes
+            trades from accounts owned by any of those people.
 
     Returns:
         List of {symbol, currency, realized_native, realized_base, lots_closed[]}.
     """
     return investments.get_realized_pnl(
-        get_mcp_user_id(user_id), account_id, symbol, start_date, end_date
+        get_mcp_user_id(user_id), account_id, symbol, start_date, end_date, person_ids
     )
 
 
@@ -853,6 +898,7 @@ def get_unrealized_pnl(
     account_id: str | None = None,
     symbol: str | None = None,
     user_id: str | None = None,
+    person_ids: list[str] | None = None,
 ) -> list[dict]:
     """
     Compute unrealized P&L for currently-open FIFO lots.
@@ -864,12 +910,14 @@ def get_unrealized_pnl(
         account_id: Filter to a single investment account (optional).
         symbol: Filter to a single symbol (optional).
         user_id: Optional, defaults to authenticated user.
+        person_ids: Optional list of person UUIDs. When provided, only includes
+            trades and holdings from accounts owned by any of those people.
 
     Returns:
         List of {symbol, currency, quantity, cost_basis_native, cost_basis_base,
         market_value_native, market_value_base, unrealized_native, unrealized_base, fx_missing}.
     """
-    return investments.get_unrealized_pnl(get_mcp_user_id(user_id), account_id, symbol)
+    return investments.get_unrealized_pnl(get_mcp_user_id(user_id), account_id, symbol, person_ids)
 
 
 @mcp.tool
@@ -897,3 +945,41 @@ def get_holding_trades(
         not owned by the user or has no trades behind it.
     """
     return investments.get_holding_trades(get_mcp_user_id(user_id), holding_id)
+
+
+# ============================================================================
+# People & Household Tools
+# ============================================================================
+
+@mcp.tool
+def list_people(user_id: str | None = None) -> list[dict]:
+    """
+    List all people in the user's household.
+
+    Args:
+        user_id: The user's ID (optional, defaults to configured user)
+
+    Returns:
+        List of person dicts with id, name, kind (self|member), color.
+    """
+    return people_tools.list_people(get_mcp_user_id(user_id))
+
+
+@mcp.tool
+def get_household_summary(
+    person_ids: list[str] | None = None,
+    user_id: str | None = None,
+) -> dict:
+    """
+    Per-person net worth breakdown across cash, investments, properties, vehicles.
+
+    Args:
+        person_ids: Optional list of person UUIDs. When provided, only returns
+            entries for those specific people.
+        user_id: The user's ID (optional, defaults to configured user)
+
+    Returns:
+        Dict with a ``people`` list; each entry has person_id, name, cash,
+        investments, properties, vehicles, total (all share-attributed).
+    """
+    return people_tools.get_household_summary(get_mcp_user_id(user_id), person_ids)

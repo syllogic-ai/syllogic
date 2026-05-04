@@ -1,14 +1,23 @@
 "use client";
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { RiUserLine, RiFolderLine, RiKeyLine, RiUploadLine, RiBankLine } from "@remixicon/react";
+import { RiUserLine, RiFolderLine, RiKeyLine, RiUploadLine, RiBankLine, RiGroupLine } from "@remixicon/react";
 import { ProfileEditor } from "./profile-editor";
 import { CategoryManager } from "./category-manager";
 import { ApiKeysManager } from "./api-keys-manager";
 import { ImportHistoryManager } from "./import-history-manager";
 import { BankConnectionsManager } from "./bank-connections-manager";
+import { HouseholdTab } from "./household-tab";
 import type { User, Category } from "@/lib/db/schema";
 import type { CsvImportWithStats } from "@/lib/actions/csv-import";
+
+type Person = {
+  id: string;
+  name: string;
+  kind: string;
+  color?: string | null;
+  avatarUrl?: string | null;
+};
 
 interface SettingsTabsProps {
   user: User;
@@ -37,6 +46,7 @@ interface SettingsTabsProps {
     consentExpiresAt: Date | null;
     createdAt: Date | null;
   }>;
+  people: Person[];
 }
 
 export function SettingsTabs({
@@ -50,6 +60,7 @@ export function SettingsTabs({
   defaultTab = "profile",
   csvImports,
   bankConnections,
+  people,
 }: SettingsTabsProps) {
   return (
     <Tabs defaultValue={defaultTab} className="flex-1">
@@ -76,6 +87,10 @@ export function SettingsTabs({
             Bank Connections
           </TabsTrigger>
         )}
+        <TabsTrigger value="household">
+          <RiGroupLine className="mr-1.5 h-4 w-4" />
+          Household
+        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="profile">
@@ -103,6 +118,10 @@ export function SettingsTabs({
           <BankConnectionsManager connections={bankConnections} />
         </TabsContent>
       )}
+
+      <TabsContent value="household">
+        <HouseholdTab people={people} />
+      </TabsContent>
     </Tabs>
   );
 }

@@ -44,6 +44,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { EditHoldingDialog } from "./EditHoldingDialog";
+import { OwnerBadges } from "@/components/household/owner-badges";
 
 type Filter = "All" | "ETF" | "Equity" | "Cash";
 type SortKey = "sym" | "acct" | "type" | "qty" | "price" | "value" | "pnl";
@@ -268,6 +269,7 @@ export function HoldingsTableHF({
                           className="size-1.5 rounded-full bg-amber-500"
                         />
                       )}
+                      <OwnerBadges entityType="account" entityId={h.account_id} size={16} />
                     </div>
                     <div className="text-[10px] text-muted-foreground">
                       {h.name ?? ""}

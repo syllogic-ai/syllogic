@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,8 +15,11 @@ import {
 } from "@/components/ui/select";
 import { CURRENCIES, ACCOUNT_TYPES } from "@/lib/constants";
 import { createAccount, createPocketAccount } from "@/lib/actions/accounts";
+import { OwnersField, type OwnerValue } from "@/components/household/owners-field";
 
 const IBAN_RE = /^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/;
+
+type Person = { id: string; name: string; kind: string; color?: string | null; avatarUrl?: string | null };
 
 interface AccountFormProps {
   onSuccess?: () => void;
@@ -45,6 +48,28 @@ export function AccountForm({
   const [isPocket, setIsPocket] = useState(false);
   const [iban, setIban] = useState("");
 
+  // Ownership state
+  const [people, setPeople] = useState<Person[]>([]);
+  const [peopleLoaded, setPeopleLoaded] = useState(false);
+  const [owners, setOwners] = useState<OwnerValue[]>([]);
+  const [ownersError, setOwnersError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/people")
+      .then((r) => r.json())
+      .then((data: { people: Person[] }) => {
+        setPeople(data.people);
+        const self = data.people.find((p) => p.kind === "self");
+        if (self) {
+          setOwners([{ personId: self.id, share: null }]);
+        }
+      })
+      .catch(() => {
+        // Non-fatal: owners field will be empty; submit is still blocked until peopleLoaded.
+      })
+      .finally(() => setPeopleLoaded(true));
+  }, []);
+
   const resetForm = () => {
     setName("");
     setAccountType("");
@@ -53,6 +78,48 @@ export function AccountForm({
     setInitialBalance("");
     setIsPocket(false);
     setIban("");
+    setOwnersError(null);
+    // Re-seed owners to self
+    const self = people.find((p) => p.kind === "self");
+    setOwners(self ? [{ personId: self.id, share: null }] : []);
+  };
+
+  const validateOwners = (): boolean => {
+    if (owners.length === 0) {
+      setOwnersError("Select at least one owner.");
+      return false;
+    }
+    const allNull = owners.every((o) => o.share === null);
+    const allSet = owners.every((o) => o.share !== null);
+    if (!allNull && !allSet) {
+      setOwnersError("All owners must either split equally or specify shares.");
+      return false;
+    }
+    if (allSet) {
+      const sum = owners.reduce((acc, o) => acc + (o.share as number), 0);
+      if (Math.abs(sum - 1) > 0.0001) {
+        setOwnersError(`Shares must sum to 100% (currently ${Math.round(sum * 100)}%).`);
+        return false;
+      }
+    }
+    setOwnersError(null);
+    return true;
+  };
+
+  const putOwners = async (entityId: string) => {
+    try {
+      const r = await fetch(`/api/owners/account/${entityId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ owners }),
+      });
+      if (!r.ok) {
+        const text = await r.text().catch(() => "request failed");
+        throw new Error(`Failed to save owners: ${text.slice(0, 200)}`);
+      }
+    } catch (err) {
+      toast.error((err as Error).message || "Account created, but failed to save ownership. You can update it later.");
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -70,6 +137,12 @@ export function AccountForm({
       toast.error("Please select a currency");
       return;
     }
+
+    if (!peopleLoaded) {
+      setOwnersError("Loading household data, please wait…");
+      return;
+    }
+    if (people.length > 0 && !validateOwners()) return;
 
     const normalizedIban = iban.replace(/\s+/g, "").toUpperCase();
     if (isPocket) {
@@ -114,6 +187,11 @@ export function AccountForm({
           });
 
       if (result.success) {
+        // PUT owners after entity creation
+        if (result.accountId) {
+          await putOwners(result.accountId);
+        }
+
         const backfilled =
           isPocket && "backfilledCount" in result && typeof result.backfilledCount === "number"
             ? result.backfilledCount
@@ -240,6 +318,23 @@ export function AccountForm({
               Spaces are ignored. The IBAN is encrypted at rest and only used to
               match transfers from your synced accounts.
             </p>
+          </div>
+        )}
+
+        {people.length > 0 && (
+          <div className="space-y-2">
+            <OwnersField
+              people={people}
+              value={owners}
+              onChange={(next) => {
+                setOwners(next);
+                setOwnersError(null);
+              }}
+              disabled={isLoading}
+            />
+            {ownersError && (
+              <p className="text-sm text-destructive">{ownersError}</p>
+            )}
           </div>
         )}
       </div>

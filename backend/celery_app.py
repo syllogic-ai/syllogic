@@ -13,7 +13,7 @@ celery_app = Celery(
     "finance_tasks",
     broker=REDIS_URL,
     backend=REDIS_URL,
-    include=["tasks.csv_import_tasks", "tasks.demo_tasks", "tasks.enable_banking_tasks", "tasks.post_import_pipeline", "tasks.investment_tasks"],
+    include=["tasks.csv_import_tasks", "tasks.demo_tasks", "tasks.enable_banking_tasks", "tasks.post_import_pipeline", "tasks.investment_tasks", "tasks.routine_tasks"],
     set_as_current=True,
 )
 # Ensure @shared_task instances bind to this Celery instance instead of any
@@ -84,6 +84,11 @@ def _build_beat_schedule() -> dict:
     schedule["daily-investment-sync-all"] = {
         "task": "tasks.investment_tasks.daily_investment_sync_all",
         "schedule": crontab(minute=0, hour=investment_hour),
+    }
+
+    schedule["scheduled-poll-due"] = {
+        "task": "scheduled.poll_due",
+        "schedule": 60.0,  # every 60 seconds
     }
 
     return schedule

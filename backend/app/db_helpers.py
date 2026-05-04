@@ -130,6 +130,41 @@ def authenticate_internal_request_from_headers(
     return user_id
 
 
+def authenticate_internal_request_with_body(
+    method: str,
+    path_with_query: str,
+    headers: Mapping[str, str],
+    body_bytes: bytes,
+) -> str:
+    """Like authenticate_internal_request_from_headers but signature covers body_sha256."""
+    user_id = headers.get(INTERNAL_AUTH_USER_HEADER, "").strip()
+    timestamp = headers.get(INTERNAL_AUTH_TIMESTAMP_HEADER, "").strip()
+    signature = headers.get(INTERNAL_AUTH_SIGNATURE_HEADER, "").strip()
+
+    if not user_id or not timestamp or not signature:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing internal authentication headers.")
+
+    try:
+        timestamp_int = int(timestamp)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid internal authentication timestamp.") from exc
+
+    now = int(time.time())
+    max_age = _get_max_signature_age_seconds()
+    if abs(now - timestamp_int) > max_age:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Expired internal authentication signature.")
+
+    secret = _get_internal_auth_secret()
+    body_hex = hashlib.sha256(body_bytes).hexdigest()
+    payload = "\n".join([method.upper(), path_with_query, user_id, timestamp, body_hex])
+    expected_signature = hmac.new(secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+
+    if not hmac.compare_digest(expected_signature, signature):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid internal authentication signature.")
+
+    return user_id
+
+
 def get_or_create_system_user(db: Session) -> User:
     """
     Get or create a system user for backward compatibility.
