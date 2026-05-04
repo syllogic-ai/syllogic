@@ -148,6 +148,13 @@
       "when": 1746316800000,
       "tag": "0022_investment_plans",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1777873682297,
+      "tag": "0023_share_check_constraint",
+      "breakpoints": true
     }
   ]
 }
