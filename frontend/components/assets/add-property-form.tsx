@@ -110,7 +110,7 @@ export function AddPropertyForm({ onSuccess, onCancel }: AddPropertyFormProps) {
       return;
     }
 
-    if (!validateOwners()) return;
+    if (people.length > 0 && !validateOwners()) return;
 
     setIsLoading(true);
 

@@ -112,7 +112,7 @@ export function AddVehicleForm({ onSuccess, onCancel }: AddVehicleFormProps) {
       return;
     }
 
-    if (!validateOwners()) return;
+    if (people.length > 0 && !validateOwners()) return;
 
     setIsLoading(true);
 

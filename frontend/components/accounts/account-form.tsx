@@ -136,7 +136,7 @@ export function AccountForm({
       return;
     }
 
-    if (!validateOwners()) return;
+    if (people.length > 0 && !validateOwners()) return;
 
     const normalizedIban = iban.replace(/\s+/g, "").toUpperCase();
     if (isPocket) {

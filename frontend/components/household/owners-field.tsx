@@ -43,7 +43,9 @@ export function OwnersField(props: {
   }
 
   function setShare(personId: string, raw: string) {
-    const n = raw === "" ? 0 : Number(raw) / 100;
+    let n = raw === "" ? 0 : Number(raw) / 100;
+    if (!Number.isFinite(n) || n < 0) n = 0;
+    if (n > 1) n = 1;
     onChange(value.map((o) => (o.personId === personId ? { ...o, share: n } : o)));
   }
 

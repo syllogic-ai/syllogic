@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,14 @@ export function PersonForm(props: {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const previewObjectUrlRef = useRef<string | null>(null);
+
+  // Revoke object URLs on unmount to avoid memory leaks.
+  useEffect(() => {
+    return () => {
+      if (previewObjectUrlRef.current) URL.revokeObjectURL(previewObjectUrlRef.current);
+    };
+  }, []);
 
   function onFile(file: File | undefined) {
     setError(null);
@@ -44,11 +52,17 @@ export function PersonForm(props: {
     }
     setPickedFile(file);
     setCleared(false);
-    setPreviewUrl(URL.createObjectURL(file));
+    // Revoke prior preview URL before creating a new one.
+    if (previewObjectUrlRef.current) URL.revokeObjectURL(previewObjectUrlRef.current);
+    const url = URL.createObjectURL(file);
+    previewObjectUrlRef.current = url;
+    setPreviewUrl(url);
   }
 
   function clearAvatar() {
     setPickedFile(undefined);
+    if (previewObjectUrlRef.current) URL.revokeObjectURL(previewObjectUrlRef.current);
+    previewObjectUrlRef.current = null;
     setPreviewUrl(null);
     setCleared(true);
     if (fileRef.current) fileRef.current.value = "";

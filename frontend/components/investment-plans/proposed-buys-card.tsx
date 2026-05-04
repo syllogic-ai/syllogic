@@ -21,6 +21,7 @@ export function ProposedBuysCard({
   async function toggle(slotId: string) {
     const wasExecuted = !!marks[slotId]?.executedAt;
     const now = new Date().toISOString();
+    const prevMarks = marks;
     setMarks((prev) => {
       const next = { ...prev };
       if (wasExecuted) {
@@ -30,17 +31,24 @@ export function ProposedBuysCard({
       }
       return next;
     });
-    await fetch(
-      `/api/investment-plans/${planId}/runs/${runId}/execution-marks`,
-      {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          slotId,
-          executedAt: wasExecuted ? null : now,
-        }),
-      }
-    );
+    try {
+      const r = await fetch(
+        `/api/investment-plans/${planId}/runs/${runId}/execution-marks`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            slotId,
+            executedAt: wasExecuted ? null : now,
+          }),
+        }
+      );
+      if (!r.ok) throw new Error(await r.text());
+    } catch (e) {
+      // Revert optimistic update.
+      setMarks(prevMarks);
+      alert(`Failed to update execution mark: ${e instanceof Error ? e.message : "unknown error"}`);
+    }
   }
 
   const total = output.monthlyAction.proposedBuys.reduce(

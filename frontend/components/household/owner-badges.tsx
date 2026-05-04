@@ -30,7 +30,9 @@ async function loadPeople(): Promise<Person[]> {
   if (isFresh(peopleCache.entry)) return peopleCache.entry.value;
   try {
     const r = await fetch("/api/people");
+    if (!r.ok) return [];
     const j = await r.json();
+    if (!Array.isArray(j?.people)) return [];
     peopleCache.entry = { value: j.people, timestamp: Date.now() };
     return j.people;
   } catch {
@@ -44,9 +46,11 @@ async function loadOwners(entityType: EntityType, entityId: string) {
   if (isFresh(existing)) return existing.value;
   try {
     const r = await fetch(`/api/owners/${entityType}/${entityId}`);
+    if (!r.ok) return [];
     const j = await r.json();
-    ownersCache.set(key, { value: j.owners, timestamp: Date.now() });
-    return j.owners;
+    const owners = Array.isArray(j?.owners) ? j.owners : [];
+    ownersCache.set(key, { value: owners, timestamp: Date.now() });
+    return owners;
   } catch {
     return [];
   }

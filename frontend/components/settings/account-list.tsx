@@ -119,10 +119,12 @@ export function AccountList({ accounts, onAccountUpdated }: AccountListProps) {
     setEditInstitution(account.institution || "");
     setEditCurrency(account.currency || "EUR");
     setEditBalance(account.startingBalance || "0");
+    // Reset owners immediately to prevent stale state during fetch
+    setEditOwners([]);
     // Fetch current owners for this account
     fetch(`/api/owners/account/${account.id}`)
       .then((r) => r.json())
-      .then((data: { owners: OwnerValue[] }) => setEditOwners(data.owners))
+      .then((data: { owners: OwnerValue[] }) => setEditOwners(data.owners ?? []))
       .catch(() => {
         const self = people.find((p) => p.kind === "self");
         setEditOwners(self ? [{ personId: self.id, share: null }] : []);
@@ -151,8 +153,8 @@ export function AccountList({ accounts, onAccountUpdated }: AccountListProps) {
       });
 
       if (result.success) {
-        // Update owners — require at least one owner
-        if (editOwners.length === 0) {
+        // Update owners — require at least one owner WHEN the picker was visible
+        if (people.length >= 2 && editOwners.length === 0) {
           toast.error("Select at least one owner.");
           setIsLoading(false);
           return;

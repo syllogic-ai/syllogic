@@ -17,6 +17,7 @@ export default async function RunDetailPage({
   const routine = await getRoutine(userId, id);
   const run = await getRun(userId, runId);
   if (!routine || !run) notFound();
+  if (run.routineId !== id) notFound();
 
   let html = "";
   let parsed = null;

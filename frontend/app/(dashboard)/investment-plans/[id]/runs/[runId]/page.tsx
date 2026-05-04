@@ -18,6 +18,7 @@ export default async function PlanRunDetailPage({
     getPlanRun(userId, runId),
   ]);
   if (!plan || !run) notFound();
+  if (run.planId !== id) notFound();
 
   let output: ReturnType<typeof investmentPlanOutputSchema.parse> | null = null;
   let parseError: string | null = null;
