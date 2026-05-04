@@ -28,9 +28,15 @@ _ASSOC = {
 def resolve_shares(owners: list[dict]) -> dict[str, float]:
     if not owners:
         return {}
-    if all(o.get("share") is None for o in owners):
+    none_count = sum(1 for o in owners if o.get("share") is None)
+    if none_count == len(owners):
         equal = 1.0 / len(owners)
         return {str(o["person_id"]): equal for o in owners}
+    if none_count > 0:
+        raise ValueError(
+            "ownership shares must be all NULL (equal split) or all explicit; "
+            f"got {none_count} NULL of {len(owners)}"
+        )
     return {str(o["person_id"]): float(o["share"]) for o in owners}
 
 

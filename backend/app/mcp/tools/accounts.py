@@ -53,11 +53,21 @@ def list_accounts(
 
         accounts = query.order_by(Account.name).all()
 
-        # Cache owners per account when we need share-weighting
+        # Cache owners per account when we need share-weighting (single batch query)
         owners_cache: dict = {}
         if single_person:
-            for account in accounts:
-                owners_cache[str(account.id)] = get_owners(db, "account", account.id)
+            from app.models import AccountOwner
+            account_ids = [a.id for a in accounts]
+            if account_ids:
+                rows = db.query(AccountOwner).filter(AccountOwner.account_id.in_(account_ids)).all()
+                for row in rows:
+                    owners_cache.setdefault(str(row.account_id), []).append({
+                        "person_id": str(row.person_id),
+                        "share": float(row.share) if row.share is not None else None,
+                    })
+            # Ensure every account has an entry (even if empty)
+            for a in accounts:
+                owners_cache.setdefault(str(a.id), [])
 
         results = []
         for account in accounts:
@@ -80,7 +90,12 @@ def list_accounts(
             if single_person:
                 owners = owners_cache[str(account.id)]
                 row["owners"] = owners
-                full_balance = float(account.functional_balance or account.balance_available or 0)
+                if account.functional_balance is not None:
+                    full_balance = float(account.functional_balance)
+                elif account.balance_available is not None:
+                    full_balance = float(account.balance_available)
+                else:
+                    full_balance = 0.0
                 row["attributed_balance"] = attribute_amount(
                     full_balance, owners, person_ids[0]
                 )

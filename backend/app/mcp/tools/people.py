@@ -51,7 +51,7 @@ def get_household_summary(
     """
     with get_db() as db:
         people = db.query(Person).filter(Person.user_id == user_id).all()
-        if person_ids:
+        if person_ids is not None:
             pid_set = set(person_ids)
             people = [p for p in people if str(p.id) in pid_set]
 

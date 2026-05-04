@@ -33,7 +33,12 @@ def collect_grounding(user_id: str, days: int = 30) -> dict[str, list[dict]]:
         )
         cash_snapshot: list[dict] = []
         for a in accts:
-            balance = float(a.balance_available or a.functional_balance or 0)
+            if a.balance_available is not None:
+                balance = float(a.balance_available)
+            elif a.functional_balance is not None:
+                balance = float(a.functional_balance)
+            else:
+                balance = 0.0
             holdings = db.query(Holding).filter(Holding.account_id == a.id).all()
             held_value = 0.0
             for h in holdings:
