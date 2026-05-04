@@ -56,7 +56,7 @@ services:
 
   uploads-init:
     image: alpine:3.20
-    command: ["sh", "-c", "mkdir -p /uploads && chown -R ${PUID:-1000}:${PGID:-1000} /uploads"]
+    command: ["sh", "-c", "mkdir -p /uploads/profile /uploads/logos /uploads/imports /uploads/people && chown -R ${PUID:-1000}:${PGID:-1000} /uploads"]
     volumes:
       - type: bind
         source: /DATA/AppData/$AppID/uploads
@@ -219,14 +219,15 @@ services:
       DATA_ENCRYPTION_KEY_ID: ${DATA_ENCRYPTION_KEY_ID:-k1}
       BACKEND_URL: ${BACKEND_URL:-http://backend:8000}
       STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
-      LOCAL_STORAGE_PATH: ${LOCAL_STORAGE_PATH:-uploads}
+      # Absolute path: persistent volume served via /uploads/* route handler.
+      LOCAL_STORAGE_PATH: ${LOCAL_STORAGE_PATH:-/data/uploads}
       # Optional features
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       LOGO_DEV_API_KEY: ${LOGO_DEV_API_KEY:-}
     volumes:
       - type: bind
         source: /DATA/AppData/$AppID/uploads
-        target: /app/public/uploads
+        target: /data/uploads
     depends_on:
       - uploads-init
       - migrate
@@ -276,7 +277,7 @@ services:
           description:
             en_US: Timezone (e.g. Europe/Athens).
       volumes:
-        - container: /app/public/uploads
+        - container: /data/uploads
           description:
             en_US: User uploads and CSV storage.
 

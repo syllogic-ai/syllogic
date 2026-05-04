@@ -137,12 +137,12 @@ services:
   # Keep PORT=3000 so Railway proxy routes traffic correctly.
   app:
     image: ghcr.io/syllogic-ai/syllogic-frontend:v1.0.0
-    command: /bin/sh -lc "mkdir -p /app/public/uploads/profile /app/public/uploads/logos /app/public/uploads/imports && chmod -R u+rwX,g+rwX /app/public/uploads && node scripts/migrate.js && exec node_modules/.bin/next start -p 3000 -H 0.0.0.0"
+    command: /bin/sh -lc "mkdir -p /data/uploads/profile /data/uploads/logos /data/uploads/imports /data/uploads/people && chmod -R u+rwX,g+rwX /data/uploads && node scripts/migrate.js && exec node_modules/.bin/next start -p 3000 -H 0.0.0.0"
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "test -w /app/public/uploads && node -e \"require('http').get('http://127.0.0.1:3000/', (r)=>process.exit(r.statusCode && r.statusCode < 500 ? 0 : 1)).on('error', ()=>process.exit(1))\"",
+          "test -w /data/uploads && node -e \"require('http').get('http://127.0.0.1:3000/', (r)=>process.exit(r.statusCode && r.statusCode < 500 ? 0 : 1)).on('error', ()=>process.exit(1))\"",
         ]
       interval: 15s
       timeout: 5s
@@ -163,12 +163,16 @@ services:
       DATA_ENCRYPTION_KEY_ID: ${{shared.DATA_ENCRYPTION_KEY_ID}}
       BACKEND_URL: http://${{backend.RAILWAY_PRIVATE_DOMAIN}}:${{backend.PORT}}
       STORAGE_PROVIDER: local
-      LOCAL_STORAGE_PATH: uploads
+      # Absolute path: files live on a persistent volume outside the build
+      # output. They're served via the Next.js /uploads/* route handler
+      # (frontend/app/uploads/[...slug]/route.ts), not the public/ folder.
+      LOCAL_STORAGE_PATH: /data/uploads
       OPENAI_API_KEY: ${{shared.OPENAI_API_KEY}}
       LOGO_DEV_API_KEY: ${{shared.LOGO_DEV_API_KEY}}
     volumes:
-      # Persist uploaded files and keep them directly web-accessible at /uploads/*
-      - uploads_data:/app/public/uploads
+      # Persistent volume for uploaded files (avatars, logos, CSVs).
+      # Served via /uploads/* route handler.
+      - uploads_data:/data/uploads
     restart: always
 
 volumes:

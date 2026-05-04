@@ -1,49 +1,19 @@
 import { promises as fs, existsSync } from "fs";
 import path from "path";
+import { resolveLocalStorageRoot } from "./local-paths";
 import type { StorageProvider, StorageFile, UploadOptions } from "./types";
-
-const DEFAULT_STORAGE_ROOT = "uploads";
-const STORAGE_ROOT = process.env.LOCAL_STORAGE_PATH || DEFAULT_STORAGE_ROOT;
-
-function normalizeStorageRoot(root: string): string {
-  let normalized = root.trim();
-  if (normalized.startsWith("/")) {
-    normalized = normalized.slice(1);
-  }
-  if (normalized.startsWith("public/")) {
-    normalized = normalized.slice("public/".length);
-  }
-  if (!normalized) {
-    normalized = DEFAULT_STORAGE_ROOT;
-  }
-  return normalized;
-}
-
-function resolvePublicDir(): string {
-  const cwd = process.cwd();
-  const directPublic = path.join(cwd, "public");
-  const nestedPublic = path.join(cwd, "frontend", "public");
-
-  if (existsSync(directPublic)) {
-    return directPublic;
-  }
-
-  if (existsSync(nestedPublic)) {
-    return nestedPublic;
-  }
-
-  return directPublic;
-}
 
 export class LocalStorageProvider implements StorageProvider {
   private storageRoot: string;
   private baseUrl: string;
 
   constructor() {
-    const publicDir = resolvePublicDir();
-    const normalizedRoot = normalizeStorageRoot(STORAGE_ROOT);
-    this.storageRoot = path.resolve(publicDir, normalizedRoot);
-    this.baseUrl = `/${normalizedRoot}`;
+    this.storageRoot = resolveLocalStorageRoot();
+    this.baseUrl = "/uploads";
+    // Best-effort: ensure root exists so first uploads don't fail before mkdir.
+    if (!existsSync(this.storageRoot)) {
+      fs.mkdir(this.storageRoot, { recursive: true }).catch(() => {});
+    }
   }
 
   private getFullPath(filePath: string): string {
@@ -121,6 +91,6 @@ export class LocalStorageProvider implements StorageProvider {
   }
 
   getUrl(filePath: string): string {
-    return `${this.baseUrl}/${filePath}`;
+    return `${this.baseUrl}/${filePath.replace(/^\/+/, "")}`;
   }
 }

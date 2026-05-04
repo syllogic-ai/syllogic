@@ -33,7 +33,7 @@ services:
   uploads-init:
     image: alpine:3.20
     container_name: syllogic-uploads-init
-    command: ["sh", "-c", "mkdir -p /uploads && chown -R 1000:1000 /uploads"]
+    command: ["sh", "-c", "mkdir -p /uploads/profile /uploads/logos /uploads/imports /uploads/people && chown -R 1000:1000 /uploads"]
     volumes:
       - uploads_data:/uploads
     restart: "no"
@@ -174,12 +174,14 @@ services:
       DATA_ENCRYPTION_KEY_ID: ${DATA_ENCRYPTION_KEY_ID:-k1}
       BACKEND_URL: ${BACKEND_URL:-http://backend:8000}
       STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
-      LOCAL_STORAGE_PATH: ${LOCAL_STORAGE_PATH:-uploads}
+      # Absolute path: files live on a persistent volume outside the build
+      # output and are served via the /uploads/* route handler.
+      LOCAL_STORAGE_PATH: ${LOCAL_STORAGE_PATH:-/data/uploads}
       # Optional features
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       LOGO_DEV_API_KEY: ${LOGO_DEV_API_KEY:-}
     volumes:
-      - uploads_data:/app/public/uploads
+      - uploads_data:/data/uploads
     depends_on:
       uploads-init:
         condition: service_completed_successfully

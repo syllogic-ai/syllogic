@@ -76,8 +76,10 @@ COPY --from=builder --chown=node:node /app/public ./public
 COPY --from=builder --chown=node:node /app/scripts/migrate.js ./scripts/migrate.js
 COPY --from=builder --chown=node:node /app/lib/db/migrations ./lib/db/migrations
 
-# Ensure uploads dir exists (can be mounted as a volume in production).
-RUN mkdir -p /app/public/uploads && chown -R node:node /app/public/uploads
+# Uploads live on a persistent volume in production (LOCAL_STORAGE_PATH,
+# typically /data/uploads) and are served via the /uploads/* route handler,
+# not the public/ directory. No build-time mkdir needed — the storage
+# provider creates its root on first write.
 
 USER node
 

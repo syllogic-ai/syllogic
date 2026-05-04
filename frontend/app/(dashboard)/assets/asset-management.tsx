@@ -108,6 +108,7 @@ interface AssetManagementProps {
   initialAccounts: AccountWithLogo[];
   initialProperties: Property[];
   initialVehicles: Vehicle[];
+  initialPeople?: Person[];
 }
 
 type AccountWithLogo = Account & {
@@ -122,6 +123,7 @@ export function AssetManagement({
   initialAccounts,
   initialProperties,
   initialVehicles,
+  initialPeople,
 }: AssetManagementProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -179,19 +181,25 @@ export function AssetManagement({
   const [editVehicleValue, setEditVehicleValue] = useState("");
   const [editVehicleCurrency, setEditVehicleCurrency] = useState("");
 
-  // Shared ownership state for edit dialogs
-  const [people, setPeople] = useState<Person[]>([]);
+  // Shared ownership state for edit dialogs.
+  // People are preloaded server-side so the OwnersField gate is correct on
+  // first render — no client fetch race, no silent failures.
+  const [people, setPeople] = useState<Person[]>(initialPeople ?? []);
   const [editAccountOwners, setEditAccountOwners] = useState<OwnerValue[]>([]);
   const [editPropertyOwners, setEditPropertyOwners] = useState<OwnerValue[]>([]);
   const [editVehicleOwners, setEditVehicleOwners] = useState<OwnerValue[]>([]);
 
-  // Load people list once
+  // Refresh client-side too, in case the household was edited in another tab
+  // since the server render. Only runs if the server didn't pass anything.
   useEffect(() => {
+    if (initialPeople && initialPeople.length > 0) return;
     fetch("/api/people")
       .then((r) => r.json())
-      .then((data: { people: Person[] }) => setPeople(data.people))
+      .then((data: { people: Person[] }) => {
+        if (Array.isArray(data?.people)) setPeople(data.people);
+      })
       .catch(() => {});
-  }, []);
+  }, [initialPeople]);
 
   const handleRefresh = () => {
     router.refresh();
