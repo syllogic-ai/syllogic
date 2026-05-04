@@ -38,6 +38,7 @@ export function AddVehicleForm({ onSuccess, onCancel }: AddVehicleFormProps) {
 
   // Ownership state
   const [people, setPeople] = useState<Person[]>([]);
+  const [peopleLoaded, setPeopleLoaded] = useState(false);
   const [owners, setOwners] = useState<OwnerValue[]>([]);
   const [ownersError, setOwnersError] = useState<string | null>(null);
 
@@ -52,8 +53,9 @@ export function AddVehicleForm({ onSuccess, onCancel }: AddVehicleFormProps) {
         }
       })
       .catch(() => {
-        // Non-fatal: owners field will be empty
-      });
+        // Non-fatal: owners field will be empty; submit is still blocked until peopleLoaded.
+      })
+      .finally(() => setPeopleLoaded(true));
   }, []);
 
   const validateOwners = (): boolean => {
@@ -112,6 +114,10 @@ export function AddVehicleForm({ onSuccess, onCancel }: AddVehicleFormProps) {
       return;
     }
 
+    if (!peopleLoaded) {
+      setOwnersError("Loading household data, please wait…");
+      return;
+    }
     if (people.length > 0 && !validateOwners()) return;
 
     setIsLoading(true);

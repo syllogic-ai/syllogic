@@ -50,6 +50,7 @@ export function AccountForm({
 
   // Ownership state
   const [people, setPeople] = useState<Person[]>([]);
+  const [peopleLoaded, setPeopleLoaded] = useState(false);
   const [owners, setOwners] = useState<OwnerValue[]>([]);
   const [ownersError, setOwnersError] = useState<string | null>(null);
 
@@ -64,8 +65,9 @@ export function AccountForm({
         }
       })
       .catch(() => {
-        // Non-fatal: owners field will be empty
-      });
+        // Non-fatal: owners field will be empty; submit is still blocked until peopleLoaded.
+      })
+      .finally(() => setPeopleLoaded(true));
   }, []);
 
   const resetForm = () => {
@@ -136,6 +138,10 @@ export function AccountForm({
       return;
     }
 
+    if (!peopleLoaded) {
+      setOwnersError("Loading household data, please wait…");
+      return;
+    }
     if (people.length > 0 && !validateOwners()) return;
 
     const normalizedIban = iban.replace(/\s+/g, "").toUpperCase();
