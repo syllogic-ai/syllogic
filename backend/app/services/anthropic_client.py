@@ -37,7 +37,10 @@ def get_client() -> Anthropic:
     api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError("ANTHROPIC_API_KEY is not configured")
-    return Anthropic(api_key=api_key)
+    # Increase max_retries from default (2) so transient 429s on low-tier orgs
+    # ride out the per-minute window automatically. Anthropic's SDK honors the
+    # Retry-After header when the server provides one.
+    return Anthropic(api_key=api_key, max_retries=6)
 
 
 def is_configured() -> bool:
