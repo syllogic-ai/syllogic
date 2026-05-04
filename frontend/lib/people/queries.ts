@@ -67,6 +67,45 @@ export async function getOwners(entityType: EntityType, entityId: string) {
   }));
 }
 
+/**
+ * Batched lookup: returns a Map of entityId -> owners[] for all `entityIds`.
+ * Used by server components to avoid an N-request fetch waterfall on list pages.
+ */
+export async function getOwnersForEntities(
+  entityType: EntityType,
+  entityIds: string[]
+): Promise<Map<string, { personId: string; share: number | null }[]>> {
+  const out = new Map<string, { personId: string; share: number | null }[]>();
+  if (entityIds.length === 0) return out;
+
+  const push = (eid: string, personId: string, share: string | null) => {
+    const list = out.get(eid) ?? [];
+    list.push({ personId, share: share === null ? null : Number(share) });
+    out.set(eid, list);
+  };
+
+  if (entityType === "account") {
+    const rows = await db
+      .select()
+      .from(accountOwners)
+      .where(inArray(accountOwners.accountId, entityIds));
+    for (const r of rows) push(r.accountId, r.personId, r.share);
+  } else if (entityType === "property") {
+    const rows = await db
+      .select()
+      .from(propertyOwners)
+      .where(inArray(propertyOwners.propertyId, entityIds));
+    for (const r of rows) push(r.propertyId, r.personId, r.share);
+  } else {
+    const rows = await db
+      .select()
+      .from(vehicleOwners)
+      .where(inArray(vehicleOwners.vehicleId, entityIds));
+    for (const r of rows) push(r.vehicleId, r.personId, r.share);
+  }
+  return out;
+}
+
 /** Returns the set of entity ids of `entityType` owned by ANY of `personIds`. */
 export async function listEntityIdsForPeople(
   entityType: EntityType,

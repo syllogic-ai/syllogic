@@ -109,6 +109,9 @@ interface AssetManagementProps {
   initialProperties: Property[];
   initialVehicles: Vehicle[];
   initialPeople?: Person[];
+  initialAccountOwnerIds?: Record<string, string[]>;
+  initialPropertyOwnerIds?: Record<string, string[]>;
+  initialVehicleOwnerIds?: Record<string, string[]>;
 }
 
 type AccountWithLogo = Account & {
@@ -124,6 +127,9 @@ export function AssetManagement({
   initialProperties,
   initialVehicles,
   initialPeople,
+  initialAccountOwnerIds,
+  initialPropertyOwnerIds,
+  initialVehicleOwnerIds,
 }: AssetManagementProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -576,7 +582,13 @@ export function AssetManagement({
                     <div>
                       <div className="flex items-center gap-2">
                         <p className="font-medium">{account.name}</p>
-                        <OwnerBadges entityType="account" entityId={account.id} size={20} />
+                        <OwnerBadges
+                          entityType="account"
+                          entityId={account.id}
+                          size={20}
+                          people={people}
+                          ownerIds={initialAccountOwnerIds?.[account.id] ?? []}
+                        />
                       </div>
                       <p className="text-sm text-muted-foreground">
                         {getAccountTypeLabel(account.accountType)}
@@ -647,7 +659,13 @@ export function AssetManagement({
                     <div>
                       <div className="flex items-center gap-2">
                         <p className="font-medium">{property.name}</p>
-                        <OwnerBadges entityType="property" entityId={property.id} size={20} />
+                        <OwnerBadges
+                          entityType="property"
+                          entityId={property.id}
+                          size={20}
+                          people={people}
+                          ownerIds={initialPropertyOwnerIds?.[property.id] ?? []}
+                        />
                       </div>
                       <p className="text-sm text-muted-foreground">
                         {getPropertyTypeLabel(property.propertyType)}
@@ -707,7 +725,13 @@ export function AssetManagement({
                     <div>
                       <div className="flex items-center gap-2">
                         <p className="font-medium">{vehicle.name}</p>
-                        <OwnerBadges entityType="vehicle" entityId={vehicle.id} size={20} />
+                        <OwnerBadges
+                          entityType="vehicle"
+                          entityId={vehicle.id}
+                          size={20}
+                          people={people}
+                          ownerIds={initialVehicleOwnerIds?.[vehicle.id] ?? []}
+                        />
                       </div>
                       <p className="text-sm text-muted-foreground">
                         {getVehicleTypeLabel(vehicle.vehicleType)}
