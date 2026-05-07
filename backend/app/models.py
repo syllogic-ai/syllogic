@@ -19,6 +19,7 @@ from sqlalchemy import (
     JSON,
     text,
 )
+from pgvector.sqlalchemy import Vector
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from decimal import Decimal
@@ -142,6 +143,9 @@ class Category(Base):
     icon = Column(String(50))  # Remix icon name
     description = Column(Text, nullable=True)  # Category description
     categorization_instructions = Column(Text, nullable=True)  # User instructions for AI categorization
+    # Anchor embedding built from name + description + keywords. Populated by
+    # CategoryEmbeddingService; queried via pgvector cosine distance.
+    embedding = Column(Vector(1536), nullable=True)
     is_system = Column(Boolean, default=False)
     hide_from_selection = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -189,6 +193,9 @@ class Transaction(Base):
     )
     category_id = Column(UUID(as_uuid=True), ForeignKey("categories.id"), nullable=True, index=True)  # User-overridden category
     category_system_id = Column(UUID(as_uuid=True), ForeignKey("categories.id"), nullable=True, index=True)  # AI-assigned category
+    categorization_confidence = Column(Numeric(5, 2), nullable=True)  # 0-100
+    categorization_method = Column(String(20), nullable=True)  # 'override'|'deterministic'|'embedding'|'llm'|'none'
+    embedding = Column(Vector(1536), nullable=True)  # Cached embedding of merchant + description
     booked_at = Column(DateTime, nullable=False, index=True)
     pending = Column(Boolean, default=False)
     categorization_instructions = Column(Text)  # User instructions for AI categorization

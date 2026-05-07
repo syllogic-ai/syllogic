@@ -14,9 +14,28 @@ import {
   numeric,
   date,
   uniqueIndex,
+  customType,
   primaryKey,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
+
+// pgvector column type (extension created in migration 0018). Stored as
+// `vector(<dimensions>)`; serialized to/from the wire format `[1,2,3]`.
+const vector = customType<{
+  data: number[];
+  driverData: string;
+  config: { dimensions: number };
+}>({
+  dataType(config) {
+    return `vector(${config?.dimensions ?? 1536})`;
+  },
+  toDriver(value: number[]): string {
+    return `[${value.join(",")}]`;
+  },
+  fromDriver(value: string): number[] {
+    return value.replace(/^\[|\]$/g, "").split(",").map(Number);
+  },
+});
 
 // ============================================================================
 // BetterAuth Tables
@@ -300,6 +319,7 @@ export const categories = pgTable(
     icon: varchar("icon", { length: 50 }), // Remix icon name
     description: text("description"),
     categorizationInstructions: text("categorization_instructions"),
+    embedding: vector("embedding", { dimensions: 1536 }), // Anchor embedding of name + description + keywords (migration 0018)
     isSystem: boolean("is_system").default(false),
     hideFromSelection: boolean("hide_from_selection").default(false),
     createdAt: timestamp("created_at").defaultNow(),
@@ -367,6 +387,9 @@ export const transactions = pgTable(
     internalTransferId: uuid("internal_transfer_id"), // FK to internal_transfers.id (enforced at DB level in migration 0017)
     categoryId: uuid("category_id").references(() => categories.id), // User-overridden category
     categorySystemId: uuid("category_system_id").references(() => categories.id), // AI-assigned category (never updated by user)
+    categorizationConfidence: decimal("categorization_confidence", { precision: 5, scale: 2 }), // 0-100 confidence of auto-assignment
+    categorizationMethod: varchar("categorization_method", { length: 20 }), // 'override' | 'deterministic' | 'embedding' | 'llm' | 'none'
+    embedding: vector("embedding", { dimensions: 1536 }), // Cached embedding of merchant + description (migration 0018)
     bookedAt: timestamp("booked_at").notNull(),
     pending: boolean("pending").default(false),
     categorizationInstructions: text("categorization_instructions"), // User instructions for AI categorization

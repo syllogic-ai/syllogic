@@ -548,17 +548,34 @@ class CategoryMatcher:
 
         return text
 
+    MAX_CATEGORY_HINTS_LEN = 400
+
     def _render_category_list(self, categories) -> str:
-        """Render the category list for the LLM prompt, with truncated descriptions."""
+        """Render the category list for the LLM prompt.
+
+        Each line is:
+            - <name> — <description> | hints: <categorization_instructions>
+
+        Description and hints are both truncated (description to
+        MAX_CATEGORY_DESCRIPTION_LEN, hints to MAX_CATEGORY_HINTS_LEN) to keep
+        prompt size in check; the prompt-context budget system applies further
+        degradation when needed.
+        """
         lines = []
         for cat in categories:
+            parts: list[str] = [f"- {cat.name}"]
             desc = (cat.description or "").strip()
             if desc:
                 if len(desc) > self.MAX_CATEGORY_DESCRIPTION_LEN:
                     desc = desc[: self.MAX_CATEGORY_DESCRIPTION_LEN].rstrip() + "…"
-                lines.append(f"- {cat.name} — {desc}")
-            else:
-                lines.append(f"- {cat.name}")
+                parts.append(f"— {desc}")
+            hints = (getattr(cat, "categorization_instructions", None) or "").strip()
+            if hints:
+                hints_flat = " ".join(hints.split())
+                if len(hints_flat) > self.MAX_CATEGORY_HINTS_LEN:
+                    hints_flat = hints_flat[: self.MAX_CATEGORY_HINTS_LEN].rstrip() + "…"
+                parts.append(f"| hints: {hints_flat}")
+            lines.append(" ".join(parts))
         return "\n".join(lines)
 
     def _load_accounts(self) -> list:
@@ -1397,7 +1414,7 @@ Category name:"""
     def match_categories_batch_llm(
         self,
         transactions: List[Dict],
-        max_batch_size: int = 50
+        max_batch_size: int = 15
     ) -> Tuple[Dict[int, Tuple[Category, float]], int, float]:
         """
         Batch categorize multiple transactions in a single LLM call.
@@ -1428,8 +1445,10 @@ Category name:"""
         expense_categories = [c for c in all_categories if c.category_type in ("expense", "transfer")]
         income_categories = [c for c in all_categories if c.category_type in ("income", "transfer")]
 
-        expense_list = "\n".join([f"- {c.name}" for c in expense_categories])
-        income_list = "\n".join([f"- {c.name}" for c in income_categories])
+        # Render with description + keyword hints so the LLM can match
+        # on vendor names and tolerate spelling variants.
+        expense_list = self._render_category_list(expense_categories)
+        income_list = self._render_category_list(income_categories)
         
         logger.info(f"[BATCH LLM] Expense categories ({len(expense_categories)}): {[c.name for c in expense_categories[:10]]}...")
         logger.info(f"[BATCH LLM] Income categories ({len(income_categories)}): {[c.name for c in income_categories[:10]]}...")
