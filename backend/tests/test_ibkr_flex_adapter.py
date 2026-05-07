@@ -9,6 +9,7 @@ from app.integrations.ibkr_flex_adapter import (
     IBKRFlexAdapter,
     FlexStatementNotReady,
     FlexAuthError,
+    FlexTransientError,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -68,3 +69,37 @@ def test_fetch_statement_raises_auth_error():
     with patch.object(adapter._client, "get", return_value=httpx.Response(200, text=response_xml)):
         with pytest.raises(FlexAuthError):
             adapter.fetch_statement("REF1")
+
+
+def test_request_statement_retries_on_1001_then_succeeds():
+    sleeps: list[float] = []
+    adapter = IBKRFlexAdapter(
+        token="t", query_id_positions="qp", query_id_trades="qt",
+        transient_retries=3, transient_backoff_seconds=1.0,
+        sleep=sleeps.append,
+    )
+    transient = '<FlexStatementResponse><Status>Fail</Status><ErrorCode>1001</ErrorCode><ErrorMessage>Statement could not be generated at this time. Please try again shortly.</ErrorMessage></FlexStatementResponse>'
+    success = '<FlexStatementResponse><Status>Success</Status><ReferenceCode>REF1</ReferenceCode></FlexStatementResponse>'
+    responses = [
+        httpx.Response(200, text=transient),
+        httpx.Response(200, text=transient),
+        httpx.Response(200, text=success),
+    ]
+    with patch.object(adapter._client, "get", side_effect=responses):
+        ref = adapter.request_statement("qp")
+    assert ref == "REF1"
+    assert sleeps == [1.0, 3.0]
+
+
+def test_request_statement_raises_after_exhausting_retries_on_1001():
+    sleeps: list[float] = []
+    adapter = IBKRFlexAdapter(
+        token="t", query_id_positions="qp", query_id_trades="qt",
+        transient_retries=2, transient_backoff_seconds=1.0,
+        sleep=sleeps.append,
+    )
+    transient = '<FlexStatementResponse><Status>Fail</Status><ErrorCode>1001</ErrorCode><ErrorMessage>Statement could not be generated at this time. Please try again shortly.</ErrorMessage></FlexStatementResponse>'
+    with patch.object(adapter._client, "get", return_value=httpx.Response(200, text=transient)):
+        with pytest.raises(FlexTransientError):
+            adapter.request_statement("qp")
+    assert sleeps == [1.0, 3.0]

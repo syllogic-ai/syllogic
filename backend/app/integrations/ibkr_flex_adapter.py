@@ -7,6 +7,7 @@ Two-step flow:
 """
 from __future__ import annotations
 import logging
+import time
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -23,6 +24,11 @@ GET_URL = f"{BASE}/FlexStatementService.GetStatement"
 
 FLEX_NOT_READY_CODES = {"1019"}
 FLEX_AUTH_ERROR_CODES = {"1012", "1003"}
+# 1001 = "Statement could not be generated at this time. Please try again shortly."
+# Distinct from 1019 (still generating after a successful SendRequest) and 1018
+# (rate limit: 1 req/sec, 10 req/min per token — see IBKR Flex v3 error docs).
+# Default retry schedule (5s, 15s, 45s) stays well under both limits.
+FLEX_TRANSIENT_CODES = {"1001"}
 
 
 class FlexError(RuntimeError):
@@ -34,6 +40,10 @@ class FlexStatementNotReady(FlexError):
 
 
 class FlexAuthError(FlexError):
+    pass
+
+
+class FlexTransientError(FlexError):
     pass
 
 
@@ -75,19 +85,47 @@ class ParsedTrade:
 
 
 class IBKRFlexAdapter:
-    def __init__(self, token: str, query_id_positions: str, query_id_trades: str, *, client: httpx.Client | None = None):
+    def __init__(
+        self,
+        token: str,
+        query_id_positions: str,
+        query_id_trades: str,
+        *,
+        client: httpx.Client | None = None,
+        transient_retries: int = 3,
+        transient_backoff_seconds: float = 5.0,
+        sleep: callable = time.sleep,
+    ):
         self.token = token
         self.query_id_positions = query_id_positions
         self.query_id_trades = query_id_trades
         self._client = client or httpx.Client(timeout=30.0)
+        self._transient_retries = transient_retries
+        self._transient_backoff = transient_backoff_seconds
+        self._sleep = sleep
 
     def request_statement(self, query_id: str) -> str:
-        resp = self._client.get(SEND_URL, params={"v": "3", "t": self.token, "q": query_id}, timeout=30.0)
-        root = ET.fromstring(resp.text)
-        status = (root.findtext("Status") or "").strip()
-        if status != "Success":
-            self._raise_for_error(root)
-        return (root.findtext("ReferenceCode") or "").strip()
+        last_exc: FlexTransientError | None = None
+        for attempt in range(self._transient_retries + 1):
+            try:
+                resp = self._client.get(SEND_URL, params={"v": "3", "t": self.token, "q": query_id}, timeout=30.0)
+                root = ET.fromstring(resp.text)
+                status = (root.findtext("Status") or "").strip()
+                if status != "Success":
+                    self._raise_for_error(root)
+                return (root.findtext("ReferenceCode") or "").strip()
+            except FlexTransientError as e:
+                last_exc = e
+                if attempt >= self._transient_retries:
+                    break
+                delay = self._transient_backoff * (3 ** attempt)
+                logger.warning(
+                    "IBKR Flex transient error on SendRequest (q=%s), retry %d/%d in %.1fs: %s",
+                    query_id, attempt + 1, self._transient_retries, delay, e,
+                )
+                self._sleep(delay)
+        assert last_exc is not None
+        raise last_exc
 
     def fetch_statement(self, reference_code: str) -> str:
         resp = self._client.get(GET_URL, params={"v": "3", "t": self.token, "q": reference_code}, timeout=60.0)
@@ -104,6 +142,8 @@ class IBKRFlexAdapter:
             raise FlexStatementNotReady(message)
         if code in FLEX_AUTH_ERROR_CODES:
             raise FlexAuthError(message)
+        if code in FLEX_TRANSIENT_CODES:
+            raise FlexTransientError(f"{code}: {message}")
         raise FlexError(f"{code}: {message}")
 
     def parse_positions_xml(self, xml: str) -> ParsedStatement:

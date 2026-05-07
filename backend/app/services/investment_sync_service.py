@@ -15,7 +15,7 @@ from app.services.credentials_crypto import decrypt
 from app.services.holding_valuation_service import HoldingValuationService, FxConverter
 from app.services.price_service import PriceService
 from app.integrations.ibkr_flex_adapter import (
-    IBKRFlexAdapter, FlexAuthError, FlexStatementNotReady, FlexError,
+    IBKRFlexAdapter, FlexAuthError, FlexStatementNotReady, FlexTransientError, FlexError,
 )
 
 logger = logging.getLogger(__name__)
@@ -70,6 +70,11 @@ class InvestmentSyncService:
             conn.last_sync_status = "pending"
             self.db.commit()
             raise
+        except FlexTransientError as e:
+            conn.last_sync_status = "pending"
+            conn.last_sync_error = str(e)
+            self.db.commit()
+            raise
         except FlexError as e:
             conn.last_sync_status = "error"
             conn.last_sync_error = str(e)
@@ -112,6 +117,9 @@ class InvestmentSyncService:
         except FlexStatementNotReady as e:
             trades_error = f"trades not ready: {e}"
             logger.info("IBKR trades not ready for %s: %s", account.id, e)
+        except FlexTransientError as e:
+            trades_error = f"trades transient error: {e}"
+            logger.info("IBKR trades transient error for %s: %s", account.id, e)
         except FlexError as e:
             trades_error = f"trades fetch failed: {e}"
             logger.warning("IBKR trades sync failed for %s: %s", account.id, e)
