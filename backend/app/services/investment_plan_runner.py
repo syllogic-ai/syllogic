@@ -23,7 +23,7 @@ from app.services.grounding import collect_grounding
 
 log = logging.getLogger(__name__)
 
-MAX_AGENT_STEPS = 30
+MAX_AGENT_STEPS = 15  # Tighter cap — each web_search-using step grows input by 5-20k tokens
 
 EMIT_OUTPUT_TOOL = {
     "name": "emit_investment_plan_output",
@@ -136,7 +136,29 @@ def _agent_loop(plan: InvestmentPlan, transcript: list[dict], usage_totals: dict
     return None, last_message
 
 
+def _normalize_payload(payload: dict) -> dict:
+    """Heal common Anthropic tool-input quirks.
+
+    Sonnet sometimes serializes nested object/array values as JSON-encoded strings
+    when the tool's input_schema has deeply nested types. We pre-walk the payload
+    and json.loads any string that looks like a JSON object or array. Idempotent.
+    """
+    if not isinstance(payload, dict):
+        return payload
+    healed: dict = {}
+    for k, v in payload.items():
+        if isinstance(v, str) and v and v[0] in ("{", "["):
+            try:
+                healed[k] = json.loads(v)
+                continue
+            except json.JSONDecodeError:
+                pass
+        healed[k] = v
+    return healed
+
+
 def _validate(payload: dict) -> tuple[dict, list[str]]:
+    payload = _normalize_payload(payload)
     try:
         validated = InvestmentPlanOutput.model_validate(payload).model_dump(by_alias=True)
         return validated, []

@@ -38,14 +38,29 @@ def call_agent_step(client, model: str, system: str, messages: list[dict], tools
     if client is None:
         client = anthropic_client.get_client()
 
+    # Apply Anthropic prompt caching to the system prompt and the tools array.
+    # The system prompt (~3-5k tokens) and tool definitions including the
+    # emit_*_output schema (~5-15k tokens) are STATIC across every iteration
+    # of an agent loop. Marking the last block of each with cache_control=ephemeral
+    # caches them for 5 minutes — subsequent iterations pay 0.1× input cost on
+    # the cached portion (90% discount). For a typical 10-step loop with
+    # web_search this cuts total run cost roughly in half.
+    cached_system = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
+    cached_tools = list(tools)
+    if cached_tools:
+        # Marking the LAST tool caches every tool definition above it as well.
+        last_tool = dict(cached_tools[-1])
+        last_tool["cache_control"] = {"type": "ephemeral"}
+        cached_tools[-1] = last_tool
+
     last_err: Exception | None = None
     for attempt in range(_RATE_LIMIT_OUTER_RETRIES):
         try:
             return client.messages.create(
                 model=model,
                 max_tokens=4096,
-                system=system,
-                tools=tools,
+                system=cached_system,
+                tools=cached_tools,
                 messages=messages,
             )
         except RateLimitError as exc:

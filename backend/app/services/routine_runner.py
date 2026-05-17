@@ -25,7 +25,7 @@ from app.services._agent_loop import call_agent_step, dispatch_mcp, serialize_bl
 
 log = logging.getLogger(__name__)
 
-MAX_AGENT_STEPS = 30
+MAX_AGENT_STEPS = 15  # Tighter cap — each web_search-using step grows input by 5-20k tokens
 EVIDENCE_THRESHOLD = 3
 
 # Built from the Pydantic schema so the agent sees exactly what we'll validate against.
@@ -149,8 +149,30 @@ def _agent_loop(routine: Routine, transcript: list[dict], usage_totals: dict) ->
     return None, last_message
 
 
+def _normalize_payload(payload: dict) -> dict:
+    """Heal common Anthropic tool-input quirks.
+
+    Sonnet sometimes serializes nested object/array values as JSON-encoded strings
+    when the tool's input_schema has deeply nested types. We pre-walk the payload
+    and json.loads any string that looks like a JSON object or array. Idempotent.
+    """
+    if not isinstance(payload, dict):
+        return payload
+    healed: dict = {}
+    for k, v in payload.items():
+        if isinstance(v, str) and v and v[0] in ("{", "["):
+            try:
+                healed[k] = json.loads(v)
+                continue
+            except json.JSONDecodeError:
+                pass
+        healed[k] = v
+    return healed
+
+
 def _validate_or_downgrade(payload: dict) -> tuple[dict, list[str]]:
     """Validate against the Pydantic schema; if AMBER/RED with insufficient evidence, downgrade to GREEN."""
+    payload = _normalize_payload(payload)
     errors: list[str] = []
     try:
         validated = RoutineOutput.model_validate(payload).model_dump(by_alias=True)
