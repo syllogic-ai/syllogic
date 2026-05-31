@@ -23,7 +23,7 @@ export function ScheduleField(props: {
     setParsing(true);
     setError(null);
     try {
-      const r = await fetch("/api/routines/parse-schedule", {
+      const r = await fetch("/api/investment-plans/parse-schedule", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ text: nlText }),

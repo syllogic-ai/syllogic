@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { ScheduleField, type ScheduleValue } from "@/components/routines/schedule-field";
+import { ScheduleField, type ScheduleValue } from "./schedule-field";
 import { SlotEditor } from "./slot-editor";
 import type { SlotConfig } from "@/lib/investment-plans/schema";
 
