@@ -1,6 +1,5 @@
 """
 Shared helpers for agent loops that run Claude with MCP tools + web search.
-Used by routine_runner and investment_plan_runner.
 """
 from __future__ import annotations
 
