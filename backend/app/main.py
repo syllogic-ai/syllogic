@@ -23,7 +23,6 @@ from app.db_helpers import (
     set_request_user_id,
 )
 from app.routes import api_router
-from app.routes import routines_internal
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +122,6 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix="/api")
-app.include_router(routines_internal.router)
 
 
 @app.get("/")
