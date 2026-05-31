@@ -14,8 +14,6 @@ import {
   RiLineChartLine,
   RiArrowRightSLine,
   RiArrowLeftSLine,
-  RiCalendarTodoLine,
-  RiCoinsLine,
 } from "@remixicon/react";
 import { HelpButton } from "@/components/walkthrough/help-button";
 import { signOut, useSession } from "@/lib/auth-client";
@@ -79,16 +77,6 @@ const navItems = [
     title: "Assets",
     href: "/assets",
     icon: RiWallet3Line,
-  },
-  {
-    title: "Routines",
-    href: "/routines",
-    icon: RiCalendarTodoLine,
-  },
-  {
-    title: "Investment plans",
-    href: "/investment-plans",
-    icon: RiCoinsLine,
   },
   {
     title: "Settings",
