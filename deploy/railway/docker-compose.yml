@@ -6,8 +6,17 @@
 # services. Then follow the post-import steps in the README.
 #
 # IMPORTANT: This file is wired for Railway Shared Variables.
-# Set the required shared values once in Railway and services
-# will resolve them automatically via ${{shared.VAR}} references.
+# Every secret/optional value is referenced via ${{shared.VAR}}, so it is
+# configured in exactly one place (the project's Shared Variables) and all
+# services resolve it automatically. Derived URLs (DATABASE_URL, REDIS_URL,
+# APP_URL, BACKEND_URL) are built from service references and never set by hand.
+#
+# For the published one-click template, the secret shared variables
+# (POSTGRES_PASSWORD, BETTER_AUTH_SECRET, INTERNAL_AUTH_SECRET,
+# DATA_ENCRYPTION_KEY_CURRENT) are auto-generated at deploy time via Railway's
+# ${{secret()}} function — see deploy/railway/TEMPLATE.md for the exact defaults
+# and the publishing workflow. When importing this compose manually, set those
+# shared variables yourself once (README section 2).
 #
 # Release channel policy:
 # - `edge` is for development/testing.
@@ -32,7 +41,12 @@
 services:
   # ── Database ──────────────────────────────────────────────
   postgres:
-    image: postgres:16-alpine
+    # SSL-enabled Postgres (Railway-maintained image). On Railway the app reaches
+    # Postgres over a non-local private domain in a "production" environment, so the
+    # backend enforces TLS on DATABASE_URL (?sslmode=require). Plain postgres:16-alpine
+    # has ssl=off and would reject sslmode=require ("server does not support SSL").
+    # postgres-ssl ships auto-generated self-signed certs (sslmode=require, not verify-*).
+    image: ghcr.io/railwayapp-templates/postgres-ssl:16
     environment:
       POSTGRES_USER: financeuser
       POSTGRES_PASSWORD: ${{shared.POSTGRES_PASSWORD}}
@@ -58,7 +72,7 @@ services:
   # ── Backend API (FastAPI) ─────────────────────────────────
   backend:
     # Template maintainers: this tag is auto-bumped by CI on each vX.Y.Z release.
-    image: ghcr.io/syllogic-ai/syllogic-backend:v1.0.0
+    image: ghcr.io/syllogic-ai/syllogic-backend:v1.0.1
     environment:
       NODE_ENV: production
       PORT: "8080"
@@ -75,9 +89,10 @@ services:
     restart: always
 
   # ── MCP Server (FastMCP) ──────────────────────────────────
+  # Role is selected by PROCESS_TYPE (the backend image dispatches on it),
+  # so no custom start command is needed on Railway.
   mcp:
-    image: ghcr.io/syllogic-ai/syllogic-backend:v1.0.0
-    command: uvicorn mcp_server:app --host 0.0.0.0 --port 8001
+    image: ghcr.io/syllogic-ai/syllogic-backend:v1.0.1
     healthcheck:
       test:
         [
@@ -99,11 +114,13 @@ services:
     restart: always
 
   # ── Celery Worker ─────────────────────────────────────────
+  # PROCESS_TYPE=worker makes the backend image run the Celery worker
+  # (no custom start command required on Railway).
   worker:
-    image: ghcr.io/syllogic-ai/syllogic-backend:v1.0.0
-    command: celery -A celery_app worker --loglevel=info --concurrency=4
+    image: ghcr.io/syllogic-ai/syllogic-backend:v1.0.1
     environment:
       NODE_ENV: production
+      PROCESS_TYPE: worker
       DATABASE_URL: postgresql://financeuser:${{shared.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/finance_db?sslmode=require
       REDIS_URL: redis://${{redis.RAILWAY_PRIVATE_DOMAIN}}:6379/0
       FRONTEND_URL: ${{app.RAILWAY_STATIC_URL}}
@@ -116,11 +133,13 @@ services:
     restart: always
 
   # ── Celery Beat (scheduler) ───────────────────────────────
+  # PROCESS_TYPE=beat makes the backend image run the Celery beat scheduler
+  # (no custom start command required on Railway).
   beat:
-    image: ghcr.io/syllogic-ai/syllogic-backend:v1.0.0
-    command: celery -A celery_app beat --loglevel=info
+    image: ghcr.io/syllogic-ai/syllogic-backend:v1.0.1
     environment:
       NODE_ENV: production
+      PROCESS_TYPE: beat
       DATABASE_URL: postgresql://financeuser:${{shared.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/finance_db?sslmode=require
       REDIS_URL: redis://${{redis.RAILWAY_PRIVATE_DOMAIN}}:6379/0
       FRONTEND_URL: ${{app.RAILWAY_STATIC_URL}}
@@ -136,7 +155,7 @@ services:
   # Migrations run automatically at startup before Next.js boot.
   # Keep PORT=3000 so Railway proxy routes traffic correctly.
   app:
-    image: ghcr.io/syllogic-ai/syllogic-frontend:v1.0.0
+    image: ghcr.io/syllogic-ai/syllogic-frontend:v1.0.1
     command: /bin/sh -lc "mkdir -p /data/uploads/profile /data/uploads/logos /data/uploads/imports /data/uploads/people && chmod -R u+rwX,g+rwX /data/uploads && node scripts/migrate.js && exec node_modules/.bin/next start -p 3000 -H 0.0.0.0"
     healthcheck:
       test:

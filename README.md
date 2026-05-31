@@ -23,7 +23,7 @@
   <a href="https://github.com/orgs/syllogic-ai/packages">
     <img src="https://img.shields.io/badge/Docker-GHCR-blue?logo=docker" alt="Docker" />
   </a>
-  <a href="https://railway.com/deploy/N98lwA?referralCode=25KFsK&utm_source=github&utm_medium=readme&utm_campaign=oss_promotion&utm_content=hero_railway">
+  <a href="https://railway.com/deploy/syllogic?referralCode=25KFsK&utm_source=github&utm_medium=readme&utm_campaign=oss_promotion&utm_content=hero_railway">
     <img src="https://img.shields.io/badge/Deploy-Railway-blueviolet?logo=railway" alt="Deploy on Railway" />
   </a>
 </p>
@@ -105,19 +105,20 @@ For advanced configuration (TLS, custom domains, MCP server), see [`deploy/compo
 
 ### Railway (One-Click)
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/N98lwA?referralCode=25KFsK&utm_source=github&utm_medium=readme&utm_campaign=oss_promotion&utm_content=quickstart_railway)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/syllogic?referralCode=25KFsK&utm_source=github&utm_medium=readme&utm_campaign=oss_promotion&utm_content=quickstart_railway)
 
-After deploy, set these **Shared Variables** in Railway:
+The template configures everything through Railway **Shared Variables** — one place
+that every service reads from. The required secrets (`POSTGRES_PASSWORD`,
+`BETTER_AUTH_SECRET`, `INTERNAL_AUTH_SECRET`, `DATA_ENCRYPTION_KEY_CURRENT`) are
+**auto-generated at deploy time**, so a default deploy needs **no manual input**.
 
-- `POSTGRES_PASSWORD` (required)
-- `BETTER_AUTH_SECRET` (required)
-- `INTERNAL_AUTH_SECRET` (required)
-- `DATA_ENCRYPTION_KEY_CURRENT` (recommended — field-level encryption)
-- `DATA_ENCRYPTION_KEY_ID` (recommended — e.g. `k1`)
-- `OPENAI_API_KEY` (optional — enables AI categorization)
-- `LOGO_DEV_API_KEY` (optional — enables company logos)
+Optionally set these Shared Variables to enable extra features:
+
+- `OPENAI_API_KEY` (enables AI categorization)
+- `LOGO_DEV_API_KEY` (enables company logos)
 
 For full Railway setup details, see [`deploy/railway/README.md`](deploy/railway/README.md).
+Maintainers publishing the template: see [`deploy/railway/TEMPLATE.md`](deploy/railway/TEMPLATE.md).
 
 ### Shared Demo Login Link
 
@@ -185,15 +186,9 @@ Both services share a single PostgreSQL database. The frontend handles all CRUD 
 
 Syllogic models a household as a set of `people` belonging to one user. Accounts, properties, and vehicles can have one or more owners with optional shares (a `NULL` share means equal split). Holdings inherit ownership from their account. The Syllogic MCP read tools accept `person_ids` to scope results and attribute share-weighted amounts.
 
-### Routines (weekly digest)
+### Investments & holdings
 
-Users can define agentic Routines — scheduled prompts that run against the Syllogic MCP and produce React Email digests sent via Resend. The first template is a household investment-strategy review based on the audit prompt in `household-investment-strategy-risk-review.md`. A Celery Beat poller checks for due routines every 60 seconds.
-
-Required env vars: `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, plus the existing `INTERNAL_AUTH_SECRET` for backend↔frontend HMAC.
-
-### Investment plans
-
-Configure a recurring monthly amount split into pinned (specific symbol) and discretionary (theme the agent picks from) slots. Each month a Celery-Beat poller fires the agent, which grounds itself in your real cash + last-30-day broker activity (via MCP) and returns per-slot verdicts plus a top-10 ranked list per discretionary theme. The "this month's suggested buys" card on the run-detail page lets you tick off trades as you place them in your broker manually — no order execution from this app.
+Track brokerage and crypto holdings with portfolio summaries and history. The Syllogic MCP exposes read tools for holdings, portfolio summary/history, and symbol search.
 
 ## Development
 
