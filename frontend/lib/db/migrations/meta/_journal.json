@@ -1,153 +1,153 @@
 {
-  "version": "7",
-  "dialect": "postgresql",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "7",
-      "when": 1768685392212,
-      "tag": "0000_stormy_roxanne_simpson",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1769808592212,
-      "tag": "0001_fix_balance_adjustment_signs",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1770401897806,
-      "tag": "0002_better_auth_admin_fields",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1770408054187,
-      "tag": "0003_schema_alignment",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1771006303622,
-      "tag": "0004_remove_bank_connections",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1771761600000,
-      "tag": "0005_accounts_logo_id",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1771099200000,
-      "tag": "0006_subscription_account_scope",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1771766400000,
-      "tag": "0007_recurring_account_id_hotfix",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1771820400000,
-      "tag": "0008_subscription_suggestions_account_category",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "7",
-      "when": 1772308800000,
-      "tag": "0009_data_encryption_columns",
-      "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "7",
-      "when": 1772395200000,
-      "tag": "0010_transaction_deletion_flows",
-      "breakpoints": true
-    },
-    {
-      "idx": 11,
-      "version": "7",
-      "when": 1744502400000,
-      "tag": "0011_enable_banking_connections",
-      "breakpoints": true
-    },
-    {
-      "idx": 12,
-      "version": "7",
-      "when": 1744588800000,
-      "tag": "0012_bank_connection_initial_sync_days",
-      "breakpoints": true
-    },
-    {
-      "idx": 13,
-      "version": "7",
-      "when": 1776470400000,
-      "tag": "0013_transaction_creditor_debtor",
-      "breakpoints": true
-    },
-    {
-      "idx": 14,
-      "version": "7",
-      "when": 1745020800000,
-      "tag": "0014_bank_connection_sync_started_at",
-      "breakpoints": true
-    },
-    {
-      "idx": 15,
-      "version": "7",
-      "when": 1776556800000,
-      "tag": "0015_oauth_provider_tables",
-      "breakpoints": true
-    },
-    {
-      "idx": 16,
-      "version": "7",
-      "when": 1776643200000,
-      "tag": "0016_jwks_table",
-      "breakpoints": true
-    },
-    {
-      "idx": 17,
-      "version": "7",
-      "when": 1776729600000,
-      "tag": "0017_verification_value_rename",
-      "breakpoints": true
-    },
-    {
-      "idx": 20,
-      "version": "7",
-      "when": 1746230400000,
-      "tag": "0020_people_and_ownership",
-      "breakpoints": true
-    },
-    {
-      "idx": 21,
-      "version": "7",
-      "when": 1777831390704,
-      "tag": "0021_routines",
-      "breakpoints": true
-    },
-    {
-      "idx": 22,
-      "version": "7",
-      "when": 1746316800000,
-      "tag": "0022_investment_plans",
-      "breakpoints": true
-    }
-  ]
+	"version": "7",
+	"dialect": "postgresql",
+	"entries": [
+		{
+			"idx": 0,
+			"version": "7",
+			"when": 1768685392212,
+			"tag": "0000_stormy_roxanne_simpson",
+			"breakpoints": true
+		},
+		{
+			"idx": 1,
+			"version": "7",
+			"when": 1769808592212,
+			"tag": "0001_fix_balance_adjustment_signs",
+			"breakpoints": true
+		},
+		{
+			"idx": 2,
+			"version": "7",
+			"when": 1770401897806,
+			"tag": "0002_better_auth_admin_fields",
+			"breakpoints": true
+		},
+		{
+			"idx": 3,
+			"version": "7",
+			"when": 1770408054187,
+			"tag": "0003_schema_alignment",
+			"breakpoints": true
+		},
+		{
+			"idx": 4,
+			"version": "7",
+			"when": 1771006303622,
+			"tag": "0004_remove_bank_connections",
+			"breakpoints": true
+		},
+		{
+			"idx": 5,
+			"version": "7",
+			"when": 1771761600000,
+			"tag": "0005_accounts_logo_id",
+			"breakpoints": true
+		},
+		{
+			"idx": 6,
+			"version": "7",
+			"when": 1771099200000,
+			"tag": "0006_subscription_account_scope",
+			"breakpoints": true
+		},
+		{
+			"idx": 7,
+			"version": "7",
+			"when": 1771766400000,
+			"tag": "0007_recurring_account_id_hotfix",
+			"breakpoints": true
+		},
+		{
+			"idx": 8,
+			"version": "7",
+			"when": 1771820400000,
+			"tag": "0008_subscription_suggestions_account_category",
+			"breakpoints": true
+		},
+		{
+			"idx": 9,
+			"version": "7",
+			"when": 1772308800000,
+			"tag": "0009_data_encryption_columns",
+			"breakpoints": true
+		},
+		{
+			"idx": 10,
+			"version": "7",
+			"when": 1772395200000,
+			"tag": "0010_transaction_deletion_flows",
+			"breakpoints": true
+		},
+		{
+			"idx": 11,
+			"version": "7",
+			"when": 1744502400000,
+			"tag": "0011_enable_banking_connections",
+			"breakpoints": true
+		},
+		{
+			"idx": 12,
+			"version": "7",
+			"when": 1744588800000,
+			"tag": "0012_bank_connection_initial_sync_days",
+			"breakpoints": true
+		},
+		{
+			"idx": 13,
+			"version": "7",
+			"when": 1776470400000,
+			"tag": "0013_transaction_creditor_debtor",
+			"breakpoints": true
+		},
+		{
+			"idx": 14,
+			"version": "7",
+			"when": 1745020800000,
+			"tag": "0014_bank_connection_sync_started_at",
+			"breakpoints": true
+		},
+		{
+			"idx": 15,
+			"version": "7",
+			"when": 1776556800000,
+			"tag": "0015_oauth_provider_tables",
+			"breakpoints": true
+		},
+		{
+			"idx": 16,
+			"version": "7",
+			"when": 1776643200000,
+			"tag": "0016_jwks_table",
+			"breakpoints": true
+		},
+		{
+			"idx": 17,
+			"version": "7",
+			"when": 1776729600000,
+			"tag": "0017_verification_value_rename",
+			"breakpoints": true
+		},
+		{
+			"idx": 20,
+			"version": "7",
+			"when": 1777879472826,
+			"tag": "0020_people_and_ownership",
+			"breakpoints": true
+		},
+		{
+			"idx": 21,
+			"version": "7",
+			"when": 1777879473826,
+			"tag": "0021_routines",
+			"breakpoints": true
+		},
+		{
+			"idx": 22,
+			"version": "7",
+			"when": 1777879474826,
+			"tag": "0022_investment_plans",
+			"breakpoints": true
+		}
+	]
 }

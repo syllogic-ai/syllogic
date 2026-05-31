@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FlexQueryResponse queryName="positions" type="AF">
+  <FlexStatements count="1">
+    <FlexStatement accountId="U1234567" fromDate="20260101" toDate="20260418" period="YearToDate">
+      <OpenPositions>
+        <!-- Three lots of PPC at different cost bases — IBKR-Flex lot granularity -->
+        <OpenPosition symbol="PPC" description="PUBLIC POWER CORP" assetCategory="STK" currency="EUR" position="100" markPrice="20.00" costBasisPrice="18.00"/>
+        <OpenPosition symbol="PPC" description="PUBLIC POWER CORP" assetCategory="STK" currency="EUR" position="50" markPrice="20.00" costBasisPrice="19.00"/>
+        <OpenPosition symbol="PPC" description="PUBLIC POWER CORP" assetCategory="STK" currency="EUR" position="50" markPrice="20.00" costBasisPrice="20.00"/>
+        <!-- Single-lot positions still parse correctly -->
+        <OpenPosition symbol="AAPL" description="APPLE INC" assetCategory="STK" currency="USD" position="10" markPrice="234.56" costBasisPrice="180.00"/>
+        <!-- Two lots, one lacks costBasisPrice — weighted avg ignores the missing one -->
+        <OpenPosition symbol="VWCE" description="VANGUARD FTSE ALL-WORLD" assetCategory="ETF" currency="EUR" position="20" markPrice="115.20" costBasisPrice="100.00"/>
+        <OpenPosition symbol="VWCE" description="VANGUARD FTSE ALL-WORLD" assetCategory="ETF" currency="EUR" position="22" markPrice="115.20" costBasisPrice=""/>
+      </OpenPositions>
+      <CashReport>
+        <CashReportCurrency currency="USD" endingCash="1500.00"/>
+      </CashReport>
+    </FlexStatement>
+  </FlexStatements>
+</FlexQueryResponse>

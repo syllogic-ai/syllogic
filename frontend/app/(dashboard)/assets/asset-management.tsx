@@ -108,6 +108,10 @@ interface AssetManagementProps {
   initialAccounts: AccountWithLogo[];
   initialProperties: Property[];
   initialVehicles: Vehicle[];
+  initialPeople?: Person[];
+  initialAccountOwnerIds?: Record<string, string[]>;
+  initialPropertyOwnerIds?: Record<string, string[]>;
+  initialVehicleOwnerIds?: Record<string, string[]>;
 }
 
 type AccountWithLogo = Account & {
@@ -122,6 +126,10 @@ export function AssetManagement({
   initialAccounts,
   initialProperties,
   initialVehicles,
+  initialPeople,
+  initialAccountOwnerIds,
+  initialPropertyOwnerIds,
+  initialVehicleOwnerIds,
 }: AssetManagementProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -179,19 +187,25 @@ export function AssetManagement({
   const [editVehicleValue, setEditVehicleValue] = useState("");
   const [editVehicleCurrency, setEditVehicleCurrency] = useState("");
 
-  // Shared ownership state for edit dialogs
-  const [people, setPeople] = useState<Person[]>([]);
+  // Shared ownership state for edit dialogs.
+  // People are preloaded server-side so the OwnersField gate is correct on
+  // first render — no client fetch race, no silent failures.
+  const [people, setPeople] = useState<Person[]>(initialPeople ?? []);
   const [editAccountOwners, setEditAccountOwners] = useState<OwnerValue[]>([]);
   const [editPropertyOwners, setEditPropertyOwners] = useState<OwnerValue[]>([]);
   const [editVehicleOwners, setEditVehicleOwners] = useState<OwnerValue[]>([]);
 
-  // Load people list once
+  // Refresh client-side too, in case the household was edited in another tab
+  // since the server render. Only runs if the server didn't pass anything.
   useEffect(() => {
+    if (initialPeople && initialPeople.length > 0) return;
     fetch("/api/people")
       .then((r) => r.json())
-      .then((data: { people: Person[] }) => setPeople(data.people))
+      .then((data: { people: Person[] }) => {
+        if (Array.isArray(data?.people)) setPeople(data.people);
+      })
       .catch(() => {});
-  }, []);
+  }, [initialPeople]);
 
   const handleRefresh = () => {
     router.refresh();
@@ -568,7 +582,13 @@ export function AssetManagement({
                     <div>
                       <div className="flex items-center gap-2">
                         <p className="font-medium">{account.name}</p>
-                        <OwnerBadges entityType="account" entityId={account.id} size={20} />
+                        <OwnerBadges
+                          entityType="account"
+                          entityId={account.id}
+                          size={20}
+                          people={people}
+                          ownerIds={initialAccountOwnerIds?.[account.id] ?? []}
+                        />
                       </div>
                       <p className="text-sm text-muted-foreground">
                         {getAccountTypeLabel(account.accountType)}
@@ -639,7 +659,13 @@ export function AssetManagement({
                     <div>
                       <div className="flex items-center gap-2">
                         <p className="font-medium">{property.name}</p>
-                        <OwnerBadges entityType="property" entityId={property.id} size={20} />
+                        <OwnerBadges
+                          entityType="property"
+                          entityId={property.id}
+                          size={20}
+                          people={people}
+                          ownerIds={initialPropertyOwnerIds?.[property.id] ?? []}
+                        />
                       </div>
                       <p className="text-sm text-muted-foreground">
                         {getPropertyTypeLabel(property.propertyType)}
@@ -699,7 +725,13 @@ export function AssetManagement({
                     <div>
                       <div className="flex items-center gap-2">
                         <p className="font-medium">{vehicle.name}</p>
-                        <OwnerBadges entityType="vehicle" entityId={vehicle.id} size={20} />
+                        <OwnerBadges
+                          entityType="vehicle"
+                          entityId={vehicle.id}
+                          size={20}
+                          people={people}
+                          ownerIds={initialVehicleOwnerIds?.[vehicle.id] ?? []}
+                        />
                       </div>
                       <p className="text-sm text-muted-foreground">
                         {getVehicleTypeLabel(vehicle.vehicleType)}

@@ -9,7 +9,10 @@
 [deploy]
 # Run DB migrations before each deploy so auth (users, sessions) tables exist.
 preDeployCommand = "node scripts/migrate.js"
-startCommand = "/bin/sh -lc \"mkdir -p /app/public/uploads/profile /app/public/uploads/logos /app/public/uploads/imports && chmod -R u+rwX,g+rwX /app/public/uploads && exec node_modules/.bin/next start -p ${PORT:-3000} -H 0.0.0.0\""
+# Uploads live on a persistent volume at /data/uploads (matches LOCAL_STORAGE_PATH,
+# which must be set to /data/uploads on this service, and the self-host/Railway compose).
+# Files are served via the Next.js /uploads/* route handler, not public/.
+startCommand = "/bin/sh -lc \"mkdir -p /data/uploads/profile /data/uploads/logos /data/uploads/imports /data/uploads/people && chmod -R u+rwX,g+rwX /data/uploads && exec node_modules/.bin/next start -p ${PORT:-3000} -H 0.0.0.0\""
 healthcheckPath = "/api/health"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"

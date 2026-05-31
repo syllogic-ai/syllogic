@@ -1,23 +1,11 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
+import { resolveLocalStorageRoot } from "@/lib/storage/local-paths";
 
-const DEFAULT_STORAGE_ROOT = "uploads";
-const PUBLIC_UPLOAD_DIRS = new Set(["profile", "logos"]);
-
-function normalizeStorageRoot(root: string): string {
-  let normalized = root.trim();
-  if (normalized.startsWith("/")) normalized = normalized.slice(1);
-  if (normalized.startsWith("public/")) normalized = normalized.slice("public/".length);
-  return normalized || DEFAULT_STORAGE_ROOT;
-}
-
-function resolveStorageRoot(): string {
-  const root = normalizeStorageRoot(
-    process.env.LOCAL_STORAGE_PATH || DEFAULT_STORAGE_ROOT
-  );
-  return path.resolve(process.cwd(), "public", root);
-}
+// Subdirectories of the storage root that may be served publicly.
+// CSV imports and other private files must NOT be added here.
+const PUBLIC_UPLOAD_DIRS = new Set(["profile", "logos", "people"]);
 
 function contentTypeFor(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
@@ -52,11 +40,14 @@ export async function GET(
     return new NextResponse("Not Found", { status: 404 });
   }
 
-  const storageRoot = resolveStorageRoot();
+  const storageRoot = resolveLocalStorageRoot();
   const filePath = path.resolve(storageRoot, ...slug);
 
   // Prevent path traversal
-  if (!filePath.startsWith(`${storageRoot}${path.sep}`)) {
+  if (
+    filePath !== storageRoot &&
+    !filePath.startsWith(`${storageRoot}${path.sep}`)
+  ) {
     return new NextResponse("Not Found", { status: 404 });
   }
 

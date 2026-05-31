@@ -48,19 +48,19 @@ export const LINKS = {
   },
   railway: {
     hero: withUtm(
-      "https://railway.com/deploy/N98lwA?referralCode=25KFsK",
+      "https://railway.com/deploy/syllogic?referralCode=25KFsK",
       "hero_railway",
       "landing",
       "site"
     ),
     install: withUtm(
-      "https://railway.com/deploy/N98lwA?referralCode=25KFsK",
+      "https://railway.com/deploy/syllogic?referralCode=25KFsK",
       "install_railway",
       "landing",
       "site"
     ),
     readme: withUtm(
-      "https://railway.com/deploy/N98lwA?referralCode=25KFsK",
+      "https://railway.com/deploy/syllogic?referralCode=25KFsK",
       "readme_railway",
       "github",
       "readme"

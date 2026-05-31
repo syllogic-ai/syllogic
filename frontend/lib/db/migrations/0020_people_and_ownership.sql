@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS "people" (
   "created_at" timestamp DEFAULT now() NOT NULL,
   "updated_at" timestamp DEFAULT now() NOT NULL
 );
-
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "account_owners" (
   "account_id" uuid NOT NULL REFERENCES "accounts"("id") ON DELETE CASCADE,
   "person_id" uuid NOT NULL REFERENCES "people"("id") ON DELETE CASCADE,
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS "account_owners" (
   "created_at" timestamp DEFAULT now() NOT NULL,
   CONSTRAINT "account_owners_pkey" PRIMARY KEY ("account_id", "person_id")
 );
-
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "property_owners" (
   "property_id" uuid NOT NULL REFERENCES "properties"("id") ON DELETE CASCADE,
   "person_id" uuid NOT NULL REFERENCES "people"("id") ON DELETE CASCADE,
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS "property_owners" (
   "created_at" timestamp DEFAULT now() NOT NULL,
   CONSTRAINT "property_owners_pkey" PRIMARY KEY ("property_id", "person_id")
 );
-
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "vehicle_owners" (
   "vehicle_id" uuid NOT NULL REFERENCES "vehicles"("id") ON DELETE CASCADE,
   "person_id" uuid NOT NULL REFERENCES "people"("id") ON DELETE CASCADE,
@@ -34,9 +34,13 @@ CREATE TABLE IF NOT EXISTS "vehicle_owners" (
   "created_at" timestamp DEFAULT now() NOT NULL,
   CONSTRAINT "vehicle_owners_pkey" PRIMARY KEY ("vehicle_id", "person_id")
 );
-
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_people_user" ON "people" ("user_id");
+--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "people_user_self_uq" ON "people" ("user_id") WHERE "kind" = 'self';
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_account_owners_person" ON "account_owners" ("person_id");
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_property_owners_person" ON "property_owners" ("person_id");
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_vehicle_owners_person" ON "vehicle_owners" ("person_id");

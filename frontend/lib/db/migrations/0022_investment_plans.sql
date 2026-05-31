@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS "investment_plans" (
   "created_at" timestamp DEFAULT now() NOT NULL,
   "updated_at" timestamp DEFAULT now() NOT NULL
 );
-
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "investment_plan_runs" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
   "plan_id" uuid NOT NULL REFERENCES "investment_plans"("id") ON DELETE CASCADE,
@@ -37,8 +37,11 @@ CREATE TABLE IF NOT EXISTS "investment_plan_runs" (
   "completed_at" timestamp,
   "created_at" timestamp DEFAULT now() NOT NULL
 );
-
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_investment_plans_user" ON "investment_plans" ("user_id");
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_investment_plans_due" ON "investment_plans" ("enabled", "next_run_at");
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_investment_plan_runs_plan" ON "investment_plan_runs" ("plan_id", "created_at");
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_investment_plan_runs_user" ON "investment_plan_runs" ("user_id", "created_at");
