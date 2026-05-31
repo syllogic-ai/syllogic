@@ -77,7 +77,7 @@ references so they self-wire on Railway's private network.
 
 | Service | Image / source | Public? | Volume | Notes |
 |---|---|---|---|---|
-| `postgres` | `postgres:16-alpine` | Private | `/var/lib/postgresql/data` | Initialized with `POSTGRES_PASSWORD` on first boot. |
+| `postgres` | `ghcr.io/railwayapp-templates/postgres-ssl:16` | Private | `/var/lib/postgresql/data` | **SSL-enabled** Postgres. The backend enforces TLS on `DATABASE_URL` for non-local hosts in production, so `sslmode=require` only works against an SSL-capable server — plain `postgres:16-alpine` (ssl=off) would reject it. Initialized with `POSTGRES_PASSWORD`. |
 | `redis` | `redis:7-alpine` | Private | `/data` | Celery broker + cache. |
 | `backend` | `ghcr.io/syllogic-ai/syllogic-backend` | Private | — | FastAPI API (default role, `PROCESS_TYPE` unset), healthcheck `/health`. |
 | `worker` | same backend image | Private | — | Celery worker. Set `PROCESS_TYPE=worker`. |
@@ -95,6 +95,12 @@ references so they self-wire on Railway's private network.
 
 These are configured on the relevant services in the composer, **not** as shared
 variables:
+
+> **`?sslmode=require` requires an SSL-capable Postgres.** The backend enforces TLS
+> on `DATABASE_URL` for non-local hosts in production, but plain `postgres:16-alpine`
+> has `ssl=off` and rejects `sslmode=require` ("server does not support SSL"). That's
+> why the `postgres` service uses `ghcr.io/railwayapp-templates/postgres-ssl:16`
+> (auto-generated self-signed certs; `sslmode=require` works, `verify-*` would not).
 
 ```bash
 # On backend / worker / beat / mcp / app (as applicable):

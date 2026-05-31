@@ -170,7 +170,7 @@ All existing data in Postgres will be lost.
 - **Startup hardening**: The app startup command creates `profile/`, `logos/`, and `imports/` folders under `/data/uploads` and applies write permissions before running migrations and starting Next.js.
 - **Healthcheck hardening**: The app healthcheck verifies `/data/uploads` is writable before checking HTTP readiness.
 
-If your existing app service is mounted at an older path such as `/data/uploads`, profile images can fail to persist or render. Move that volume mount to `/data/uploads` (and set `LOCAL_STORAGE_PATH=/data/uploads`), then redeploy `app`.
+If your existing app service is mounted at an older path such as `/app/public/uploads`, profile images can fail to persist or render. Move the volume mount to `/data/uploads` (and set `LOCAL_STORAGE_PATH=/data/uploads`), then redeploy `app`.
 
 ## 7. What Was Removed (vs Self-Hosted Compose)
 

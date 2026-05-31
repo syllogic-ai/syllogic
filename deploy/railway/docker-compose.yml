@@ -41,7 +41,12 @@
 services:
   # ── Database ──────────────────────────────────────────────
   postgres:
-    image: postgres:16-alpine
+    # SSL-enabled Postgres (Railway-maintained image). On Railway the app reaches
+    # Postgres over a non-local private domain in a "production" environment, so the
+    # backend enforces TLS on DATABASE_URL (?sslmode=require). Plain postgres:16-alpine
+    # has ssl=off and would reject sslmode=require ("server does not support SSL").
+    # postgres-ssl ships auto-generated self-signed certs (sslmode=require, not verify-*).
+    image: ghcr.io/railwayapp-templates/postgres-ssl:16
     environment:
       POSTGRES_USER: financeuser
       POSTGRES_PASSWORD: ${{shared.POSTGRES_PASSWORD}}
