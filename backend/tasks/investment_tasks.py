@@ -64,21 +64,17 @@ def daily_investment_sync_all() -> dict:
     try:
         demo_user_id = _resolve_demo_user_id(db)
 
-        # Fail safe: when demo mode is enabled but the demo identity cannot be
-        # resolved, skip entirely rather than risk syncing the demo portfolio.
-        # Its seeded holdings have no valid Flex token and must keep their
-        # deterministic valuations untouched.
+        # Fail loudly on misconfiguration: demo mode is on but we can't identify
+        # the demo user. Raising (rather than returning a success-like result)
+        # surfaces the deploy error in task monitoring, and aborting before the
+        # sync still protects the seeded demo portfolio — its holdings have no
+        # valid Flex token and must keep their deterministic valuations.
         if _env_bool("DEMO_MODE", default=False) and not demo_user_id:
-            logger.warning(
-                "Skipping investment sync: DEMO_MODE enabled but demo user "
-                "identity is not configured/resolvable"
+            raise RuntimeError(
+                "DEMO_MODE is enabled but the demo user identity "
+                "(DEMO_SHARED_USER_ID / DEMO_SHARED_USER_EMAIL) is not configured "
+                "or resolvable; refusing to run investment sync."
             )
-            return {
-                "queued": 0,
-                "demo_excluded": False,
-                "skipped": True,
-                "reason": "MISSING_DEMO_USER_IDENTITY",
-            }
 
         broker_q = (
             db.query(Account)
