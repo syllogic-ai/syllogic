@@ -23,7 +23,7 @@
   <a href="https://github.com/orgs/syllogic-ai/packages">
     <img src="https://img.shields.io/badge/Docker-GHCR-blue?logo=docker" alt="Docker" />
   </a>
-  <a href="https://railway.com/deploy/syllogic?referralCode=25KFsK&utm_source=github&utm_medium=readme&utm_campaign=oss_promotion&utm_content=hero_railway">
+  <a href="https://railway.com/deploy/N98lwA?referralCode=25KFsK&utm_source=github&utm_medium=readme&utm_campaign=oss_promotion&utm_content=hero_railway">
     <img src="https://img.shields.io/badge/Deploy-Railway-blueviolet?logo=railway" alt="Deploy on Railway" />
   </a>
 </p>
@@ -105,7 +105,7 @@ For advanced configuration (TLS, custom domains, MCP server), see [`deploy/compo
 
 ### Railway (One-Click)
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/syllogic?referralCode=25KFsK&utm_source=github&utm_medium=readme&utm_campaign=oss_promotion&utm_content=quickstart_railway)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/N98lwA?referralCode=25KFsK&utm_source=github&utm_medium=readme&utm_campaign=oss_promotion&utm_content=quickstart_railway)
 
 The template configures everything through Railway **Shared Variables** — one place
 that every service reads from. The required secrets (`POSTGRES_PASSWORD`,
