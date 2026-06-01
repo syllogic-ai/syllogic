@@ -3,6 +3,17 @@
 import { getAuthenticatedSession, requireAuth } from "@/lib/auth-helpers";
 import { getBackendBaseUrl } from "@/lib/backend-url";
 import { createInternalAuthHeaders } from "@/lib/internal-auth";
+import {
+  isDemoRestrictedUserEmail,
+  DEMO_RESTRICTED_ACTION_ERROR,
+} from "@/lib/demo-access";
+
+async function assertNotDemoRestricted(): Promise<void> {
+  const session = await getAuthenticatedSession();
+  if (isDemoRestrictedUserEmail(session?.user?.email)) {
+    throw new Error(DEMO_RESTRICTED_ACTION_ERROR);
+  }
+}
 
 export type Holding = {
   id: string;
@@ -205,6 +216,7 @@ export async function createBrokerConnection(payload: {
   account_name: string;
   base_currency: string;
 }): Promise<{ connection_id: string; account_id: string }> {
+  await assertNotDemoRestricted();
   const resp = await signedFetch("POST", "/api/investments/broker-connections", {
     body: payload,
   });
@@ -215,6 +227,7 @@ export async function createManualAccount(
   name: string,
   base_currency: string,
 ): Promise<{ account_id: string }> {
+  await assertNotDemoRestricted();
   const resp = await signedFetch("POST", "/api/investments/manual-accounts", {
     body: { name, base_currency },
   });
@@ -232,6 +245,7 @@ export async function addManualHolding(
     avg_cost?: string;
   },
 ): Promise<{ holding_id: string }> {
+  await assertNotDemoRestricted();
   const resp = await signedFetch(
     "POST",
     `/api/investments/manual-accounts/${accountId}/holdings`,
@@ -243,10 +257,14 @@ export async function addManualHolding(
 export async function deleteHolding(holdingId: string): Promise<void> {
   const session = await getAuthenticatedSession();
   if (!session?.user?.id) throw new Error("Not authenticated");
+  if (isDemoRestrictedUserEmail(session.user.email)) {
+    throw new Error(DEMO_RESTRICTED_ACTION_ERROR);
+  }
   await signedFetch("DELETE", `/api/investments/holdings/${holdingId}`);
 }
 
 export async function syncAllInvestments(): Promise<{ count: number }> {
+  await assertNotDemoRestricted();
   const resp = await signedFetch("POST", "/api/investments/sync-all");
   return readJsonOrThrow<{ count: number }>(resp);
 }
@@ -263,6 +281,9 @@ export async function updateHolding(
 ): Promise<void> {
   const session = await getAuthenticatedSession();
   if (!session?.user?.id) throw new Error("Not authenticated");
+  if (isDemoRestrictedUserEmail(session.user.email)) {
+    throw new Error(DEMO_RESTRICTED_ACTION_ERROR);
+  }
   const resp = await signedFetch("PATCH", `/api/investments/holdings/${holdingId}`, {
     body: payload,
   });

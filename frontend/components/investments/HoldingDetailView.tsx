@@ -46,12 +46,14 @@ export function HoldingDetailView({
   initialHistory,
   trades = [],
   lots = [],
+  isDemoRestricted = false,
 }: {
   holding: Holding;
   portfolio: PortfolioSummary;
   initialHistory: ValuationPoint[];
   trades?: HoldingTrade[];
   lots?: HoldingLot[];
+  isDemoRestricted?: boolean;
 }) {
   const router = useRouter();
   const [range, setRange] = useState<Range>("1M");
@@ -166,7 +168,7 @@ export function HoldingDetailView({
           <Badge variant="outline" className="ml-auto">
             {accountName}
           </Badge>
-          {holding.source === "manual" && (
+          {!isDemoRestricted && holding.source === "manual" && (
             <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
               <RiEditLine className="size-4" />
               Edit
@@ -377,7 +379,7 @@ export function HoldingDetailView({
         </TabsContent>
       </Tabs>
 
-      {holding.source === "manual" && (
+      {!isDemoRestricted && holding.source === "manual" && (
         <EditHoldingDialog
           open={editOpen}
           onOpenChange={setEditOpen}

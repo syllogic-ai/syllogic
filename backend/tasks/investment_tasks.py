@@ -1,16 +1,43 @@
 from __future__ import annotations
 from datetime import date
 import logging
+import os
 from uuid import UUID
 from celery import shared_task
+from sqlalchemy import func
 
 from app.database import SessionLocal
-from app.models import Account, BrokerConnection
+from app.models import Account, BrokerConnection, User
 from app.services.investment_sync_service import InvestmentSyncService
 from app.services.exchange_rate_service import ExchangeRateService
 from app.integrations.ibkr_flex_adapter import FlexStatementNotReady
 
 logger = logging.getLogger(__name__)
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _resolve_demo_user_id(db) -> str | None:
+    """Resolve the shared demo user's id when demo mode is enabled.
+
+    The demo portfolio is seeded directly with deterministic valuations and
+    must NOT be touched by the real IBKR/price sync (no valid Flex token, and
+    live price fetches would make the data non-deterministic)."""
+    if not _env_bool("DEMO_MODE", default=False):
+        return None
+    user_id = os.getenv("DEMO_SHARED_USER_ID")
+    if user_id:
+        return user_id
+    email = os.getenv("DEMO_SHARED_USER_EMAIL")
+    if not email:
+        return None
+    user = db.query(User).filter(func.lower(User.email) == email.strip().lower()).first()
+    return user.id if user else None
 
 
 class _FxAdapter:
@@ -35,21 +62,27 @@ class _FxAdapter:
 def daily_investment_sync_all() -> dict:
     db = SessionLocal()
     try:
-        broker_account_ids = [
-            a.id for a in db.query(Account)
+        demo_user_id = _resolve_demo_user_id(db)
+
+        broker_q = (
+            db.query(Account)
             .join(BrokerConnection, BrokerConnection.account_id == Account.id)
             .filter(Account.is_active == True, Account.account_type == "investment_brokerage")
-            .all()
-        ]
-        manual_account_ids = [
-            a.id for a in db.query(Account)
+        )
+        manual_q = (
+            db.query(Account)
             .filter(Account.is_active == True, Account.account_type == "investment_manual")
-            .all()
-        ]
+        )
+        if demo_user_id:
+            broker_q = broker_q.filter(Account.user_id != demo_user_id)
+            manual_q = manual_q.filter(Account.user_id != demo_user_id)
+
+        broker_account_ids = [a.id for a in broker_q.all()]
+        manual_account_ids = [a.id for a in manual_q.all()]
         all_ids = list(broker_account_ids) + list(manual_account_ids)
         for aid in all_ids:
             sync_investment_account.delay(str(aid))
-        return {"queued": len(all_ids)}
+        return {"queued": len(all_ids), "demo_excluded": bool(demo_user_id)}
     finally:
         db.close()
 

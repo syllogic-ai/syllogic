@@ -6,21 +6,27 @@ The service is designed for shared demo environments where data is reset on a sc
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import random
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 from sqlalchemy import cast, func, Date
 
 from app.models import (
     Account,
+    AccountBalance,
+    BrokerConnection,
+    BrokerTrade,
     CategorizationRule,
     Category,
     CsvImport,
+    Holding,
+    HoldingValuation,
     Property,
     RecurringTransaction,
     SubscriptionSuggestion,
@@ -366,6 +372,88 @@ SPIKE_TEMPLATES: tuple[TxTemplate, ...] = (
 )
 
 
+# ---------------------------------------------------------------------------
+# Investments demo data
+#
+# The demo portfolio is seeded directly into holdings/valuations/account
+# balances with a deterministic price path. We deliberately DO NOT use the
+# shared `price_snapshots` cache or the IBKR sync service: prices there are
+# global (keyed by symbol/date) and would collide with real users holding
+# the same tickers. Keeping demo valuations self-contained makes the data
+# deterministic and fully isolated. The demo investment accounts are also
+# excluded from the nightly investment sync (see tasks/investment_tasks.py).
+# ---------------------------------------------------------------------------
+
+DEMO_INVESTMENT_START_DATE = date(2024, 1, 1)
+
+
+@dataclass(frozen=True)
+class HoldingSpec:
+    symbol: str
+    name: str
+    instrument_type: str  # "equity" | "etf" | "cash"
+    currency: str
+    quantity: Decimal
+    base_price: Decimal  # native-currency price at the position's open date
+    drift_annual: float  # fractional annual price drift (e.g. 0.12 = +12%/yr)
+    volatility: float  # daily deterministic noise amplitude (fraction of price)
+    avg_cost: Optional[Decimal]  # native average cost (None for cash)
+
+
+@dataclass(frozen=True)
+class InvestmentAccountSpec:
+    name: str
+    account_type: str  # "investment_brokerage" | "investment_manual"
+    institution: str
+    provider: str  # "ibkr_flex" | "manual"
+    currency: str  # account base currency
+    source: str  # holdings source tag: "ibkr_flex" | "manual"
+    has_broker_connection: bool
+    holdings: Tuple[HoldingSpec, ...]
+
+
+INVESTMENT_ACCOUNT_SPECS: Tuple[InvestmentAccountSpec, ...] = (
+    InvestmentAccountSpec(
+        name="Interactive Brokers",
+        account_type="investment_brokerage",
+        institution="Interactive Brokers",
+        provider="ibkr_flex",
+        currency="USD",
+        source="ibkr_flex",
+        has_broker_connection=True,
+        holdings=(
+            HoldingSpec("AAPL", "Apple Inc.", "equity", "USD",
+                        Decimal("40"), Decimal("185.00"), 0.14, 0.012, Decimal("164.20")),
+            HoldingSpec("MSFT", "Microsoft Corp.", "equity", "USD",
+                        Decimal("22"), Decimal("372.00"), 0.16, 0.011, Decimal("328.50")),
+            HoldingSpec("NVDA", "NVIDIA Corp.", "equity", "USD",
+                        Decimal("18"), Decimal("48.00"), 0.55, 0.022, Decimal("21.40")),
+            HoldingSpec("VWRA", "Vanguard FTSE All-World UCITS ETF", "etf", "USD",
+                        Decimal("60"), Decimal("108.00"), 0.10, 0.008, Decimal("95.30")),
+            HoldingSpec("USD", "Cash (USD)", "cash", "USD",
+                        Decimal("3150.00"), Decimal("1"), 0.0, 0.0, None),
+        ),
+    ),
+    InvestmentAccountSpec(
+        name="Personal Portfolio",
+        account_type="investment_manual",
+        institution="Self-managed",
+        provider="manual",
+        currency="EUR",
+        source="manual",
+        has_broker_connection=False,
+        holdings=(
+            HoldingSpec("IWDA", "iShares Core MSCI World UCITS ETF", "etf", "EUR",
+                        Decimal("85"), Decimal("82.00"), 0.11, 0.008, Decimal("71.90")),
+            HoldingSpec("VWCE", "Vanguard FTSE All-World UCITS ETF (Acc)", "etf", "EUR",
+                        Decimal("45"), Decimal("112.00"), 0.10, 0.008, Decimal("99.40")),
+            HoldingSpec("EUR", "Cash (EUR)", "cash", "EUR",
+                        Decimal("1850.00"), Decimal("1"), 0.0, 0.0, None),
+        ),
+    ),
+)
+
+
 class DemoSeedService:
     """Creates and refreshes a deterministic demo dataset for a specific user."""
 
@@ -374,6 +462,7 @@ class DemoSeedService:
         self.random_seed = random_seed
         self.rng = random.Random(random_seed)
         self._external_counter = 0
+        self._usd_eur_cache: Dict[date, Decimal] = {}
 
     def resolve_user(self, user_id: Optional[str] = None, email: Optional[str] = None) -> User:
         """Resolve demo user by user_id or email. Raises ValueError if missing."""
@@ -451,6 +540,12 @@ class DemoSeedService:
         balances_result = balance_service.calculate_account_balances(user.id, account_ids=account_ids)
         timeseries_result = balance_service.calculate_account_timeseries(user.id, account_ids=account_ids)
 
+        investments_result = self._seed_investments(
+            user=user,
+            start_date=seed_start,
+            end_date=seed_end,
+        )
+
         currency_set = sorted({account.currency for account in accounts if account.currency})
         summary = {
             "user_id": user.id,
@@ -470,6 +565,7 @@ class DemoSeedService:
             "functional_amounts": functional_result,
             "balances_calculated": balances_result,
             "timeseries_calculated": timeseries_result,
+            "investments": investments_result,
         }
 
         logger.info(
@@ -591,6 +687,8 @@ class DemoSeedService:
         balances_result = balance_service.calculate_account_balances(user.id, account_ids=touched_account_ids)
         timeseries_result = balance_service.calculate_account_timeseries(user.id, account_ids=touched_account_ids)
 
+        investments_result = self._append_investment_valuations_for_day(user=user, day=day)
+
         summary = {
             "skipped": False,
             "target_date": day.isoformat(),
@@ -599,6 +697,7 @@ class DemoSeedService:
             "functional_amounts": functional_result,
             "balances_calculated": balances_result,
             "timeseries_calculated": timeseries_result,
+            "investments": investments_result,
         }
         logger.info(
             "[DEMO_DAILY] Added %s transactions for user=%s date=%s",
@@ -848,6 +947,347 @@ class DemoSeedService:
             self.db.refresh(category)
 
         return categories
+
+    # ------------------------------------------------------------------
+    # Investments
+    # ------------------------------------------------------------------
+
+    def _seed_investments(
+        self,
+        user: User,
+        start_date: date,
+        end_date: date,
+    ) -> Dict[str, object]:
+        """Create the demo investment portfolio (IBKR + standalone) plus a
+        deterministic daily valuation history across [start_date, end_date].
+
+        Valuations and account balances are written directly (no PriceSnapshot
+        cache, no IBKR/price sync) so the data is deterministic and isolated
+        from real users who may hold the same tickers.
+        """
+        self._clear_investment_data(user.id)
+
+        now = datetime.utcnow()
+        accounts: List[Tuple[Account, InvestmentAccountSpec]] = []
+
+        for acct_spec in INVESTMENT_ACCOUNT_SPECS:
+            account = Account(
+                user_id=user.id,
+                name=acct_spec.name,
+                account_type=acct_spec.account_type,
+                institution=acct_spec.institution,
+                currency=acct_spec.currency,
+                provider=acct_spec.provider,
+                is_active=True,
+                starting_balance=Decimal("0"),
+                functional_balance=Decimal("0") if acct_spec.currency == "EUR" else None,
+                created_at=now,
+                updated_at=now,
+            )
+            self.db.add(account)
+            accounts.append((account, acct_spec))
+
+        self.db.commit()
+        for account, _ in accounts:
+            self.db.refresh(account)
+
+        holdings: List[Tuple[Holding, HoldingSpec, Account]] = []
+        for account, acct_spec in accounts:
+            if acct_spec.has_broker_connection:
+                self.db.add(BrokerConnection(
+                    user_id=user.id,
+                    account_id=account.id,
+                    provider=acct_spec.provider,
+                    # Demo accounts are excluded from the real investment sync,
+                    # so these credentials are never decrypted. A sentinel keeps
+                    # the NOT NULL column populated without SYLLOGIC_SECRET_KEY.
+                    credentials_encrypted="demo-disabled",
+                    last_sync_status="ok",
+                    last_sync_at=now,
+                    created_at=now,
+                    updated_at=now,
+                ))
+            for h_spec in acct_spec.holdings:
+                holding = Holding(
+                    user_id=user.id,
+                    account_id=account.id,
+                    symbol=h_spec.symbol,
+                    name=h_spec.name,
+                    currency=h_spec.currency,
+                    instrument_type=h_spec.instrument_type,
+                    quantity=h_spec.quantity,
+                    avg_cost=h_spec.avg_cost,
+                    as_of_date=start_date,
+                    source=acct_spec.source,
+                    created_at=now,
+                    updated_at=now,
+                )
+                self.db.add(holding)
+                holdings.append((holding, h_spec, account))
+
+        self.db.commit()
+        for holding, _, _ in holdings:
+            self.db.refresh(holding)
+
+        trades_created = self._create_broker_trades(holdings, start_date)
+        valuation_summary = self._seed_investment_valuations(
+            holdings, accounts, start_date, end_date
+        )
+
+        logger.info(
+            "[DEMO_SEED] Seeded investments for user=%s accounts=%s holdings=%s "
+            "trades=%s valuations=%s",
+            user.id,
+            len(accounts),
+            len(holdings),
+            trades_created,
+            valuation_summary["valuations"],
+        )
+
+        return {
+            "accounts_created": len(accounts),
+            "holdings_created": len(holdings),
+            "broker_trades_created": trades_created,
+            "valuations_created": valuation_summary["valuations"],
+            "account_balances_created": valuation_summary["account_balances"],
+            "date_range": {"start": start_date.isoformat(), "end": end_date.isoformat()},
+        }
+
+    def _clear_investment_data(self, user_id: str) -> None:
+        """Remove existing demo investment accounts (cascades to holdings,
+        valuations, broker connections/trades, and account balances)."""
+        self.db.query(Account).filter(
+            Account.user_id == user_id,
+            Account.account_type.in_(("investment_brokerage", "investment_manual")),
+        ).delete(synchronize_session=False)
+        self.db.commit()
+
+    def _create_broker_trades(
+        self,
+        holdings: List[Tuple[Holding, HoldingSpec, Account]],
+        start_date: date,
+    ) -> int:
+        """Create a small buy-only trade history for brokerage positions so the
+        holding-detail trades/lots views populate. Lots sum to the held qty."""
+        created = 0
+        lots = (
+            (Decimal("0.6"), 0, Decimal("0.94")),
+            (Decimal("0.4"), 45, Decimal("1.07")),
+        )
+        for holding, h_spec, account in holdings:
+            if h_spec.instrument_type == "cash" or holding.source != "ibkr_flex":
+                continue
+            if h_spec.avg_cost is None:
+                continue
+            lot_n = 0
+            for frac, day_offset, price_mult in lots:
+                qty = (Decimal(h_spec.quantity) * frac).quantize(Decimal("0.00000001"))
+                if qty <= 0:
+                    continue
+                lot_n += 1
+                self.db.add(BrokerTrade(
+                    account_id=account.id,
+                    symbol=h_spec.symbol,
+                    trade_date=start_date + timedelta(days=day_offset),
+                    side="buy",
+                    quantity=qty,
+                    price=(Decimal(h_spec.avg_cost) * price_mult).quantize(Decimal("0.0001")),
+                    currency=h_spec.currency,
+                    fees=Decimal("1.00"),
+                    external_id=f"demo-trade-{h_spec.symbol}-{lot_n}",
+                ))
+                created += 1
+        self.db.commit()
+        return created
+
+    def _seed_investment_valuations(
+        self,
+        holdings: List[Tuple[Holding, HoldingSpec, Account]],
+        accounts: List[Tuple[Account, InvestmentAccountSpec]],
+        start_date: date,
+        end_date: date,
+    ) -> Dict[str, int]:
+        holdings_by_account: Dict[str, List[Tuple[Holding, HoldingSpec]]] = {}
+        for holding, h_spec, account in holdings:
+            holdings_by_account.setdefault(str(account.id), []).append((holding, h_spec))
+
+        valuations = 0
+        account_balances = 0
+        for day in _iter_dates(start_date, end_date):
+            rate_usd_eur = self._usd_to_eur_rate(day)
+            for account, acct_spec in accounts:
+                total_user = Decimal("0")
+                total_acct = Decimal("0")
+                for holding, h_spec in holdings_by_account.get(str(account.id), []):
+                    price = self._demo_holding_price(h_spec, start_date, day)
+                    value_native = (Decimal(h_spec.quantity) * price).quantize(Decimal("0.00000001"))
+                    value_user = self._convert_currency(value_native, h_spec.currency, "EUR", rate_usd_eur)
+                    value_acct = self._convert_currency(value_native, h_spec.currency, acct_spec.currency, rate_usd_eur)
+                    self.db.add(HoldingValuation(
+                        holding_id=holding.id,
+                        date=day,
+                        quantity=h_spec.quantity,
+                        price=price,
+                        value_user_currency=value_user,
+                        is_stale=False,
+                    ))
+                    valuations += 1
+                    total_user += value_user
+                    total_acct += value_acct
+                self.db.add(AccountBalance(
+                    account_id=account.id,
+                    date=day,
+                    balance_in_account_currency=total_acct,
+                    balance_in_functional_currency=total_user,
+                ))
+                account_balances += 1
+
+        # Reflect the most recent valuation on the account headline balance.
+        last_rate = self._usd_to_eur_rate(end_date)
+        for account, acct_spec in accounts:
+            total_acct = Decimal("0")
+            for holding, h_spec in holdings_by_account.get(str(account.id), []):
+                price = self._demo_holding_price(h_spec, start_date, end_date)
+                value_native = (Decimal(h_spec.quantity) * price).quantize(Decimal("0.00000001"))
+                total_acct += self._convert_currency(value_native, h_spec.currency, acct_spec.currency, last_rate)
+            account.balance_available = total_acct
+            account.last_synced_at = datetime.utcnow()
+
+        self.db.commit()
+        return {"valuations": valuations, "account_balances": account_balances}
+
+    def _append_investment_valuations_for_day(
+        self,
+        user: User,
+        day: date,
+    ) -> Dict[str, object]:
+        """Add one day of investment valuations for the demo portfolio.
+
+        Idempotent: skips when the day is already valued. Safe no-op when the
+        demo investment accounts don't exist yet (a full reset creates them)."""
+        accounts = self.db.query(Account).filter(
+            Account.user_id == user.id,
+            Account.is_active == True,
+            Account.account_type.in_(("investment_brokerage", "investment_manual")),
+        ).all()
+        if not accounts:
+            return {"skipped": True, "reason": "NO_INVESTMENT_ACCOUNTS"}
+
+        holdings = self.db.query(Holding).filter(Holding.user_id == user.id).all()
+        holding_ids = [h.id for h in holdings]
+        if holding_ids:
+            already = self.db.query(HoldingValuation).filter(
+                HoldingValuation.holding_id.in_(holding_ids),
+                HoldingValuation.date == day,
+            ).first()
+            if already is not None:
+                return {"skipped": True, "reason": "ALREADY_VALUED", "target_date": day.isoformat()}
+
+        holdings_by_account: Dict[str, List[Holding]] = {}
+        for h in holdings:
+            holdings_by_account.setdefault(str(h.account_id), []).append(h)
+
+        spec_lookup = _holding_spec_lookup()
+        rate_usd_eur = self._usd_to_eur_rate(day)
+        valuations = 0
+        account_balances = 0
+        for account in accounts:
+            total_user = Decimal("0")
+            total_acct = Decimal("0")
+            for h in holdings_by_account.get(str(account.id), []):
+                spec = spec_lookup.get((h.source, h.symbol, h.instrument_type))
+                if spec is None:
+                    continue
+                anchor = h.as_of_date or DEMO_DEFAULT_START_DATE
+                price = self._demo_holding_price(spec, anchor, day)
+                value_native = (Decimal(h.quantity) * price).quantize(Decimal("0.00000001"))
+                value_user = self._convert_currency(value_native, h.currency, "EUR", rate_usd_eur)
+                value_acct = self._convert_currency(value_native, h.currency, account.currency, rate_usd_eur)
+                self.db.add(HoldingValuation(
+                    holding_id=h.id,
+                    date=day,
+                    quantity=h.quantity,
+                    price=price,
+                    value_user_currency=value_user,
+                    is_stale=False,
+                ))
+                valuations += 1
+                total_user += value_user
+                total_acct += value_acct
+            self.db.add(AccountBalance(
+                account_id=account.id,
+                date=day,
+                balance_in_account_currency=total_acct,
+                balance_in_functional_currency=total_user,
+            ))
+            account_balances += 1
+            account.balance_available = total_acct
+            account.last_synced_at = datetime.utcnow()
+
+        self.db.commit()
+        return {
+            "skipped": False,
+            "target_date": day.isoformat(),
+            "valuations": valuations,
+            "account_balances": account_balances,
+        }
+
+    def _demo_holding_price(self, h_spec: HoldingSpec, anchor: date, day: date) -> Decimal:
+        """Deterministic native-currency price for a holding on a given day.
+
+        Pure function of (seed, symbol, day) so a full reset and an incremental
+        daily append always agree on the price for any given date."""
+        if h_spec.instrument_type == "cash":
+            return Decimal("1")
+        day_index = (day - anchor).days
+        if day_index < 0:
+            day_index = 0
+        drift = 1.0 + h_spec.drift_annual * (day_index / 365.0)
+        digest = hashlib.sha256(
+            f"{self.random_seed}:{h_spec.symbol}:{day.isoformat()}".encode()
+        ).hexdigest()
+        unit = (int(digest[:8], 16) / 0xFFFFFFFF) * 2.0 - 1.0  # [-1, 1]
+        factor = drift * (1.0 + h_spec.volatility * unit)
+        if factor < 0.05:
+            factor = 0.05
+        price = Decimal(h_spec.base_price) * Decimal(str(factor))
+        return price.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+    def _convert_currency(
+        self,
+        amount: Decimal,
+        src: str,
+        dst: str,
+        rate_usd_eur: Decimal,
+    ) -> Decimal:
+        src = (src or "").upper()
+        dst = (dst or "").upper()
+        if src == dst:
+            converted = Decimal(amount)
+        elif src == "USD" and dst == "EUR":
+            converted = Decimal(amount) * rate_usd_eur
+        elif src == "EUR" and dst == "USD":
+            converted = Decimal(amount) / rate_usd_eur
+        else:
+            converted = Decimal(amount)
+        return converted.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    def _usd_to_eur_rate(self, day: date) -> Decimal:
+        cached = self._usd_eur_cache.get(day)
+        if cached is not None:
+            return cached
+        rate: Optional[Decimal] = None
+        try:
+            rate = ExchangeRateService(self.db).get_exchange_rate(
+                base_currency="USD",
+                target_currency="EUR",
+                for_date=day,
+            )
+        except Exception:  # noqa: BLE001 - fall back to a static rate
+            rate = None
+        value = Decimal(str(rate)) if rate else Decimal("0.92")
+        self._usd_eur_cache[day] = value
+        return value
 
     def _build_transactions(
         self,
@@ -2043,6 +2483,17 @@ class DemoSeedService:
 
         self.db.commit()
         return {"updated": updated, "skipped": skipped, "failed": failed}
+
+
+def _holding_spec_lookup() -> Dict[Tuple[str, str, str], HoldingSpec]:
+    """Map (source, symbol, instrument_type) -> HoldingSpec for the demo
+    portfolio, so the daily append can recompute the same deterministic price
+    path from persisted holdings."""
+    lookup: Dict[Tuple[str, str, str], HoldingSpec] = {}
+    for acct_spec in INVESTMENT_ACCOUNT_SPECS:
+        for h_spec in acct_spec.holdings:
+            lookup[(acct_spec.source, h_spec.symbol, h_spec.instrument_type)] = h_spec
+    return lookup
 
 
 def _quantize_currency(value: Decimal) -> Decimal:

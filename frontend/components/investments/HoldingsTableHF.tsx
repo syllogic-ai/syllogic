@@ -62,6 +62,7 @@ export function HoldingsTableHF({
   portfolioCurrencySymbol,
   onAddClick,
   onDelete,
+  readOnly = false,
 }: {
   holdings: Holding[];
   accountNames: Record<string, string>;
@@ -69,6 +70,7 @@ export function HoldingsTableHF({
   portfolioCurrencySymbol: string;
   onAddClick?: () => void;
   onDelete?: (id: string) => void;
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>("All");
@@ -331,7 +333,7 @@ export function HoldingsTableHF({
                         >
                           View details
                         </DropdownMenuItem>
-                        {h.source === "manual" && (
+                        {!readOnly && h.source === "manual" && (
                           <>
                             <DropdownMenuItem onClick={() => setEditingId(h.id)}>
                               Edit

@@ -28,11 +28,13 @@ export function InvestmentsOverview({
   holdings,
   initialHistory,
   initialRange = "1M",
+  isDemoRestricted = false,
 }: {
   portfolio: PortfolioSummary;
   holdings: Holding[];
   initialHistory: ValuationPoint[];
   initialRange?: Range;
+  isDemoRestricted?: boolean;
 }) {
   const router = useRouter();
   const [range, setRange] = useState<Range>(initialRange);
@@ -147,7 +149,7 @@ export function InvestmentsOverview({
 
   const sym = currencySymbol(portfolio.currency);
 
-  const refreshButton = (
+  const refreshButton = isDemoRestricted ? null : (
     <Button
       variant="outline"
       size="sm"
@@ -198,8 +200,13 @@ export function InvestmentsOverview({
         accountNames={accountNames}
         accountsCount={portfolio.accounts.length}
         portfolioCurrencySymbol={sym}
-        onAddClick={() => router.push("/investments/connect")}
-        onDelete={onDelete}
+        onAddClick={
+          isDemoRestricted
+            ? undefined
+            : () => router.push("/investments/connect")
+        }
+        onDelete={isDemoRestricted ? undefined : onDelete}
+        readOnly={isDemoRestricted}
       />
     </div>
   );
