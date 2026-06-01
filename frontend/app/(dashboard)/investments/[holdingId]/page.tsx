@@ -9,6 +9,8 @@ import {
 import { Header } from "@/components/layout/header";
 import { HoldingDetailView } from "@/components/investments/HoldingDetailView";
 import { rangeToDates } from "@/lib/utils/date-ranges";
+import { getAuthenticatedSession } from "@/lib/auth-helpers";
+import { isDemoRestrictedUserEmail } from "@/lib/demo-access";
 
 export const dynamic = "force-dynamic";
 
@@ -26,11 +28,13 @@ export default async function HoldingDetailPage({
   const [holdings, portfolio] = await Promise.all([listHoldings(), getPortfolio()]);
   const holding = holdings.find((h) => h.id === holdingId);
   if (!holding) return notFound();
-  const [history, trades, lots] = await Promise.all([
+  const [history, trades, lots, session] = await Promise.all([
     getHoldingHistory(holdingId, from, to),
     getHoldingTrades(holdingId).catch(() => []),
     getHoldingLots(holdingId).catch(() => []),
+    getAuthenticatedSession(),
   ]);
+  const isDemoRestricted = isDemoRestrictedUserEmail(session?.user?.email);
   return (
     <>
       <Header title={holding.symbol} />
@@ -41,6 +45,7 @@ export default async function HoldingDetailPage({
           initialHistory={history}
           trades={trades}
           lots={lots}
+          isDemoRestricted={isDemoRestricted}
         />
       </div>
     </>

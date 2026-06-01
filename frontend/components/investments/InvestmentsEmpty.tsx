@@ -10,9 +10,37 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
-export function InvestmentsEmpty() {
+export function InvestmentsEmpty({
+  isDemoRestricted = false,
+}: {
+  isDemoRestricted?: boolean;
+}) {
   const router = useRouter();
   const go = () => router.push("/investments/connect");
+
+  if (isDemoRestricted) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-10">
+        <div className="max-w-xl w-full">
+          <Card className="rounded-none">
+            <CardContent className="px-8 py-10 flex flex-col items-center text-center gap-3">
+              <div className="w-11 h-11 border border-border flex items-center justify-center bg-muted/40">
+                <RiLineChartLine size={20} className="text-muted-foreground" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <div className="text-base font-semibold">No holdings yet</div>
+                <div className="text-xs text-muted-foreground leading-relaxed max-w-[340px]">
+                  Connecting brokers and adding holdings is disabled for the demo
+                  account.
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 flex items-center justify-center p-10">
       <div className="max-w-xl w-full flex flex-col">
