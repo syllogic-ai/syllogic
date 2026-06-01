@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CategoryRow } from "@/components/onboarding/category-row";
 import { CategoryFormDialog } from "@/components/onboarding/category-form-dialog";
 import { DeleteCategoryDialog } from "./delete-category-dialog";
+import { DemoReadOnlyNotice } from "./demo-readonly-notice";
 import {
   createCategory,
   updateCategory,
@@ -30,9 +31,10 @@ import { groupCategoriesByType, getCategoryTypeLabel, type CategoryType } from "
 
 interface CategoryManagerProps {
   initialCategories: Category[];
+  isDemoUser?: boolean;
 }
 
-export function CategoryManager({ initialCategories }: CategoryManagerProps) {
+export function CategoryManager({ initialCategories, isDemoUser = false }: CategoryManagerProps) {
   const router = useRouter();
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [activeTab, setActiveTab] = useState<CategoryType>("expense");
@@ -216,6 +218,7 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
                   category={input}
                   onEdit={() => handleEdit(category)}
                   onDelete={() => handleDelete(category)}
+                  readOnly={isDemoUser}
                 />
               );
             })
@@ -223,19 +226,21 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
         </div>
 
         {/* Add button */}
-        <div className="pt-4">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="w-full"
-            onClick={() => handleAddClick(categoryType)}
-            disabled={isLoading}
-          >
-            <RiAddLine className="mr-2 h-4 w-4" />
-            Add {getCategoryTypeLabel(categoryType)} Category
-          </Button>
-        </div>
+        {!isDemoUser && (
+          <div className="pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => handleAddClick(categoryType)}
+              disabled={isLoading}
+            >
+              <RiAddLine className="mr-2 h-4 w-4" />
+              Add {getCategoryTypeLabel(categoryType)} Category
+            </Button>
+          </div>
+        )}
       </div>
     );
   };
@@ -250,6 +255,7 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {isDemoUser && <DemoReadOnlyNotice className="mb-4" />}
           <Tabs
             value={activeTab}
             onValueChange={(v) => setActiveTab(v as CategoryType)}
