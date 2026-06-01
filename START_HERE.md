@@ -34,7 +34,7 @@ For the manual setup, use [README.md](README.md#quick-start).
 
 ### 3. Deploy on Railway
 
-[Deploy on Railway](https://railway.com/deploy/syllogic?referralCode=25KFsK&utm_source=github&utm_medium=start_here&utm_campaign=oss_promotion&utm_content=railway_cta)
+[Deploy on Railway](https://railway.com/deploy/N98lwA?referralCode=25KFsK&utm_source=github&utm_medium=start_here&utm_campaign=oss_promotion&utm_content=railway_cta)
 
 ## Next links
 
