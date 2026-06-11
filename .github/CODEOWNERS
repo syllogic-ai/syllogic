@@ -1,4 +1,13 @@
-# Default owners for the whole repo. Pair with branch protection:
-# Settings → Branches → (rule) → "Require review from Code Owners".
-# Team slug must match GitHub (org shows as syllogic-ai on github.com/syllogic-ai).
+# Default owners for the whole repo.
+#
+# Branch protection: enable "Require review from Code Owners" on protected branches.
+#
+# If GitHub reports "Unknown owner" for @syllogic-ai/developers, fix org/repo settings:
+# 1) Team visibility: Organization → Teams → developers must be Visible (not Secret).
+#    Secret teams cannot be used in CODEOWNERS.
+# 2) Grant this team Write (or Maintain/Admin) on this repository:
+#    Repo → Settings → Collaborators and teams → Add teams → developers → Write.
+#
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
 * @syllogic-ai/developers
