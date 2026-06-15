@@ -115,8 +115,9 @@ function LoginPageContent() {
         return;
       }
 
+      // push("/") already fetches a fresh RSC payload for the dashboard route;
+      // calling router.refresh() here would redundantly re-render it a second time.
       router.push("/");
-      router.refresh();
     } catch {
       setError("An unexpected error occurred");
     } finally {
