@@ -101,6 +101,19 @@ def get_report(report_id: UUID, user_id: str = Depends(get_user_id), db: Session
 def update_report(report_id: UUID, payload: ReportUpdate, user_id: str = Depends(get_user_id), db: Session = Depends(get_db)):
     report = _get_owned_report(report_id, user_id, db)
     data = payload.model_dump(exclude_unset=True)
+
+    # These columns are NOT NULL in the DB. exclude_unset=True keeps an
+    # explicit `"field": null` in the payload (distinct from omitting the
+    # key entirely), which would otherwise reach setattr() below and only
+    # fail later as an uncaught IntegrityError/500 on commit.
+    _NON_NULLABLE_FIELDS = ("name", "account_ids", "recipient_emails", "frequency", "is_active", "timezone")
+    null_fields = [f for f in _NON_NULLABLE_FIELDS if f in data and data[f] is None]
+    if null_fields:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Field(s) cannot be null: {', '.join(null_fields)}",
+        )
+
     if "account_ids" in data and data["account_ids"] is not None:
         _validate_account_ids(data["account_ids"], user_id, db)
     if "send_time" in data and data["send_time"] is not None:
