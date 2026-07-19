@@ -25,7 +25,11 @@ export default function ReportRunsPage() {
 
       {isLoading ? (
         <p className="text-sm text-gray-500">Loading…</p>
-      ) : isError ? (
+      ) : isError && !(runs && runs.length > 0) ? (
+        // Only show the error state when there's no cached data to fall
+        // back on — with refetchInterval polling, a single transient
+        // background refetch failure would otherwise hide a previously
+        // loaded, still-valid run history behind an error message.
         <p className="text-sm text-red-600">Failed to load runs. Please try again.</p>
       ) : runs && runs.length > 0 ? (
         <table className="w-full text-sm border rounded-lg overflow-hidden">
