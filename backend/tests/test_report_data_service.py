@@ -88,6 +88,45 @@ def test_build_report_payload_recent_all():
         db.close()
 
 
+def test_build_report_payload_top_n_all_orders_by_absolute_magnitude():
+    db = SessionLocal()
+    try:
+        user, account = _seed_user_with_account_and_transactions(db)
+        now = datetime.utcnow()
+        # Mixed large debit/credit on top of the -50/-20/+2000 seeded above.
+        db.add(Transaction(
+            user_id=user.id,
+            account_id=account.id,
+            transaction_type="debit",
+            amount=Decimal("-5000.00"),
+            currency="EUR",
+            description="Big rent",
+            booked_at=now - timedelta(days=5),
+        ))
+        db.flush()
+
+        report = Report(
+            user_id=user.id,
+            name="Test report",
+            account_ids=[str(account.id)],
+            transaction_mode="TOP_N",
+            transaction_count=2,
+            transaction_direction="ALL",
+            frequency="DAILY",
+        )
+        db.add(report)
+        db.flush()
+
+        payload = build_report_payload(db, report)
+        items = payload["transactions"]["items"]
+        assert len(items) == 2
+        assert items[0]["description"] == "Big rent"  # abs(5000) largest
+        assert items[1]["description"] == "Salary"  # abs(2000) next largest
+    finally:
+        db.rollback()
+        db.close()
+
+
 def test_build_report_payload_functional_balance_uses_user_functional_currency():
     db = SessionLocal()
     try:

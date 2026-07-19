@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import and_
+from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
 from app.models import Account, Report, Transaction
@@ -86,6 +86,11 @@ def _fetch_transactions(db: Session, report: Report) -> dict:
 
     if report.transaction_mode == "RECENT":
         query = query.order_by(Transaction.booked_at.desc())
+    elif types == ("debit", "credit"):
+        # direction == ALL: debits are negative, credits are positive, so
+        # neither .asc() nor .desc() alone gives "biggest transactions
+        # first" — order by absolute magnitude instead.
+        query = query.order_by(func.abs(Transaction.amount).desc())
     else:  # TOP_N — order by absolute amount descending
         query = query.order_by(Transaction.amount.desc() if types == ("credit",) else Transaction.amount.asc())
 
