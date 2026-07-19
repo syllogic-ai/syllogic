@@ -1,9 +1,11 @@
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+import re
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from datetime import datetime
 from datetime import time as _time_type
 from decimal import Decimal
 from typing import Optional, List
 from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 # Account Schemas
@@ -351,6 +353,38 @@ ReportFrequency = Literal["DAILY", "WEEKLY", "BIWEEKLY", "MONTHLY"]
 ReportTransactionMode = Literal["RECENT", "TOP_N"]
 ReportTransactionDirection = Literal["ALL", "EXPENSE", "INCOME", "INFLOW", "OUTFLOW"]
 
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_SEND_TIME_RE = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)(:([0-5]\d))?$")
+
+
+def _validate_timezone(v: Optional[str]) -> Optional[str]:
+    if v is None:
+        return v
+    try:
+        ZoneInfo(v)
+    except ZoneInfoNotFoundError:
+        raise ValueError(f"Unknown timezone: {v}")
+    return v
+
+
+def _validate_recipient_emails(v: Optional[list[str]]) -> Optional[list[str]]:
+    if v is None:
+        return v
+    if len(v) < 1:
+        raise ValueError("recipient_emails must contain at least one email address")
+    for email in v:
+        if not _EMAIL_RE.match(email):
+            raise ValueError(f"Invalid email address: {email}")
+    return v
+
+
+def _validate_send_time(v: Optional[str]) -> Optional[str]:
+    if v is None:
+        return v
+    if not _SEND_TIME_RE.match(v):
+        raise ValueError(f"Invalid send_time format (expected HH:MM or HH:MM:SS): {v}")
+    return v
+
 
 class ReportBase(BaseModel):
     name: str
@@ -360,11 +394,15 @@ class ReportBase(BaseModel):
     transaction_direction: ReportTransactionDirection = "ALL"  # ALL, EXPENSE, INCOME, INFLOW, OUTFLOW
     frequency: ReportFrequency  # DAILY, WEEKLY, BIWEEKLY, MONTHLY
     send_time: str = "08:00:00"  # HH:MM:SS
-    send_day_of_week: Optional[int] = None
-    send_day_of_month: Optional[int] = None
+    send_day_of_week: Optional[int] = Field(default=None, ge=0, le=6)
+    send_day_of_month: Optional[int] = Field(default=None, ge=1, le=28)
     timezone: str = "UTC"
     recipient_emails: list[str] = Field(default_factory=list)
     is_active: bool = True
+
+    _check_timezone = field_validator("timezone")(_validate_timezone)
+    _check_recipient_emails = field_validator("recipient_emails")(_validate_recipient_emails)
+    _check_send_time = field_validator("send_time")(_validate_send_time)
 
 
 class ReportCreate(ReportBase):
@@ -385,8 +423,8 @@ class ReportUpdate(BaseModel):
     transaction_direction: Optional[ReportTransactionDirection] = None
     frequency: Optional[ReportFrequency] = None
     send_time: Optional[str] = None
-    send_day_of_week: Optional[int] = None
-    send_day_of_month: Optional[int] = None
+    send_day_of_week: Optional[int] = Field(default=None, ge=0, le=6)
+    send_day_of_month: Optional[int] = Field(default=None, ge=1, le=28)
     timezone: Optional[str] = None
     recipient_emails: Optional[list[str]] = None
     is_active: Optional[bool] = None
@@ -396,6 +434,10 @@ class ReportUpdate(BaseModel):
     # falls back to the already-persisted value for whichever field isn't in
     # this payload, so ReportCreate (which always has full context) is the
     # right place for that check.
+
+    _check_timezone = field_validator("timezone")(_validate_timezone)
+    _check_recipient_emails = field_validator("recipient_emails")(_validate_recipient_emails)
+    _check_send_time = field_validator("send_time")(_validate_send_time)
 
 
 class ReportResponse(ReportBase):
