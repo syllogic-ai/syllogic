@@ -1,5 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
+from datetime import time as _time_type
 from decimal import Decimal
 from typing import Optional, List
 from uuid import UUID
@@ -343,3 +344,62 @@ class SymbolSearchResult(BaseModel):
     name: str
     exchange: Optional[str] = None
     currency: Optional[str] = None
+
+
+# Report Schemas
+class ReportBase(BaseModel):
+    name: str
+    account_ids: list[str] = Field(default_factory=list)
+    transaction_mode: str = "RECENT"  # RECENT, TOP_N
+    transaction_count: int = 10
+    transaction_direction: str = "ALL"  # ALL, EXPENSE, INCOME, INFLOW, OUTFLOW
+    frequency: str  # DAILY, WEEKLY, BIWEEKLY, MONTHLY
+    send_time: str = "08:00:00"  # HH:MM:SS
+    send_day_of_week: Optional[int] = None
+    send_day_of_month: Optional[int] = None
+    timezone: str = "UTC"
+    recipient_emails: list[str] = Field(default_factory=list)
+    is_active: bool = True
+
+
+class ReportCreate(ReportBase):
+    pass
+
+
+class ReportUpdate(BaseModel):
+    name: Optional[str] = None
+    account_ids: Optional[list[str]] = None
+    transaction_mode: Optional[str] = None
+    transaction_count: Optional[int] = None
+    transaction_direction: Optional[str] = None
+    frequency: Optional[str] = None
+    send_time: Optional[str] = None
+    send_day_of_week: Optional[int] = None
+    send_day_of_month: Optional[int] = None
+    timezone: Optional[str] = None
+    recipient_emails: Optional[list[str]] = None
+    is_active: Optional[bool] = None
+
+
+class ReportResponse(ReportBase):
+    id: UUID
+    send_time: _time_type
+    next_run_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ReportRunResponse(BaseModel):
+    id: UUID
+    scheduled_for: Optional[datetime] = None
+    is_test: bool
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    status: str
+    error_message: Optional[str] = None
+    recipient_emails: list[str] = Field(default_factory=list)
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
