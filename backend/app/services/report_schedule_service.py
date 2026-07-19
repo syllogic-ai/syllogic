@@ -63,6 +63,12 @@ def compute_next_run_at(
     raise ValueError(f"Unknown frequency: {frequency}")
 
 
+# Known limitation: does not special-case DST transition gaps/ambiguous
+# local times — zoneinfo silently resolves them via its own PEP 495 default
+# behavior (a report scheduled inside a nonexistent local-time gap will be
+# interpreted using the post-transition UTC offset). Acceptable for v1;
+# revisit if reports need minute-precision reliability across DST
+# boundaries.
 def _combine(date_part, time_part: time, tz: ZoneInfo) -> datetime:
     return datetime.combine(date_part, time_part, tzinfo=tz)
 
