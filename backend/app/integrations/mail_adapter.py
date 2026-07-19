@@ -23,12 +23,21 @@ class MailAdapter(Protocol):
 
 
 class SmtpMailAdapter:
-    def __init__(self, host: str, port: int, username: str, password: str, from_addr: str):
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        username: str,
+        password: str,
+        from_addr: str,
+        timeout: float = 30,
+    ):
         self.host = host
         self.port = port
         self.username = username
         self.password = password
         self.from_addr = from_addr
+        self.timeout = timeout
 
     def send(self, to: list[str], subject: str, html: str, text: str) -> None:
         msg = MIMEMultipart("alternative")
@@ -38,10 +47,17 @@ class SmtpMailAdapter:
         msg.attach(MIMEText(text, "plain"))
         msg.attach(MIMEText(html, "html"))
 
-        with smtplib.SMTP(self.host, self.port) as conn:
-            conn.starttls()
-            conn.login(self.username, self.password)
-            conn.sendmail(self.from_addr, to, msg.as_string())
+        # Port 465 is implicit TLS (SMTPS) — connecting with plain SMTP +
+        # starttls() on that port hangs/fails against most providers.
+        smtp_cls = smtplib.SMTP_SSL if self.port == 465 else smtplib.SMTP
+        with smtp_cls(self.host, self.port, timeout=self.timeout) as conn:
+            if smtp_cls is smtplib.SMTP:
+                conn.starttls()
+            if self.username and self.password:
+                conn.login(self.username, self.password)
+            refused = conn.sendmail(self.from_addr, to, msg.as_string())
+            if refused:
+                raise RuntimeError(f"SMTP refused recipients: {refused}")
 
 
 class ResendMailAdapter:
@@ -75,6 +91,17 @@ class UsesendMailAdapter:
         response.raise_for_status()
 
 
+def _require_from_addr(env_var: str) -> str:
+    value = os.getenv(env_var, "")
+    if not value:
+        raise RuntimeError(
+            f"{env_var} must be set to a verified sender address — no default is used "
+            "since an unverified 'reports@localhost'-style address is silently rejected "
+            "or spoofable depending on provider."
+        )
+    return value
+
+
 def get_mail_adapter() -> MailAdapter:
     smtp_host = os.getenv("SMTP_HOST")
     if smtp_host:
@@ -83,18 +110,19 @@ def get_mail_adapter() -> MailAdapter:
             port=int(os.getenv("SMTP_PORT", "587")),
             username=os.getenv("SMTP_USERNAME", ""),
             password=os.getenv("SMTP_PASSWORD", ""),
-            from_addr=os.getenv("SMTP_FROM", "reports@localhost"),
+            from_addr=_require_from_addr("SMTP_FROM"),
+            timeout=float(os.getenv("SMTP_TIMEOUT", "30")),
         )
 
     resend_key = os.getenv("RESEND_API_KEY")
     if resend_key:
-        return ResendMailAdapter(api_key=resend_key, from_addr=os.getenv("RESEND_FROM", "reports@localhost"))
+        return ResendMailAdapter(api_key=resend_key, from_addr=_require_from_addr("RESEND_FROM"))
 
     usesend_key = os.getenv("USESEND_API_KEY")
     if usesend_key:
         return UsesendMailAdapter(
             api_key=usesend_key,
-            from_addr=os.getenv("USESEND_FROM", "reports@localhost"),
+            from_addr=_require_from_addr("USESEND_FROM"),
             base_url=os.getenv("USESEND_BASE_URL", "https://app.usesend.com/api"),
         )
 
