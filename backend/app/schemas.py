@@ -402,10 +402,17 @@ class ReportBase(BaseModel):
 
     _check_timezone = field_validator("timezone")(_validate_timezone)
     _check_recipient_emails = field_validator("recipient_emails")(_validate_recipient_emails)
-    _check_send_time = field_validator("send_time")(_validate_send_time)
+    # NOTE: send_time is intentionally NOT validated here — ReportResponse
+    # also inherits ReportBase but overrides send_time's type to
+    # datetime.time (the ORM-loaded value), and pydantic v2 field_validators
+    # are inherited by subclasses even when the field is overridden, which
+    # would break response serialization. Validated on ReportCreate/
+    # ReportUpdate individually instead, where the field stays a str.
 
 
 class ReportCreate(ReportBase):
+    _check_send_time = field_validator("send_time")(_validate_send_time)
+
     @model_validator(mode="after")
     def _validate_required_day_fields(self) -> "ReportCreate":
         if self.frequency in ("WEEKLY", "BIWEEKLY") and self.send_day_of_week is None:
