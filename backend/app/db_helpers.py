@@ -7,7 +7,8 @@ import hmac
 import os
 import time
 from typing import Mapping, Optional
-from fastapi import HTTPException, status
+from datetime import datetime
+from fastapi import HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 try:
@@ -16,8 +17,12 @@ except ImportError:  # pragma: no cover - fallback when MCP SDK is unavailable
     def get_access_token():  # type: ignore[no-redef]
         return None
 
+from app.database import SessionLocal
 from app.models import User
+from app.models import Session as SessionModel
 from app.mcp.auth import validate_api_key
+
+SESSION_COOKIE_NAMES = ("__Secure-better-auth.session_token", "better-auth.session_token")
 
 INTERNAL_AUTH_USER_HEADER = "x-syllogic-user-id"
 INTERNAL_AUTH_TIMESTAMP_HEADER = "x-syllogic-timestamp"
@@ -261,3 +266,36 @@ def get_user_id(user_id: Optional[str] = None, api_key: Optional[str] = None) ->
         )
 
     return request_user_id
+
+
+def get_user_id_from_session_cookie(request: Request) -> Optional[str]:
+    """
+    Resolve user_id from a better-auth session cookie, sent directly by a
+    client (e.g. the mobile app) that has no way to produce the HMAC-signed
+    internal-auth headers the Next.js server uses. Looks the token up
+    against the same `sessions` table better-auth writes to — no new auth
+    system, no shared secret exposed to the client.
+
+    Returns None (rather than raising) when no usable cookie is present, so
+    callers (the internal-auth middleware) can fall back accordingly.
+    """
+    raw_cookie = None
+    for name in SESSION_COOKIE_NAMES:
+        raw_cookie = request.cookies.get(name)
+        if raw_cookie:
+            break
+
+    if not raw_cookie:
+        return None
+
+    # better-auth signs the cookie value as "<token>.<signature>".
+    token = raw_cookie.split(".", 1)[0]
+
+    db = SessionLocal()
+    try:
+        session = db.query(SessionModel).filter(SessionModel.token == token).first()
+        if not session or session.expires_at < datetime.utcnow():
+            return None
+        return session.user_id
+    finally:
+        db.close()
