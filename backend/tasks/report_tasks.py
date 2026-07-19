@@ -42,7 +42,15 @@ def check_due_reports() -> None:
                     recipient_emails=report.recipient_emails,
                 )
                 db.add(run)
-                db.flush()
+
+            # Commit the due run BEFORE enqueueing so the worker (which may
+            # start executing almost immediately with a warm Celery worker
+            # and Redis broker) can always find the row by id. Enqueueing
+            # before this commit lands is a data-loss race: the task would
+            # query for a run that doesn't exist yet, return early, and the
+            # send would be silently lost with no FAILED record.
+            db.commit()
+            db.refresh(run)
 
             send_report_run.delay(str(run.id))
 
@@ -60,7 +68,7 @@ def check_due_reports() -> None:
                 status="SCHEDULED",
                 recipient_emails=report.recipient_emails,
             ))
-        db.commit()
+            db.commit()
     finally:
         db.close()
 
