@@ -53,12 +53,22 @@ def _fetch_accounts(db: Session, report: Report) -> list[dict]:
         .filter(Account.user_id == report.user_id, Account.id.in_(account_uuids))
         .all()
     )
+    functional_currency = (report.user.functional_currency if report.user else None) or "EUR"
+
+    def _balance_and_currency(a: Account) -> tuple[str, str]:
+        if a.functional_balance is not None:
+            # functional_balance is already converted to the user's
+            # functional currency, so it must be labeled with that
+            # currency, not the account's native currency.
+            return str(a.functional_balance), functional_currency
+        return str(a.balance_available or 0), a.currency or "EUR"
+
     return [
         {
             "name": a.name,
             "institution": a.institution,
-            "balance": str(a.functional_balance if a.functional_balance is not None else a.balance_available or 0),
-            "currency": a.currency or "EUR",
+            "balance": _balance_and_currency(a)[0],
+            "currency": _balance_and_currency(a)[1],
         }
         for a in rows
     ]

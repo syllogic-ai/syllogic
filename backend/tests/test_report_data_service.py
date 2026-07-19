@@ -88,6 +88,33 @@ def test_build_report_payload_recent_all():
         db.close()
 
 
+def test_build_report_payload_functional_balance_uses_user_functional_currency():
+    db = SessionLocal()
+    try:
+        user, account = _seed_user_with_account_and_transactions(db)
+        user.functional_currency = "GBP"
+        db.flush()
+
+        report = Report(
+            user_id=user.id,
+            name="Test report",
+            account_ids=[str(account.id)],
+            transaction_mode="RECENT",
+            transaction_count=2,
+            transaction_direction="ALL",
+            frequency="DAILY",
+        )
+        db.add(report)
+        db.flush()
+
+        payload = build_report_payload(db, report)
+        assert payload["accounts"][0]["balance"] == "1234.56"
+        assert payload["accounts"][0]["currency"] == "GBP"
+    finally:
+        db.rollback()
+        db.close()
+
+
 def test_build_report_payload_top_n_expenses():
     db = SessionLocal()
     try:
