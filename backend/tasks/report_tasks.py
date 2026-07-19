@@ -91,6 +91,11 @@ def send_report_run(report_run_id: str) -> None:
             run = db.query(ReportRun).filter(ReportRun.id == report_run_id).first()
             if run is None:
                 return
+            if run.status != "SCHEDULED":
+                # Already RUNNING/SUCCEEDED/FAILED — do not re-send. Guards
+                # against duplicate Celery deliveries (at-least-once
+                # delivery, retried tasks, etc.) causing double sends.
+                return
             run.status = "RUNNING"
             run.started_at = datetime.utcnow()
             db.commit()
