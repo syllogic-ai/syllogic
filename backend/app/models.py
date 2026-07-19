@@ -228,7 +228,7 @@ class Report(Base):
     __tablename__ = "reports"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(255), nullable=False)
     account_ids = Column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
     transaction_mode = Column(String(20), nullable=False, default="RECENT")
@@ -241,7 +241,7 @@ class Report(Base):
     timezone = Column(String(64), nullable=False, default="UTC")
     recipient_emails = Column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
     is_active = Column(Boolean, default=True, nullable=False)
-    next_run_at = Column(DateTime, nullable=True, index=True)
+    next_run_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -259,7 +259,7 @@ class ReportRun(Base):
     __tablename__ = "report_runs"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    report_id = Column(UUID(as_uuid=True), ForeignKey("reports.id", ondelete="CASCADE"), nullable=False, index=True)
+    report_id = Column(UUID(as_uuid=True), ForeignKey("reports.id", ondelete="CASCADE"), nullable=False)
     scheduled_for = Column(DateTime, nullable=True)
     is_test = Column(Boolean, default=False, nullable=False)
     started_at = Column(DateTime, nullable=True)
