@@ -1,21 +1,24 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { listAccounts } from "@/lib/reports/api";
 import { ReportForm } from "@/components/reports/ReportForm";
 
-async function fetchAccounts(): Promise<{ id: string; name: string }[]> {
-  const res = await fetch("/api/accounts");
-  if (!res.ok) throw new Error("Failed to load accounts");
-  return res.json();
-}
-
 export default function NewReportPage() {
-  const { data: accounts } = useQuery({ queryKey: ["accounts"], queryFn: fetchAccounts });
+  const {
+    data: accounts,
+    isLoading: accountsLoading,
+    isError: accountsError,
+  } = useQuery({ queryKey: ["accounts"], queryFn: listAccounts });
 
   return (
     <div className="p-6">
       <h1 className="text-xl font-semibold mb-4">New report</h1>
-      <ReportForm availableAccounts={accounts ?? []} />
+      <ReportForm
+        availableAccounts={accounts ?? []}
+        accountsLoading={accountsLoading}
+        accountsError={accountsError}
+      />
     </div>
   );
 }
