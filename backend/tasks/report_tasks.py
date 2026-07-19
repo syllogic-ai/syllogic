@@ -108,7 +108,8 @@ def send_report_run(report_run_id: str) -> None:
             db.commit()
 
             payload = build_report_payload(db, report)
-            payload["manage_url"] = None
+            frontend_base_url = (os.environ.get("FRONTEND_URL") or os.environ.get("APP_URL", "http://localhost:3000")).rstrip("/")
+            payload["manage_url"] = f"{frontend_base_url}/reports/{report.id}"
 
             result = subprocess.run(
                 ["npx", "tsx", str(_RENDER_SCRIPT)],

@@ -6,6 +6,7 @@ Run with:
 from __future__ import annotations
 
 import base64
+import json
 import os
 import sys
 import uuid
@@ -85,6 +86,31 @@ def test_send_report_run_success_marks_succeeded():
         assert run.status == "SUCCEEDED"
         assert run.finished_at is not None
         mock_adapter.send.assert_called_once()
+    finally:
+        db.rollback()
+        db.close()
+
+
+def test_send_report_run_sets_real_manage_url():
+    db = SessionLocal()
+    try:
+        report = _seed_due_report(db)
+        run = ReportRun(report_id=report.id, status="SCHEDULED", recipient_emails=report.recipient_emails)
+        db.add(run)
+        db.commit()
+        run_id = str(run.id)
+
+        fake_render = MagicMock(returncode=0, stdout='{"html": "<p>hi</p>", "text": "hi"}', stderr="")
+        mock_adapter = MagicMock()
+        with patch.dict(os.environ, {"FRONTEND_URL": "https://app.example.com"}), \
+             patch.object(report_tasks.subprocess, "run", return_value=fake_render) as mock_run, \
+             patch.object(report_tasks, "get_mail_adapter", return_value=mock_adapter):
+            report_tasks.send_report_run(run_id)
+
+        mock_run.assert_called_once()
+        sent_input = mock_run.call_args.kwargs["input"]
+        payload = json.loads(sent_input)
+        assert payload["manage_url"] == f"https://app.example.com/reports/{report.id}"
     finally:
         db.rollback()
         db.close()
