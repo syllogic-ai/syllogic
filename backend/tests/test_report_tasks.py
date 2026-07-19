@@ -47,10 +47,26 @@ def _seed_due_report(db) -> Report:
     return report
 
 
+def _cleanup_user(db, user_id: str) -> None:
+    """Delete the seeded user (cascades to reports/report_runs via FK).
+
+    Without this, tests that db.commit() their seed data leave rows behind
+    in the shared dev Postgres across every test run, which makes
+    test_check_due_reports_enqueues_and_reschedules flaky (it counts
+    .delay() calls across ALL due reports, including stale ones from
+    earlier runs).
+    """
+    db.rollback()
+    db.query(User).filter(User.id == user_id).delete()
+    db.commit()
+
+
 def test_check_due_reports_enqueues_and_reschedules():
     db = SessionLocal()
+    user_id = None
     try:
         report = _seed_due_report(db)
+        user_id = report.user_id
         db.commit()
 
         with patch.object(report_tasks.send_report_run, "delay") as mock_delay:
@@ -63,14 +79,18 @@ def test_check_due_reports_enqueues_and_reschedules():
         runs = db.query(ReportRun).filter(ReportRun.report_id == report.id).all()
         assert len(runs) >= 1
     finally:
+        if user_id:
+            _cleanup_user(db, user_id)
         db.rollback()
         db.close()
 
 
 def test_send_report_run_success_marks_succeeded():
     db = SessionLocal()
+    user_id = None
     try:
         report = _seed_due_report(db)
+        user_id = report.user_id
         run = ReportRun(report_id=report.id, status="SCHEDULED", recipient_emails=report.recipient_emails)
         db.add(run)
         db.commit()
@@ -87,14 +107,18 @@ def test_send_report_run_success_marks_succeeded():
         assert run.finished_at is not None
         mock_adapter.send.assert_called_once()
     finally:
+        if user_id:
+            _cleanup_user(db, user_id)
         db.rollback()
         db.close()
 
 
 def test_send_report_run_sets_real_manage_url():
     db = SessionLocal()
+    user_id = None
     try:
         report = _seed_due_report(db)
+        user_id = report.user_id
         run = ReportRun(report_id=report.id, status="SCHEDULED", recipient_emails=report.recipient_emails)
         db.add(run)
         db.commit()
@@ -112,14 +136,18 @@ def test_send_report_run_sets_real_manage_url():
         payload = json.loads(sent_input)
         assert payload["manage_url"] == f"https://app.example.com/reports/{report.id}"
     finally:
+        if user_id:
+            _cleanup_user(db, user_id)
         db.rollback()
         db.close()
 
 
 def test_send_report_run_failure_marks_failed_without_raising():
     db = SessionLocal()
+    user_id = None
     try:
         report = _seed_due_report(db)
+        user_id = report.user_id
         run = ReportRun(report_id=report.id, status="SCHEDULED", recipient_emails=report.recipient_emails)
         db.add(run)
         db.commit()
@@ -134,14 +162,18 @@ def test_send_report_run_failure_marks_failed_without_raising():
         assert run.status == "FAILED"
         assert "no provider" in run.error_message
     finally:
+        if user_id:
+            _cleanup_user(db, user_id)
         db.rollback()
         db.close()
 
 
 def test_send_report_run_db_failure_during_transition_does_not_raise():
     db = SessionLocal()
+    user_id = None
     try:
         report = _seed_due_report(db)
+        user_id = report.user_id
         run = ReportRun(report_id=report.id, status="SCHEDULED", recipient_emails=report.recipient_emails)
         db.add(run)
         db.commit()
@@ -166,5 +198,7 @@ def test_send_report_run_db_failure_during_transition_does_not_raise():
         assert run.status == "FAILED"
         assert "db unavailable" in (run.error_message or "")
     finally:
+        if user_id:
+            _cleanup_user(db, user_id)
         db.rollback()
         db.close()
