@@ -43,13 +43,18 @@ const DEFAULTS: FormValues = {
 export function ReportForm({
   report,
   availableAccounts,
+  accountsLoading,
+  accountsError,
 }: {
   report?: Report;
   availableAccounts: { id: string; name: string }[];
+  accountsLoading?: boolean;
+  accountsError?: boolean;
 }) {
   const router = useRouter();
   const [recipientDraft, setRecipientDraft] = useState("");
   const [sendingTest, setSendingTest] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const {
     register,
@@ -67,13 +72,18 @@ export function ReportForm({
   const accountIds = watch("account_ids");
 
   async function onSubmit(values: FormValues) {
-    const input: Partial<ReportInput> = values;
-    if (report) {
-      await updateReport(report.id, input);
-    } else {
-      await createReport(input);
+    setSubmitError(null);
+    try {
+      const input: Partial<ReportInput> = values;
+      if (report) {
+        await updateReport(report.id, input);
+      } else {
+        await createReport(input);
+      }
+      router.push("/reports");
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Failed to save report. Please try again.");
     }
-    router.push("/reports");
   }
 
   async function handleSendTest() {
@@ -103,6 +113,11 @@ export function ReportForm({
 
       <div>
         <label className="block text-sm font-medium mb-1">Accounts</label>
+        {accountsLoading ? (
+          <p className="text-sm text-gray-500">Loading accounts…</p>
+        ) : accountsError ? (
+          <p className="text-sm text-red-600">Failed to load accounts. Please refresh and try again.</p>
+        ) : (
         <div className="space-y-1 border rounded p-2 max-h-40 overflow-y-auto">
           {availableAccounts.map((a) => (
             <label key={a.id} className="flex items-center gap-2 text-sm">
@@ -120,6 +135,7 @@ export function ReportForm({
             </label>
           ))}
         </div>
+        )}
       </div>
 
       <div className="grid grid-cols-3 gap-3">
@@ -133,6 +149,9 @@ export function ReportForm({
         <div>
           <label className="block text-sm font-medium mb-1">Count</label>
           <input type="number" {...register("transaction_count")} className="w-full border rounded px-2 py-2 text-sm" />
+          {errors.transaction_count && (
+            <p className="text-xs text-red-600 mt-1">{errors.transaction_count.message}</p>
+          )}
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">Direction</label>
@@ -172,6 +191,9 @@ export function ReportForm({
               </option>
             ))}
           </select>
+          {errors.send_day_of_week && (
+            <p className="text-xs text-red-600 mt-1">{errors.send_day_of_week.message}</p>
+          )}
         </div>
       )}
 
@@ -185,6 +207,9 @@ export function ReportForm({
             {...register("send_day_of_month")}
             className="w-full border rounded px-2 py-2 text-sm"
           />
+          {errors.send_day_of_month && (
+            <p className="text-xs text-red-600 mt-1">{errors.send_day_of_month.message}</p>
+          )}
         </div>
       )}
 
@@ -217,8 +242,19 @@ export function ReportForm({
         {errors.recipient_emails && <p className="text-xs text-red-600 mt-1">{errors.recipient_emails.message}</p>}
       </div>
 
+      <div>
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <input type="checkbox" {...register("is_active")} />
+          Active
+        </label>
+      </div>
+
       <div className="flex items-center gap-3 pt-2">
-        <button type="submit" disabled={isSubmitting} className="bg-blue-600 text-white rounded px-4 py-2 text-sm">
+        <button
+          type="submit"
+          disabled={isSubmitting || accountsLoading || accountsError}
+          className="bg-blue-600 text-white rounded px-4 py-2 text-sm disabled:opacity-50"
+        >
           {report ? "Save changes" : "Create report"}
         </button>
         {report && (
@@ -232,6 +268,7 @@ export function ReportForm({
           </button>
         )}
       </div>
+      {submitError && <p className="text-xs text-red-600">{submitError}</p>}
     </form>
   );
 }
