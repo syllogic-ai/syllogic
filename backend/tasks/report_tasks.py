@@ -96,11 +96,16 @@ def send_report_run(report_run_id: str) -> None:
                 # against duplicate Celery deliveries (at-least-once
                 # delivery, retried tasks, etc.) causing double sends.
                 return
+            report = db.query(Report).filter(Report.id == run.report_id).first()
+
+            # Refresh the run's recipient snapshot from the live Report
+            # right before sending, so it reflects recipients as of send
+            # time (not whatever was configured when the run row was
+            # created, potentially much earlier for scheduled runs).
+            run.recipient_emails = report.recipient_emails
             run.status = "RUNNING"
             run.started_at = datetime.utcnow()
             db.commit()
-
-            report = db.query(Report).filter(Report.id == run.report_id).first()
 
             payload = build_report_payload(db, report)
             payload["manage_url"] = None
