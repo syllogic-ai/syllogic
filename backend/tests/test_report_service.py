@@ -254,8 +254,8 @@ def test_send_test_report_deletes_run_if_dispatch_fails():
             mock_task.delay.side_effect = RuntimeError("broker unreachable")
             try:
                 report_service.send_test_report(db, user.id, str(report.id))
-                assert False, "expected ReportValidationError"
-            except report_service.ReportValidationError:
+                assert False, "expected ReportDispatchError"
+            except report_service.ReportDispatchError:
                 pass
         runs = report_service.list_report_runs(db, user.id, str(report.id))
         assert len(runs) == 0

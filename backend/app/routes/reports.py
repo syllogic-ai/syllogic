@@ -5,7 +5,7 @@ from app.database import get_db
 from app.db_helpers import get_user_id
 from app.schemas import ReportCreate, ReportResponse, ReportRunResponse, ReportUpdate
 from app.services import report_service
-from app.services.report_service import ReportNotFoundError, ReportValidationError
+from app.services.report_service import ReportDispatchError, ReportNotFoundError, ReportValidationError
 
 router = APIRouter()
 
@@ -55,8 +55,8 @@ def send_test_report(report_id: str, user_id: str = Depends(get_user_id), db: Se
         return report_service.send_test_report(db, user_id, report_id)
     except ReportNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ReportValidationError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except ReportDispatchError as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
 
 
 @router.get("/{report_id}/runs", response_model=list[ReportRunResponse])

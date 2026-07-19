@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from app.mcp.dependencies import get_db
 from app.services import report_service
-from app.services.report_service import ReportNotFoundError, ReportValidationError
+from app.services.report_service import ReportDispatchError, ReportNotFoundError, ReportValidationError
 
 
 def _serialize_report(report) -> dict:
@@ -177,7 +177,7 @@ def send_test_report(user_id: str, report_id: str) -> dict:
         except ReportNotFoundError as e:
             db.rollback()
             return {"success": False, "error": str(e)}
-        except ReportValidationError as e:
+        except ReportDispatchError as e:
             db.rollback()
             return {"success": False, "error": str(e)}
         except Exception as e:  # noqa: BLE001

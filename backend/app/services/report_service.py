@@ -25,6 +25,13 @@ class ReportNotFoundError(Exception):
     """Raised when a report_id doesn't exist or isn't owned by user_id."""
 
 
+class ReportDispatchError(Exception):
+    """Raised when enqueueing a send fails for infra reasons (e.g. broker
+    unreachable) — distinct from ReportValidationError since this isn't a
+    bad-request condition; callers should map it to a 5xx/service-unavailable
+    style response, not 422."""
+
+
 _NON_NULLABLE_UPDATE_FIELDS = ("name", "account_ids", "recipient_emails", "frequency", "is_active", "timezone")
 
 
@@ -172,7 +179,7 @@ def send_test_report(db: Session, user_id: str, report_id: str) -> ReportRun:
         # transitions out of SCHEDULED.
         db.delete(run)
         db.commit()
-        raise ReportValidationError(f"Failed to enqueue send: {e}") from e
+        raise ReportDispatchError(f"Failed to enqueue send: {e}") from e
     return run
 
 
