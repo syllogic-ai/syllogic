@@ -14,9 +14,9 @@ export function BalancesSection({ accounts }: { accounts: BalanceItem[] }) {
       <Text style={{ fontSize: "12px", fontWeight: 600, color: "#6B7280", textTransform: "uppercase", margin: "0 0 8px" }}>
         Account Balances
       </Text>
-      {accounts.map((a) => (
+      {accounts.map((a, index) => (
         <Section
-          key={a.name}
+          key={`${a.name}-${index}`}
           style={{
             background: "#F9FAFB",
             borderRadius: "8px",
