@@ -8,7 +8,11 @@ import { RunStatusBadge } from "@/components/reports/RunStatusBadge";
 export default function ReportRunsPage() {
   const params = useParams<{ id: string }>();
   const { data: report } = useQuery({ queryKey: ["reports", params.id], queryFn: () => getReport(params.id) });
-  const { data: runs, isLoading } = useQuery({
+  const {
+    data: runs,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ["reports", params.id, "runs"],
     queryFn: () => listReportRuns(params.id),
     refetchInterval: 10_000,
@@ -21,6 +25,8 @@ export default function ReportRunsPage() {
 
       {isLoading ? (
         <p className="text-sm text-gray-500">Loading…</p>
+      ) : isError ? (
+        <p className="text-sm text-red-600">Failed to load runs. Please try again.</p>
       ) : runs && runs.length > 0 ? (
         <table className="w-full text-sm border rounded-lg overflow-hidden">
           <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
