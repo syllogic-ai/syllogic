@@ -68,16 +68,18 @@ def check_due_reports() -> None:
 @celery_app.task(name="tasks.report_tasks.send_report_run")
 def send_report_run(report_run_id: str) -> None:
     db = SessionLocal()
+    run = None
     try:
-        run = db.query(ReportRun).filter(ReportRun.id == report_run_id).first()
-        if run is None:
-            return
-        run.status = "RUNNING"
-        run.started_at = datetime.utcnow()
-        db.commit()
-
-        report = db.query(Report).filter(Report.id == run.report_id).first()
         try:
+            run = db.query(ReportRun).filter(ReportRun.id == report_run_id).first()
+            if run is None:
+                return
+            run.status = "RUNNING"
+            run.started_at = datetime.utcnow()
+            db.commit()
+
+            report = db.query(Report).filter(Report.id == run.report_id).first()
+
             payload = build_report_payload(db, report)
             payload["manage_url"] = None
 
@@ -102,11 +104,38 @@ def send_report_run(report_run_id: str) -> None:
             )
 
             run.status = "SUCCEEDED"
-        except Exception as exc:  # noqa: BLE001 - must never break the Beat loop
-            run.status = "FAILED"
-            run.error_message = str(exc)
-        finally:
             run.finished_at = datetime.utcnow()
             db.commit()
+        except Exception as exc:  # noqa: BLE001 - must never break the Beat loop
+            _mark_run_failed(db, run, report_run_id, exc)
     finally:
         db.close()
+
+
+def _mark_run_failed(db, run, report_run_id: str, exc: Exception) -> None:
+    """Best-effort attempt to mark a ReportRun as FAILED after any failure.
+
+    The session/transaction may be in an unusable state (e.g. if the failure
+    happened during the initial commit), so we roll back first and, if the
+    in-memory `run` object is unusable, re-query it by id on a fresh
+    transaction before giving up.
+    """
+    try:
+        db.rollback()
+    except Exception:  # noqa: BLE001
+        pass
+
+    try:
+        if run is None:
+            run = db.query(ReportRun).filter(ReportRun.id == report_run_id).first()
+        if run is None:
+            return
+        run.status = "FAILED"
+        run.error_message = str(exc)
+        run.finished_at = datetime.utcnow()
+        db.commit()
+    except Exception:  # noqa: BLE001 - never let the failure handler itself raise
+        try:
+            db.rollback()
+        except Exception:  # noqa: BLE001
+            pass

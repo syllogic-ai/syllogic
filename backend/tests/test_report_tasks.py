@@ -108,3 +108,35 @@ def test_send_report_run_failure_marks_failed_without_raising():
     finally:
         db.rollback()
         db.close()
+
+
+def test_send_report_run_db_failure_during_transition_does_not_raise():
+    db = SessionLocal()
+    try:
+        report = _seed_due_report(db)
+        run = ReportRun(report_id=report.id, status="SCHEDULED", recipient_emails=report.recipient_emails)
+        db.add(run)
+        db.commit()
+        run_id = str(run.id)
+
+        from sqlalchemy.orm import Session as SASession
+
+        real_commit = SASession.commit
+        call_count = {"n": 0}
+
+        def flaky_commit(self):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                raise RuntimeError("db unavailable")
+            return real_commit(self)
+
+        with patch.object(SASession, "commit", flaky_commit):
+            report_tasks.send_report_run(run_id)  # must not raise
+
+        db.rollback()
+        db.refresh(run)
+        assert run.status == "FAILED"
+        assert "db unavailable" in (run.error_message or "")
+    finally:
+        db.rollback()
+        db.close()
