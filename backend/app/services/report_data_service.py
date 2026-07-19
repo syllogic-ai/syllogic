@@ -38,7 +38,10 @@ def build_report_payload(db: Session, report: Report) -> dict:
 
     return {
         "report_name": report.name,
-        "generated_at": datetime.utcnow().isoformat(),
+        # Trailing "Z" so the frontend's `new Date(generatedAt)` parses this
+        # as UTC rather than the worker container's local timezone (which
+        # would silently shift the displayed date/time otherwise).
+        "generated_at": datetime.utcnow().isoformat() + "Z",
         "accounts": accounts,
         "transactions": transactions,
     }
