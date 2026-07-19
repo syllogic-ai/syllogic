@@ -177,6 +177,9 @@ def send_test_report(user_id: str, report_id: str) -> dict:
         except ReportNotFoundError as e:
             db.rollback()
             return {"success": False, "error": str(e)}
+        except ReportValidationError as e:
+            db.rollback()
+            return {"success": False, "error": str(e)}
         except Exception as e:  # noqa: BLE001
             db.rollback()
             return {"success": False, "error": f"Database error: {str(e)}"}

@@ -163,7 +163,16 @@ def send_test_report(db: Session, user_id: str, report_id: str) -> ReportRun:
     db.add(run)
     db.commit()
     db.refresh(run)
-    send_report_run.delay(str(run.id))
+    try:
+        send_report_run.delay(str(run.id))
+    except Exception as e:
+        # Dispatch failed (e.g. Redis/broker unreachable) after the run
+        # was already committed — delete it rather than leaving a
+        # SCHEDULED row that will never be picked up and never
+        # transitions out of SCHEDULED.
+        db.delete(run)
+        db.commit()
+        raise ReportValidationError(f"Failed to enqueue send: {e}") from e
     return run
 
 

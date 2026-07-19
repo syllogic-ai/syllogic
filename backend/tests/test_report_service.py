@@ -242,6 +242,30 @@ def test_send_test_report_creates_run_and_enqueues():
         db.close()
 
 
+def test_send_test_report_deletes_run_if_dispatch_fails():
+    # If send_report_run.delay() raises (e.g. broker unreachable) after the
+    # ReportRun row was already committed, it must not be left behind as a
+    # zombie SCHEDULED row that never gets picked up.
+    db = SessionLocal()
+    try:
+        user = _seed_user(db)
+        report = report_service.create_report(db, user.id, _base_payload())
+        with patch("app.services.report_service.send_report_run") as mock_task:
+            mock_task.delay.side_effect = RuntimeError("broker unreachable")
+            try:
+                report_service.send_test_report(db, user.id, str(report.id))
+                assert False, "expected ReportValidationError"
+            except report_service.ReportValidationError:
+                pass
+        runs = report_service.list_report_runs(db, user.id, str(report.id))
+        assert len(runs) == 0
+    finally:
+        db.query(User).filter(User.id == user.id).delete()
+        db.commit()
+        db.rollback()
+        db.close()
+
+
 def test_list_report_runs_scoped_to_report():
     db = SessionLocal()
     try:
