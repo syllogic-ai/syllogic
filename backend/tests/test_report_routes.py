@@ -250,6 +250,28 @@ def test_create_report_rejects_empty_recipient_emails():
         app.dependency_overrides.pop(get_user_id, None)
 
 
+def test_create_report_rejects_missing_recipient_emails_key():
+    # Omitting the key entirely (not just passing []) previously bypassed
+    # validation because pydantic v2 skips field validators on default
+    # values, letting an empty list reach the DB and only fail later when
+    # ReportResponse re-serialized it. recipient_emails now has no default,
+    # so omission is itself a 422 "field required".
+    db = SessionLocal()
+    try:
+        user = _seed_user(db)
+        client = _client_for_user(user.id)
+        payload = _base_report_payload()
+        del payload["recipient_emails"]
+        resp = client.post("/api/reports", json=payload)
+        assert resp.status_code == 422, resp.text
+    finally:
+        db.query(User).filter(User.id == user.id).delete()
+        db.commit()
+        db.rollback()
+        db.close()
+        app.dependency_overrides.pop(get_user_id, None)
+
+
 def test_create_report_rejects_invalid_recipient_email():
     db = SessionLocal()
     try:
@@ -377,6 +399,29 @@ def test_patch_report_recipient_emails_only_still_works():
         )
         assert patch_resp.status_code == 200, patch_resp.text
         assert patch_resp.json()["recipient_emails"] == ["someone-else@example.com"]
+    finally:
+        db.query(User).filter(User.id == user.id).delete()
+        db.commit()
+        db.rollback()
+        db.close()
+        app.dependency_overrides.pop(get_user_id, None)
+
+
+def test_patch_report_rejects_explicit_null_account_ids():
+    db = SessionLocal()
+    try:
+        user = _seed_user(db)
+        client = _client_for_user(user.id)
+
+        create_resp = client.post("/api/reports", json=_base_report_payload())
+        report_id = create_resp.json()["id"]
+
+        patch_resp = client.patch(f"/api/reports/{report_id}", json={"account_ids": None})
+        assert patch_resp.status_code == 422, patch_resp.text
+
+        # Confirm the report was left untouched, not partially mutated.
+        get_resp = client.get(f"/api/reports/{report_id}")
+        assert get_resp.json()["account_ids"] == []
     finally:
         db.query(User).filter(User.id == user.id).delete()
         db.commit()
