@@ -7,6 +7,8 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
+from sqlalchemy import update
+
 from celery_app import celery_app
 
 from app.database import SessionLocal
@@ -88,13 +90,36 @@ def send_report_run(report_run_id: str) -> None:
     run = None
     try:
         try:
+            # Atomically claim the run: only the invocation whose UPDATE
+            # actually flips a row from SCHEDULED -> RUNNING proceeds to
+            # send. A separate "read status, then commit RUNNING" sequence
+            # has a race window where two concurrent deliveries of the same
+            # report_run_id (Celery's at-least-once delivery, a retry, or
+            # overlapping check_due_reports invocations) could both pass the
+            # status check before either commits, double-sending. A single
+            # conditional UPDATE is an atomic compare-and-swap at the
+            # database level, closing that window.
+            #
+            # Known residual limitation (not addressed here): if a worker
+            # crashes mid-send after this claim commits, the run is left
+            # permanently RUNNING with no automatic recovery/requeue. A
+            # stale-RUNNING reaper (e.g. a periodic task that re-queues runs
+            # RUNNING for longer than the render+send timeout) would close
+            # this gap; out of scope for this fix, v1 accepts it.
+            claim_result = db.execute(
+                update(ReportRun)
+                .where(ReportRun.id == report_run_id, ReportRun.status == "SCHEDULED")
+                .values(status="RUNNING", started_at=datetime.utcnow())
+            )
+            db.commit()
+            if claim_result.rowcount == 0:
+                # Already RUNNING/SUCCEEDED/FAILED, or doesn't exist — some
+                # other invocation claimed it first, or there's nothing to
+                # claim. Do not re-send.
+                return
+
             run = db.query(ReportRun).filter(ReportRun.id == report_run_id).first()
             if run is None:
-                return
-            if run.status != "SCHEDULED":
-                # Already RUNNING/SUCCEEDED/FAILED — do not re-send. Guards
-                # against duplicate Celery deliveries (at-least-once
-                # delivery, retried tasks, etc.) causing double sends.
                 return
             report = db.query(Report).filter(Report.id == run.report_id).first()
 
@@ -103,8 +128,6 @@ def send_report_run(report_run_id: str) -> None:
             # time (not whatever was configured when the run row was
             # created, potentially much earlier for scheduled runs).
             run.recipient_emails = report.recipient_emails
-            run.status = "RUNNING"
-            run.started_at = datetime.utcnow()
             db.commit()
 
             payload = build_report_payload(db, report)
