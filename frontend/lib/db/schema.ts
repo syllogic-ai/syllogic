@@ -13,6 +13,7 @@ import {
   unique,
   numeric,
   date,
+  time,
   uniqueIndex,
   primaryKey,
 } from "drizzle-orm/pg-core";
@@ -1054,6 +1055,65 @@ export const vehicleOwnersRelations = relations(vehicleOwners, ({ one }) => ({
 }));
 
 // ============================================================================
+// Newsletter Reports
+// ============================================================================
+
+export const reports = pgTable(
+  "reports",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    accountIds: jsonb("account_ids").$type<string[]>().default([]).notNull(),
+    transactionMode: varchar("transaction_mode", { length: 20 })
+      .notNull()
+      .default("RECENT"), // RECENT, TOP_N
+    transactionCount: integer("transaction_count").notNull().default(10),
+    transactionDirection: varchar("transaction_direction", { length: 20 })
+      .notNull()
+      .default("ALL"), // ALL, EXPENSE, INCOME, INFLOW, OUTFLOW
+    frequency: varchar("frequency", { length: 20 }).notNull(), // DAILY, WEEKLY, BIWEEKLY, MONTHLY
+    sendTime: time("send_time").notNull().default("08:00:00"),
+    sendDayOfWeek: integer("send_day_of_week"), // 0=Monday..6=Sunday, WEEKLY/BIWEEKLY
+    sendDayOfMonth: integer("send_day_of_month"), // 1..28, MONTHLY
+    timezone: varchar("timezone", { length: 64 }).notNull().default("UTC"),
+    recipientEmails: jsonb("recipient_emails").$type<string[]>().default([]).notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    nextRunAt: timestamp("next_run_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_reports_user").on(table.userId),
+    index("idx_reports_next_run_at").on(table.nextRunAt),
+  ]
+);
+
+export const reportRuns = pgTable(
+  "report_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    reportId: uuid("report_id")
+      .references(() => reports.id, { onDelete: "cascade" })
+      .notNull(),
+    scheduledFor: timestamp("scheduled_for"),
+    isTest: boolean("is_test").default(false).notNull(),
+    startedAt: timestamp("started_at"),
+    finishedAt: timestamp("finished_at"),
+    status: varchar("status", { length: 20 }).notNull().default("SCHEDULED"), // SCHEDULED, RUNNING, SUCCEEDED, FAILED
+    errorMessage: text("error_message"),
+    recipientEmails: jsonb("recipient_emails").$type<string[]>().default([]).notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_report_runs_report").on(table.reportId),
+    index("idx_report_runs_status").on(table.status),
+  ]
+);
+
+// ============================================================================
 // Type Exports
 // ============================================================================
 
@@ -1111,3 +1171,9 @@ export type NewBankConnection = typeof bankConnections.$inferInsert;
 
 export type InternalTransfer = typeof internalTransfers.$inferSelect;
 export type NewInternalTransfer = typeof internalTransfers.$inferInsert;
+
+export type Report = typeof reports.$inferSelect;
+export type NewReport = typeof reports.$inferInsert;
+
+export type ReportRun = typeof reportRuns.$inferSelect;
+export type NewReportRun = typeof reportRuns.$inferInsert;

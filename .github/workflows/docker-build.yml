@@ -56,6 +56,13 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # backend/Dockerfile's frontend-deps stage renders report
+          # newsletters (npx tsx frontend/emails/render-report.ts, invoked
+          # from backend/tasks/report_tasks.py) and needs frontend/ as a
+          # named additional context since the primary context stays
+          # ./backend. No-op for the frontend matrix entry.
+          build-contexts: |
+            ${{ matrix.service == 'backend' && 'frontend=./frontend' || '' }}
           build-args: |
             NEXT_PUBLIC_DISABLE_SIGN_UPS=${{ vars.NEXT_PUBLIC_DISABLE_SIGN_UPS || 'false' }}
             NEXT_PUBLIC_DEMO_EMAIL=${{ vars.NEXT_PUBLIC_DEMO_EMAIL || '' }}
