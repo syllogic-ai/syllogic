@@ -38,10 +38,11 @@ def test_create_report_and_run_round_trip():
     db = SessionLocal()
     try:
         user = _make_user(db)
+        account_id = str(uuid.uuid4())
         report = Report(
             user_id=user.id,
             name="Weekly summary",
-            account_ids=[],
+            account_ids=[account_id],
             transaction_mode="TOP_N",
             transaction_count=5,
             transaction_direction="EXPENSE",
@@ -65,8 +66,14 @@ def test_create_report_and_run_round_trip():
 
         fetched = db.query(Report).filter(Report.id == report.id).one()
         assert fetched.transaction_direction == "EXPENSE"
+        # JSONB list columns must round-trip exactly, not e.g. degrade to a
+        # string or drop entries.
+        assert fetched.recipient_emails == ["me@example.com"]
+        assert fetched.account_ids == [account_id]
+
         fetched_run = db.query(ReportRun).filter(ReportRun.report_id == report.id).one()
         assert fetched_run.status == "SCHEDULED"
+        assert fetched_run.recipient_emails == ["me@example.com"]
     finally:
         db.rollback()
         db.close()
