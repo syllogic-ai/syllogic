@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from datetime import datetime
 from datetime import time as _time_type
 from decimal import Decimal
@@ -347,13 +347,18 @@ class SymbolSearchResult(BaseModel):
 
 
 # Report Schemas
+ReportFrequency = Literal["DAILY", "WEEKLY", "BIWEEKLY", "MONTHLY"]
+ReportTransactionMode = Literal["RECENT", "TOP_N"]
+ReportTransactionDirection = Literal["ALL", "EXPENSE", "INCOME", "INFLOW", "OUTFLOW"]
+
+
 class ReportBase(BaseModel):
     name: str
     account_ids: list[str] = Field(default_factory=list)
-    transaction_mode: str = "RECENT"  # RECENT, TOP_N
-    transaction_count: int = 10
-    transaction_direction: str = "ALL"  # ALL, EXPENSE, INCOME, INFLOW, OUTFLOW
-    frequency: str  # DAILY, WEEKLY, BIWEEKLY, MONTHLY
+    transaction_mode: ReportTransactionMode = "RECENT"  # RECENT, TOP_N
+    transaction_count: int = Field(default=10, ge=1, le=100)
+    transaction_direction: ReportTransactionDirection = "ALL"  # ALL, EXPENSE, INCOME, INFLOW, OUTFLOW
+    frequency: ReportFrequency  # DAILY, WEEKLY, BIWEEKLY, MONTHLY
     send_time: str = "08:00:00"  # HH:MM:SS
     send_day_of_week: Optional[int] = None
     send_day_of_month: Optional[int] = None
@@ -363,22 +368,34 @@ class ReportBase(BaseModel):
 
 
 class ReportCreate(ReportBase):
-    pass
+    @model_validator(mode="after")
+    def _validate_required_day_fields(self) -> "ReportCreate":
+        if self.frequency in ("WEEKLY", "BIWEEKLY") and self.send_day_of_week is None:
+            raise ValueError("send_day_of_week is required when frequency is WEEKLY or BIWEEKLY")
+        if self.frequency == "MONTHLY" and self.send_day_of_month is None:
+            raise ValueError("send_day_of_month is required when frequency is MONTHLY")
+        return self
 
 
 class ReportUpdate(BaseModel):
     name: Optional[str] = None
     account_ids: Optional[list[str]] = None
-    transaction_mode: Optional[str] = None
-    transaction_count: Optional[int] = None
-    transaction_direction: Optional[str] = None
-    frequency: Optional[str] = None
+    transaction_mode: Optional[ReportTransactionMode] = None
+    transaction_count: Optional[int] = Field(default=None, ge=1, le=100)
+    transaction_direction: Optional[ReportTransactionDirection] = None
+    frequency: Optional[ReportFrequency] = None
     send_time: Optional[str] = None
     send_day_of_week: Optional[int] = None
     send_day_of_month: Optional[int] = None
     timezone: Optional[str] = None
     recipient_emails: Optional[list[str]] = None
     is_active: Optional[bool] = None
+    # Note: no cross-field "day field required" validator here — a PATCH may
+    # legitimately update only one field (e.g. recipient_emails) without
+    # touching frequency/day fields. The route handler's _recompute_next_run
+    # falls back to the already-persisted value for whichever field isn't in
+    # this payload, so ReportCreate (which always has full context) is the
+    # right place for that check.
 
 
 class ReportResponse(ReportBase):

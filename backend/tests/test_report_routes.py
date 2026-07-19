@@ -128,3 +128,49 @@ def test_create_list_update_delete_report():
         db.rollback()
         db.close()
         app.dependency_overrides.pop(get_user_id, None)
+
+
+def test_create_report_rejects_invalid_frequency():
+    db = SessionLocal()
+    try:
+        user = _seed_user(db)
+        client = _client_for_user(user.id)
+
+        resp = client.post(
+            "/api/reports",
+            json={
+                "name": "Yearly summary",
+                "frequency": "YEARLY",
+                "recipient_emails": ["me@example.com"],
+            },
+        )
+        assert resp.status_code == 422, resp.text
+    finally:
+        db.query(User).filter(User.id == user.id).delete()
+        db.commit()
+        db.rollback()
+        db.close()
+        app.dependency_overrides.pop(get_user_id, None)
+
+
+def test_create_report_weekly_requires_send_day_of_week():
+    db = SessionLocal()
+    try:
+        user = _seed_user(db)
+        client = _client_for_user(user.id)
+
+        resp = client.post(
+            "/api/reports",
+            json={
+                "name": "Weekly summary",
+                "frequency": "WEEKLY",
+                "recipient_emails": ["me@example.com"],
+            },
+        )
+        assert resp.status_code == 422, resp.text
+    finally:
+        db.query(User).filter(User.id == user.id).delete()
+        db.commit()
+        db.rollback()
+        db.close()
+        app.dependency_overrides.pop(get_user_id, None)
