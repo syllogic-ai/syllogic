@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -14,7 +15,15 @@ from app.models import Report, ReportRun
 from app.services.report_data_service import build_report_payload
 from app.services.report_schedule_service import compute_next_run_at
 
-_RENDER_SCRIPT = Path(__file__).resolve().parent.parent.parent / "frontend" / "emails" / "render-report.ts"
+# In a local checkout, backend/ and frontend/ are siblings, so this resolves
+# correctly by default. Inside the celery-worker/celery-beat containers
+# (backend/Dockerfile), the frontend render assets + node_modules are baked
+# in at /frontend/emails and FRONTEND_EMAILS_DIR is set accordingly in
+# docker-compose.yml -- see that file and backend/Dockerfile's frontend-deps
+# stage.
+_DEFAULT_FRONTEND_EMAILS_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "emails"
+_FRONTEND_EMAILS_DIR = Path(os.environ.get("FRONTEND_EMAILS_DIR", str(_DEFAULT_FRONTEND_EMAILS_DIR)))
+_RENDER_SCRIPT = _FRONTEND_EMAILS_DIR / "render-report.ts"
 
 
 @celery_app.task(name="tasks.report_tasks.check_due_reports")
