@@ -18,8 +18,10 @@ from celery_app import celery_app  # noqa: F401, E402
 
 from app.database import engine, Base
 from app.db_helpers import (
+    INTERNAL_AUTH_USER_HEADER,
     authenticate_internal_request_from_headers,
     clear_request_user_id,
+    get_user_id_from_session_cookie,
     set_request_user_id,
 )
 from app.routes import api_router
@@ -85,23 +87,34 @@ async def internal_auth_middleware(request: Request, call_next):
     if request.url.query:
         path_with_query = f"{path_with_query}?{request.url.query}"
 
-    try:
-        request_user_id = authenticate_internal_request_from_headers(
-            method=request.method,
-            path_with_query=path_with_query,
-            headers=request.headers,
-        )
-    except Exception as exc:
-        if hasattr(exc, "status_code") and hasattr(exc, "detail"):
-            return JSONResponse(
-                status_code=getattr(exc, "status_code"),
-                content={"detail": getattr(exc, "detail")},
+    # The Next.js server signs every request with HMAC internal-auth headers.
+    # Clients that can't produce those (the mobile app, hitting this API
+    # directly) fall back to their better-auth session cookie instead.
+    if INTERNAL_AUTH_USER_HEADER in request.headers:
+        try:
+            request_user_id = authenticate_internal_request_from_headers(
+                method=request.method,
+                path_with_query=path_with_query,
+                headers=request.headers,
             )
-        logger.exception("Unexpected internal auth error")
-        return JSONResponse(
-            status_code=500,
-            content={"detail": "Internal authentication failure."},
-        )
+        except Exception as exc:
+            if hasattr(exc, "status_code") and hasattr(exc, "detail"):
+                return JSONResponse(
+                    status_code=getattr(exc, "status_code"),
+                    content={"detail": getattr(exc, "detail")},
+                )
+            logger.exception("Unexpected internal auth error")
+            return JSONResponse(
+                status_code=500,
+                content={"detail": "Internal authentication failure."},
+            )
+    else:
+        request_user_id = get_user_id_from_session_cookie(request)
+        if not request_user_id:
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Authentication required."},
+            )
 
     token = set_request_user_id(request_user_id)
     try:
