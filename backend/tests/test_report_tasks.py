@@ -99,7 +99,9 @@ def test_send_report_run_failure_marks_failed_without_raising():
         db.commit()
         run_id = str(run.id)
 
-        with patch.object(report_tasks, "get_mail_adapter", side_effect=RuntimeError("no provider")):
+        fake_render = MagicMock(returncode=0, stdout='{"html": "<p>hi</p>", "text": "hi"}', stderr="")
+        with patch.object(report_tasks.subprocess, "run", return_value=fake_render), \
+             patch.object(report_tasks, "get_mail_adapter", side_effect=RuntimeError("no provider")):
             report_tasks.send_report_run(run_id)  # must not raise
 
         db.refresh(run)
