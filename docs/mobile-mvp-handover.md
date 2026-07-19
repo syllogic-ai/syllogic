@@ -6,9 +6,72 @@ doc is the "pick up here" state as of the end of this session.
 ## Where things stand
 
 All of Phase 1–4 (foundations, accounts+filtering, saved views, portfolio,
-biometric lock) are built and typecheck cleanly. Phase 5 (macOS Catalyst +
-EAS build/distribution) is in progress and currently **blocked on Apple**,
-not on us — see "Current blocker" below.
+biometric lock) are built, typecheck cleanly, **and are now verified
+end-to-end against a real build of this branch** (backend + Postgres +
+Redis, not just typechecking — see "End-to-end verification done this
+session" below). Phase 5 (macOS Catalyst + EAS build/distribution) is in
+progress and currently **blocked on Apple**, not on us — see "Current
+blocker" below.
+
+## End-to-end verification done this session
+
+While waiting on Apple, built the actual backend + frontend Docker images
+from this branch (`docker build -f backend/Dockerfile backend`, same for
+frontend) and ran them against real Postgres/Redis containers, isolated on
+a dedicated Docker network/project so it can't collide with the
+already-running personal-use `syllogic-*` stack on this host (that one
+pulls prebuilt `:edge` images, not this branch — don't confuse the two).
+Signed up a real test user via better-auth, took the resulting session
+cookie, and hit the backend directly (simulating exactly what the mobile
+app does):
+
+- No cookie → `401 {"detail":"Authentication required."}` ✅
+- Garbage cookie → `401` ✅
+- Valid cookie → `GET /api/analytics/account-balances` → `200 []` ✅
+- `GET/POST /api/saved-views/` → both work, round-tripped correctly ✅
+- `GET /api/investments/portfolio/summary` → `200` ✅
+- `GET /api/investments/holdings` → **500** ❌ → found and fixed a real,
+  pre-existing bug (unrelated to mobile, but blocks our Portfolio screen) —
+  see below. Re-tested after the fix → `200 []` ✅
+
+This confirms the core architecture correction from earlier in this
+project (`get_user_id_from_session_cookie` fallback in
+`backend/app/db_helpers.py` + `backend/app/main.py` middleware) actually
+works, not just typechecks.
+
+**Bug found and fixed**: `backend/app/models.py`'s `Holding.provider_symbol`
+column was never added by any committed migration — Drizzle's
+`frontend/lib/db/schema.ts` doesn't define it either, and grepping all of
+`frontend/lib/db/migrations/*.sql` turned up nothing. A database built
+purely from the versioned migrations (e.g. a fresh self-host, or this
+test stack) is missing the column entirely, so `GET /investments/holdings`
+500s with `UndefinedColumn`. This only "works" on any longer-lived
+database (e.g. production) where someone once ran an ad hoc `ALTER TABLE`
+outside of version control. Fixed by adding
+`frontend/lib/db/migrations/0025_holdings_provider_symbol.manual.sql`
+(same hand-authored-migration convention as `0018`/`0014`/etc.). This is a
+general repo bug, not mobile-specific — worth calling out separately if
+this branch is reviewed/merged piecemeal.
+
+**Not yet possible this session**: actually running the mobile app against
+this and tapping through the UI. This sandbox environment is not
+network-reachable from an external phone/browser (same root cause as the
+`eas login` callback failure earlier) — `docker run -p 8111:3000` etc. only
+works from *inside* the Docker network in this environment, confirmed via
+a `curlimages/curl` container on the same network vs. a plain `curl` from
+the shell (which got `Connection refused`). Real Expo Go device testing
+needs to happen from an environment where the phone can actually reach the
+backend — e.g. the user's own machine/LAN, not this sandbox. The isolated
+test stack (`docker network syllogic-mobile-test`, containers prefixed
+`smt-*`) may still be running — check with
+`docker ps --filter network=syllogic-mobile-test` and tear down with
+`docker rm -f smt-app smt-backend smt-redis smt-postgres && docker network rm syllogic-mobile-test`
+if it's no longer needed. Rebuild reference:
+`deploy/compose/docker-compose.mobile-test.yml` (a docker-compose override
+— not directly usable in this environment since no `docker compose`/
+`docker-compose` binary was available here; the actual verification above
+was done with raw `docker run` commands instead, replicating what that
+compose file describes).
 
 Task list (from this session's TaskCreate/TaskUpdate, for reference):
 1. ✅ Clean up Expo scaffold (pnpm, removed template demo files)

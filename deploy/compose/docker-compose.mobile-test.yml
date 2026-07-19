@@ -1,0 +1,22 @@
+# Local-only override for manually testing the mobile MVP branch: exposes
+# the frontend and backend directly on host ports so mobile clients (Expo
+# Go on a phone, or curl) can reach them without going through Caddy/TLS.
+# NOT for production use — combine with docker-compose.local.yml so images
+# are built from the current checkout.
+#
+# Usage:
+#   docker compose -p syllogic-mobile-test \
+#     --env-file deploy/compose/.env.mobile-test \
+#     -f deploy/compose/docker-compose.yml \
+#     -f deploy/compose/docker-compose.local.yml \
+#     -f deploy/compose/docker-compose.mobile-test.yml \
+#     up -d --build postgres redis migrate backend app
+
+services:
+  app:
+    ports:
+      - "8111:3000"
+
+  backend:
+    ports:
+      - "8112:8000"
