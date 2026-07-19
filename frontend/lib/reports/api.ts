@@ -40,3 +40,7 @@ export function sendTestReport(id: string): Promise<ReportRun> {
 export function listReportRuns(id: string): Promise<ReportRun[]> {
   return request<ReportRun[]>(`/reports/${id}/runs`);
 }
+
+export function listAccounts(): Promise<{ id: string; name: string }[]> {
+  return request<{ id: string; name: string }[]>("/accounts");
+}
