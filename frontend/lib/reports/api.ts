@@ -42,8 +42,5 @@ export function listReportRuns(id: string): Promise<ReportRun[]> {
 }
 
 export function listAccounts(): Promise<{ id: string; name: string }[]> {
-  // Backend route is registered at GET /api/accounts/ (trailing slash).
-  // Without it, FastAPI issues a 307 redirect that the internal-auth-signed
-  // proxy request doesn't survive correctly.
-  return request<{ id: string; name: string }[]>("/accounts/");
+  return request<{ id: string; name: string }[]>("/accounts");
 }
