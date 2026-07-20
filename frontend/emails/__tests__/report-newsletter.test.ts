@@ -45,6 +45,11 @@ describe("ReportNewsletter", () => {
 
   it("omits the total block when the total is unavailable", async () => {
     const html = await render(ReportNewsletter({ ...props, totalBalance: null }));
-    expect(html).not.toContain("TOTAL BALANCE");
+    expect(html).not.toMatch(/total balance/i);
+  });
+
+  it("renders the report name through the full component tree", async () => {
+    const html = await render(ReportNewsletter(props));
+    expect(html).toContain("Syllogic | Weekly Digest");
   });
 });
