@@ -25,7 +25,7 @@ def _set_test_env() -> None:
 _set_test_env()
 
 from app.database import SessionLocal  # noqa: E402
-from app.models import Account, Report, Transaction, User  # noqa: E402
+from app.models import Account, CompanyLogo, Report, Transaction, User  # noqa: E402
 from app.services.report_data_service import build_report_payload  # noqa: E402
 
 
@@ -260,6 +260,77 @@ def test_recent_mode_is_also_windowed():
         payload = build_report_payload(db, report)
         assert payload["transactions"]["items"] == []
         assert payload["period_label"] == "Last 24 hours"
+    finally:
+        db.rollback()
+        db.close()
+
+
+def test_account_logo_url_is_absolute_and_total_is_summed(monkeypatch):
+    """Email clients need absolute URLs; logo_url in the DB is a relative path."""
+    monkeypatch.setenv("FRONTEND_URL", "https://app.syllogic.ai")
+    db = SessionLocal()
+    try:
+        user = User(id=f"test-user-{uuid.uuid4()}", email=f"{uuid.uuid4()}@example.com", name="H")
+        db.add(user)
+        db.flush()
+
+        logo = CompanyLogo(domain=f"{uuid.uuid4()}.com", company_name="ABN AMRO",
+                           logo_url="/uploads/logos/abnamro.com.png", status="found")
+        db.add(logo)
+        db.flush()
+
+        with_logo = Account(user_id=user.id, name="ABN", account_type="checking",
+                            currency="EUR", functional_balance=Decimal("100.00"), logo_id=logo.id)
+        without_logo = Account(user_id=user.id, name="Manual", account_type="savings",
+                               currency="EUR", functional_balance=Decimal("50.00"))
+        db.add_all([with_logo, without_logo])
+        db.flush()
+
+        report = Report(
+            user_id=user.id, name="R",
+            account_ids=[str(with_logo.id), str(without_logo.id)],
+            transaction_mode="RECENT", transaction_count=5,
+            transaction_direction="ALL", frequency="WEEKLY",
+        )
+        db.add(report)
+        db.flush()
+
+        payload = build_report_payload(db, report)
+        by_name = {a["name"]: a for a in payload["accounts"]}
+
+        assert by_name["ABN"]["logo_url"] == "https://app.syllogic.ai/uploads/logos/abnamro.com.png"
+        assert by_name["Manual"]["logo_url"] is None
+        assert payload["total_balance"] == "150.00"
+    finally:
+        db.rollback()
+        db.close()
+
+
+def test_total_is_omitted_when_a_balance_is_not_convertible():
+    """Never sum mixed currencies: a partial total is worse than none."""
+    db = SessionLocal()
+    try:
+        user = User(id=f"test-user-{uuid.uuid4()}", email=f"{uuid.uuid4()}@example.com", name="H")
+        db.add(user)
+        db.flush()
+        # No functional_balance -> balance is in the account's native currency.
+        a = Account(user_id=user.id, name="USD acct", account_type="checking",
+                    currency="USD", balance_available=Decimal("500.00"))
+        b = Account(user_id=user.id, name="EUR acct", account_type="checking",
+                    currency="EUR", functional_balance=Decimal("100.00"))
+        db.add_all([a, b])
+        db.flush()
+
+        report = Report(
+            user_id=user.id, name="R", account_ids=[str(a.id), str(b.id)],
+            transaction_mode="RECENT", transaction_count=5,
+            transaction_direction="ALL", frequency="WEEKLY",
+        )
+        db.add(report)
+        db.flush()
+
+        payload = build_report_payload(db, report)
+        assert payload["total_balance"] is None
     finally:
         db.rollback()
         db.close()

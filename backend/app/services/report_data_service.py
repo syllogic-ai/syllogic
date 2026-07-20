@@ -5,11 +5,14 @@ so report numbers match what the user sees in-app.
 """
 from __future__ import annotations
 
+import os
 from datetime import datetime
+from decimal import Decimal
+from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import and_, func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models import Account, Report, Transaction
 from app.services.report_horizon import horizon_start, period_label
@@ -36,6 +39,7 @@ _DIRECTION_TYPES = {
 def build_report_payload(db: Session, report: Report) -> dict:
     accounts = _fetch_accounts(db, report)
     transactions = _fetch_transactions(db, report)
+    functional_currency = (report.user.functional_currency if report.user else None) or "EUR"
 
     return {
         "report_name": report.name,
@@ -44,6 +48,8 @@ def build_report_payload(db: Session, report: Report) -> dict:
         # would silently shift the displayed date/time otherwise).
         "generated_at": datetime.utcnow().isoformat() + "Z",
         "period_label": period_label(report.frequency),
+        "total_balance": _total_balance(db, report),
+        "total_currency": functional_currency,
         "accounts": accounts,
         "transactions": transactions,
     }
@@ -55,10 +61,21 @@ def _fetch_accounts(db: Session, report: Report) -> list[dict]:
     account_uuids = [UUID(a) for a in report.account_ids]
     rows = (
         db.query(Account)
+        # Eager-load so rendering N accounts does not fire N logo queries.
+        .options(joinedload(Account.logo))
         .filter(Account.user_id == report.user_id, Account.id.in_(account_uuids))
         .all()
     )
     functional_currency = (report.user.functional_currency if report.user else None) or "EUR"
+    # logo_url on CompanyLogo is a relative path ("/uploads/logos/x.png"); mail
+    # clients need it absolute.
+    base_url = (os.environ.get("FRONTEND_URL") or os.environ.get("APP_URL", "")).rstrip("/")
+
+    def _logo_url(a: Account) -> str | None:
+        logo = a.logo
+        if not logo or not logo.logo_url or logo.status != "found":
+            return None
+        return f"{base_url}{logo.logo_url}"
 
     def _balance_and_currency(a: Account) -> tuple[str, str]:
         if a.functional_balance is not None:
@@ -68,15 +85,37 @@ def _fetch_accounts(db: Session, report: Report) -> list[dict]:
             return str(a.functional_balance), functional_currency
         return str(a.balance_available or 0), a.currency or "EUR"
 
-    return [
-        {
+    accounts = []
+    for a in rows:
+        balance, currency = _balance_and_currency(a)
+        accounts.append({
             "name": a.name,
             "institution": a.institution,
-            "balance": _balance_and_currency(a)[0],
-            "currency": _balance_and_currency(a)[1],
-        }
-        for a in rows
-    ]
+            "balance": balance,
+            "currency": currency,
+            "logo_url": _logo_url(a),
+        })
+    return accounts
+
+
+def _total_balance(db: Session, report: Report) -> Optional[str]:
+    """Sum of the selected accounts, or None if they are not all convertible.
+
+    Only functional_balance is expressed in a single currency. Summing an
+    account that only has a native balance would produce a confidently wrong
+    number, so the total is withheld instead.
+    """
+    if not report.account_ids:
+        return None
+    account_uuids = [UUID(a) for a in report.account_ids]
+    rows = (
+        db.query(Account)
+        .filter(Account.user_id == report.user_id, Account.id.in_(account_uuids))
+        .all()
+    )
+    if not rows or any(a.functional_balance is None for a in rows):
+        return None
+    return str(sum((a.functional_balance for a in rows), Decimal("0")).quantize(Decimal("0.01")))
 
 
 def _fetch_transactions(db: Session, report: Report) -> dict:
