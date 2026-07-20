@@ -9,7 +9,17 @@ async function main() {
   const props: ReportNewsletterProps = {
     reportName: input.report_name,
     generatedAt: input.generated_at,
-    accounts: input.accounts,
+    periodLabel: input.period_label ?? "",
+    totalBalance: input.total_balance ?? null,
+    totalCurrency: input.total_currency ?? "EUR",
+    // Payload is snake_case; BalanceItem is camelCase. This is the boundary.
+    accounts: (input.accounts ?? []).map((a: Record<string, unknown>) => ({
+      name: a.name,
+      institution: a.institution ?? null,
+      balance: a.balance,
+      currency: a.currency,
+      logoUrl: a.logo_url ?? null,
+    })),
     transactionsModeLabel: input.transactions.mode_label,
     transactions: input.transactions.items,
     manageUrl: input.manage_url ?? "#",

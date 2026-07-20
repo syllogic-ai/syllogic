@@ -61,4 +61,31 @@ describe("render-report.ts subprocess failure path", () => {
     expect(parsed.html).toContain("Weekly summary");
     expect(parsed.text).toBeTruthy();
   }, 30000);
+
+  it("maps payload logo_url onto the camelCase logoUrl prop", () => {
+    // Regression guard: a mismatch here fails silently — every account would
+    // fall back to the lettered tile and no logo would ever render.
+    const input = JSON.stringify({
+      report_name: "R",
+      generated_at: "2026-07-20T08:00:00Z",
+      period_label: "Last 7 days",
+      total_balance: "100.00",
+      total_currency: "EUR",
+      accounts: [{
+        name: "ABN",
+        institution: "ABN AMRO",
+        balance: "50.00",
+        currency: "EUR",
+        logo_url: "https://app.syllogic.ai/uploads/logos/abnamro.com.png",
+      }],
+      transactions: { mode_label: "Top 5 expenses", items: [] },
+      manage_url: "https://app.syllogic.ai/reports/1",
+    });
+
+    const result = runRenderReport(input);
+
+    expect(result.status).toBe(0);
+    const { html } = JSON.parse(result.stdout);
+    expect(html).toContain("https://app.syllogic.ai/uploads/logos/abnamro.com.png");
+  }, 30000);
 });
