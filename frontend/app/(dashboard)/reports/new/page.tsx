@@ -12,7 +12,7 @@ export default function NewReportPage() {
   } = useQuery({ queryKey: ["accounts"], queryFn: listAccounts });
 
   return (
-    <div className="p-6">
+    <div className="p-6 text-foreground">
       <h1 className="text-xl font-semibold mb-4">New report</h1>
       <ReportForm
         availableAccounts={accounts ?? []}

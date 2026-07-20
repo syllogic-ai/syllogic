@@ -1,16 +1,16 @@
 import type { ReportRunStatus } from "@/lib/reports/types";
+import { Badge, type badgeVariants } from "@/components/ui/badge";
+import type { VariantProps } from "class-variance-authority";
 
-const STYLES: Record<ReportRunStatus, string> = {
-  SCHEDULED: "bg-gray-100 text-gray-700",
-  RUNNING: "bg-blue-100 text-blue-700",
-  SUCCEEDED: "bg-green-100 text-green-700",
-  FAILED: "bg-red-100 text-red-700",
+type BadgeVariant = NonNullable<VariantProps<typeof badgeVariants>["variant"]>;
+
+const VARIANTS: Record<ReportRunStatus, BadgeVariant> = {
+  SCHEDULED: "secondary",
+  RUNNING: "outline",
+  SUCCEEDED: "default",
+  FAILED: "destructive",
 };
 
 export function RunStatusBadge({ status }: { status: ReportRunStatus }) {
-  return (
-    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STYLES[status]}`}>
-      {status}
-    </span>
-  );
+  return <Badge variant={VARIANTS[status]}>{status}</Badge>;
 }

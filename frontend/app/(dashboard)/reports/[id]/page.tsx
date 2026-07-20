@@ -19,13 +19,13 @@ export default function EditReportPage() {
     isError: accountsError,
   } = useQuery({ queryKey: ["accounts"], queryFn: listAccounts });
 
-  if (reportLoading) return <div className="p-6 text-sm text-gray-500">Loading…</div>;
+  if (reportLoading) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
 
   if (reportError || !report) {
     return (
-      <div className="p-6 text-sm text-gray-500">
+      <div className="p-6 text-sm text-muted-foreground">
         Report not found or failed to load.{" "}
-        <Link href="/reports" className="text-blue-600">
+        <Link href="/reports" className="text-foreground underline underline-offset-4">
           Back to reports
         </Link>
       </div>
@@ -33,7 +33,7 @@ export default function EditReportPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-6 text-foreground">
       <h1 className="text-xl font-semibold mb-4">Edit report</h1>
       <ReportForm
         report={report}

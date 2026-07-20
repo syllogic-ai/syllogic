@@ -19,21 +19,21 @@ export default function ReportRunsPage() {
   });
 
   return (
-    <div className="p-6">
+    <div className="p-6 text-foreground">
       <h1 className="text-xl font-semibold mb-1">{report ? `${report.name} — Runs` : "Runs"}</h1>
-      <p className="text-sm text-gray-500 mb-4">Scheduled and executed sends for this report.</p>
+      <p className="text-sm text-muted-foreground mb-4">Scheduled and executed sends for this report.</p>
 
       {isLoading ? (
-        <p className="text-sm text-gray-500">Loading…</p>
+        <p className="text-sm text-muted-foreground">Loading…</p>
       ) : isError && !(runs && runs.length > 0) ? (
         // Only show the error state when there's no cached data to fall
         // back on — with refetchInterval polling, a single transient
         // background refetch failure would otherwise hide a previously
         // loaded, still-valid run history behind an error message.
-        <p className="text-sm text-red-600">Failed to load runs. Please try again.</p>
+        <p className="text-sm text-destructive">Failed to load runs. Please try again.</p>
       ) : runs && runs.length > 0 ? (
-        <table className="w-full text-sm border rounded-lg overflow-hidden">
-          <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
+        <table className="w-full text-sm border border-border rounded-lg overflow-hidden">
+          <thead className="bg-muted text-left text-xs uppercase text-muted-foreground">
             <tr>
               <th className="px-4 py-2">Scheduled for</th>
               <th className="px-4 py-2">Status</th>
@@ -41,7 +41,7 @@ export default function ReportRunsPage() {
               <th className="px-4 py-2">Error</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-border">
             {runs.map((run) => (
               <tr key={run.id}>
                 <td className="px-4 py-2">
@@ -55,13 +55,13 @@ export default function ReportRunsPage() {
                   <RunStatusBadge status={run.status} />
                 </td>
                 <td className="px-4 py-2">{run.finished_at ? new Date(run.finished_at).toLocaleString() : "—"}</td>
-                <td className="px-4 py-2 text-red-600">{run.error_message ?? ""}</td>
+                <td className="px-4 py-2 text-destructive">{run.error_message ?? ""}</td>
               </tr>
             ))}
           </tbody>
         </table>
       ) : (
-        <p className="text-sm text-gray-500">No runs yet.</p>
+        <p className="text-sm text-muted-foreground">No runs yet.</p>
       )}
     </div>
   );

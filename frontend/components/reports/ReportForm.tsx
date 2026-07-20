@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createReport, sendTestReport, updateReport } from "@/lib/reports/api";
 import type { Report, ReportInput } from "@/lib/reports/types";
+import { Button } from "@/components/ui/button";
 
 const schema = z.object({
   name: z.string().min(1, "Required"),
@@ -54,6 +55,8 @@ export function ReportForm({
   const router = useRouter();
   const [recipientDraft, setRecipientDraft] = useState("");
   const [sendingTest, setSendingTest] = useState(false);
+  const [sendTestError, setSendTestError] = useState<string | null>(null);
+  const [sendTestSuccess, setSendTestSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const {
@@ -89,8 +92,13 @@ export function ReportForm({
   async function handleSendTest() {
     if (!report) return;
     setSendingTest(true);
+    setSendTestError(null);
+    setSendTestSuccess(false);
     try {
       await sendTestReport(report.id);
+      setSendTestSuccess(true);
+    } catch (err) {
+      setSendTestError(err instanceof Error ? err.message : "Failed to send test. Please try again.");
     } finally {
       setSendingTest(false);
     }
@@ -99,35 +107,39 @@ export function ReportForm({
   function addRecipient() {
     const value = recipientDraft.trim();
     if (!value) return;
-    setValue("recipient_emails", [...recipients, value]);
+    setValue("recipient_emails", [...recipients, value], { shouldValidate: true });
     setRecipientDraft("");
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="max-w-lg space-y-5">
+    <form onSubmit={handleSubmit(onSubmit)} className="max-w-lg space-y-5 text-foreground">
       <div>
         <label className="block text-sm font-medium mb-1">Name</label>
-        <input {...register("name")} className="w-full border rounded px-3 py-2 text-sm" />
-        {errors.name && <p className="text-xs text-red-600 mt-1">{errors.name.message}</p>}
+        <input
+          {...register("name")}
+          className="w-full border border-border bg-background text-foreground rounded px-3 py-2 text-sm placeholder:text-muted-foreground"
+        />
+        {errors.name && <p className="text-xs text-destructive mt-1">{errors.name.message}</p>}
       </div>
 
       <div>
         <label className="block text-sm font-medium mb-1">Accounts</label>
         {accountsLoading ? (
-          <p className="text-sm text-gray-500">Loading accounts…</p>
+          <p className="text-sm text-muted-foreground">Loading accounts…</p>
         ) : accountsError ? (
-          <p className="text-sm text-red-600">Failed to load accounts. Please refresh and try again.</p>
+          <p className="text-sm text-destructive">Failed to load accounts. Please refresh and try again.</p>
         ) : (
-        <div className="space-y-1 border rounded p-2 max-h-40 overflow-y-auto">
+        <div className="space-y-1 border border-border rounded p-2 max-h-40 overflow-y-auto">
           {availableAccounts.map((a) => (
-            <label key={a.id} className="flex items-center gap-2 text-sm">
+            <label key={a.id} className="flex items-center gap-2 text-sm text-foreground">
               <input
                 type="checkbox"
                 checked={accountIds.includes(a.id)}
                 onChange={(e) =>
                   setValue(
                     "account_ids",
-                    e.target.checked ? [...accountIds, a.id] : accountIds.filter((id) => id !== a.id)
+                    e.target.checked ? [...accountIds, a.id] : accountIds.filter((id) => id !== a.id),
+                    { shouldValidate: true }
                   )
                 }
               />
@@ -141,21 +153,31 @@ export function ReportForm({
       <div className="grid grid-cols-3 gap-3">
         <div>
           <label className="block text-sm font-medium mb-1">Mode</label>
-          <select {...register("transaction_mode")} className="w-full border rounded px-2 py-2 text-sm">
+          <select
+            {...register("transaction_mode")}
+            className="w-full border border-border bg-background text-foreground rounded px-2 py-2 text-sm"
+          >
             <option value="RECENT">Most recent</option>
             <option value="TOP_N">Top N by amount</option>
           </select>
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">Count</label>
-          <input type="number" {...register("transaction_count")} className="w-full border rounded px-2 py-2 text-sm" />
+          <input
+            type="number"
+            {...register("transaction_count")}
+            className="w-full border border-border bg-background text-foreground rounded px-2 py-2 text-sm"
+          />
           {errors.transaction_count && (
-            <p className="text-xs text-red-600 mt-1">{errors.transaction_count.message}</p>
+            <p className="text-xs text-destructive mt-1">{errors.transaction_count.message}</p>
           )}
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">Direction</label>
-          <select {...register("transaction_direction")} className="w-full border rounded px-2 py-2 text-sm">
+          <select
+            {...register("transaction_direction")}
+            className="w-full border border-border bg-background text-foreground rounded px-2 py-2 text-sm"
+          >
             <option value="ALL">All</option>
             <option value="EXPENSE">Expenses</option>
             <option value="INCOME">Income</option>
@@ -168,7 +190,10 @@ export function ReportForm({
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-sm font-medium mb-1">Frequency</label>
-          <select {...register("frequency")} className="w-full border rounded px-2 py-2 text-sm">
+          <select
+            {...register("frequency")}
+            className="w-full border border-border bg-background text-foreground rounded px-2 py-2 text-sm"
+          >
             <option value="DAILY">Daily</option>
             <option value="WEEKLY">Weekly</option>
             <option value="BIWEEKLY">Biweekly</option>
@@ -177,14 +202,22 @@ export function ReportForm({
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">Time</label>
-          <input type="time" step={60} {...register("send_time")} className="w-full border rounded px-2 py-2 text-sm" />
+          <input
+            type="time"
+            step={60}
+            {...register("send_time")}
+            className="w-full border border-border bg-background text-foreground rounded px-2 py-2 text-sm"
+          />
         </div>
       </div>
 
       {(frequency === "WEEKLY" || frequency === "BIWEEKLY") && (
         <div>
           <label className="block text-sm font-medium mb-1">Day of week</label>
-          <select {...register("send_day_of_week")} className="w-full border rounded px-2 py-2 text-sm">
+          <select
+            {...register("send_day_of_week")}
+            className="w-full border border-border bg-background text-foreground rounded px-2 py-2 text-sm"
+          >
             {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((d, i) => (
               <option key={d} value={i}>
                 {d}
@@ -192,7 +225,7 @@ export function ReportForm({
             ))}
           </select>
           {errors.send_day_of_week && (
-            <p className="text-xs text-red-600 mt-1">{errors.send_day_of_week.message}</p>
+            <p className="text-xs text-destructive mt-1">{errors.send_day_of_week.message}</p>
           )}
         </div>
       )}
@@ -205,10 +238,10 @@ export function ReportForm({
             min={1}
             max={28}
             {...register("send_day_of_month")}
-            className="w-full border rounded px-2 py-2 text-sm"
+            className="w-full border border-border bg-background text-foreground rounded px-2 py-2 text-sm"
           />
           {errors.send_day_of_month && (
-            <p className="text-xs text-red-600 mt-1">{errors.send_day_of_month.message}</p>
+            <p className="text-xs text-destructive mt-1">{errors.send_day_of_month.message}</p>
           )}
         </div>
       )}
@@ -220,26 +253,38 @@ export function ReportForm({
             value={recipientDraft}
             onChange={(e) => setRecipientDraft(e.target.value)}
             placeholder="name@example.com"
-            className="flex-1 border rounded px-3 py-2 text-sm"
+            className="flex-1 border border-border bg-background text-foreground rounded px-3 py-2 text-sm placeholder:text-muted-foreground"
           />
-          <button type="button" onClick={addRecipient} className="border rounded px-3 py-2 text-sm">
+          <Button type="button" variant="outline" onClick={addRecipient}>
             Add
-          </button>
+          </Button>
         </div>
         <div className="flex flex-wrap gap-2">
           {recipients.map((email) => (
-            <span key={email} className="bg-gray-100 rounded-full px-3 py-1 text-xs flex items-center gap-1">
+            <span
+              key={email}
+              className="bg-muted text-foreground rounded-full px-3 py-1 text-xs flex items-center gap-1"
+            >
               {email}
               <button
                 type="button"
-                onClick={() => setValue("recipient_emails", recipients.filter((r) => r !== email))}
+                className="text-muted-foreground hover:text-foreground"
+                onClick={() =>
+                  setValue(
+                    "recipient_emails",
+                    recipients.filter((r) => r !== email),
+                    { shouldValidate: true }
+                  )
+                }
               >
                 ×
               </button>
             </span>
           ))}
         </div>
-        {errors.recipient_emails && <p className="text-xs text-red-600 mt-1">{errors.recipient_emails.message}</p>}
+        {errors.recipient_emails && (
+          <p className="text-xs text-destructive mt-1">{errors.recipient_emails.message}</p>
+        )}
       </div>
 
       <div>
@@ -250,25 +295,22 @@ export function ReportForm({
       </div>
 
       <div className="flex items-center gap-3 pt-2">
-        <button
-          type="submit"
-          disabled={isSubmitting || accountsLoading || accountsError}
-          className="bg-blue-600 text-white rounded px-4 py-2 text-sm disabled:opacity-50"
-        >
+        <Button type="submit" disabled={isSubmitting || accountsLoading || accountsError}>
           {report ? "Save changes" : "Create report"}
-        </button>
+        </Button>
         {report && (
-          <button
-            type="button"
-            onClick={handleSendTest}
-            disabled={sendingTest}
-            className="border rounded px-4 py-2 text-sm"
-          >
+          <Button type="button" variant="outline" onClick={handleSendTest} disabled={sendingTest}>
             {sendingTest ? "Sending…" : "Send test now"}
-          </button>
+          </Button>
         )}
       </div>
-      {submitError && <p className="text-xs text-red-600">{submitError}</p>}
+      {submitError && <p className="text-xs text-destructive">{submitError}</p>}
+      {sendTestError && <p className="text-xs text-destructive">{sendTestError}</p>}
+      {sendTestSuccess && (
+        <p className="text-xs text-muted-foreground">
+          Test queued — check the Runs tab for delivery status.
+        </p>
+      )}
     </form>
   );
 }
