@@ -10,6 +10,7 @@ export type PickerAccount = {
   name: string;
   account_type: string;
   institution: string | null;
+  is_active: boolean;
 };
 
 export type AccountGroup = {

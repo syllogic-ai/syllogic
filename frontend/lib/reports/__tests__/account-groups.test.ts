@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { groupAccounts } from "../account-groups";
 
-const acct = (id: string, name: string, account_type: string) => ({ id, name, account_type, institution: null });
+const acct = (id: string, name: string, account_type: string) => ({
+  id,
+  name,
+  account_type,
+  institution: null,
+  is_active: true,
+});
 
 describe("groupAccounts", () => {
   it("groups by asset category in canonical order", () => {

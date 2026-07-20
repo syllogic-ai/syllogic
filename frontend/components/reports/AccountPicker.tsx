@@ -57,7 +57,12 @@ export function AccountPicker({
     );
   }
 
-  const groups = groupAccounts(accounts);
+  // Inactive accounts are hidden by default to declutter the picker, but a
+  // report's saved account_ids may reference one deactivated after the fact.
+  // Always keep those visible (marked inactive) so the checked state stays
+  // truthful and can still be unticked.
+  const visibleAccounts = accounts.filter((a) => a.is_active || selectedIds.includes(a.id));
+  const groups = groupAccounts(visibleAccounts);
 
   const toggle = (id: string, checked: boolean) =>
     onChange(checked ? [...selectedIds, id] : selectedIds.filter((x) => x !== id));
@@ -80,6 +85,9 @@ export function AccountPicker({
                 />
                 <span>
                   {a.name}
+                  {!a.is_active && (
+                    <span className="text-xs text-muted-foreground"> (inactive)</span>
+                  )}
                   {ownerNames[a.id] && (
                     <span className="block text-xs text-muted-foreground">
                       {ownerNames[a.id].join(", ")}

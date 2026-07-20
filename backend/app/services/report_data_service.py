@@ -69,7 +69,7 @@ def _fetch_accounts(db: Session, report: Report) -> list[dict]:
     functional_currency = (report.user.functional_currency if report.user else None) or "EUR"
     # logo_url on CompanyLogo is a relative path ("/uploads/logos/x.png"); mail
     # clients need it absolute.
-    base_url = (os.environ.get("FRONTEND_URL") or os.environ.get("APP_URL", "")).rstrip("/")
+    base_url = (os.environ.get("FRONTEND_URL") or os.environ.get("APP_URL", "http://localhost:3000")).rstrip("/")
 
     def _logo_url(a: Account) -> str | None:
         logo = a.logo
@@ -154,7 +154,6 @@ def _fetch_transactions(db: Session, report: Report) -> dict:
     items = [
         {
             "description": t.merchant or t.description or "Transaction",
-            "category": None,
             "date": t.booked_at.date().isoformat(),
             "amount": str(abs(t.amount)),
             "currency": t.currency or "EUR",

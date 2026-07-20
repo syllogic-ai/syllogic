@@ -42,10 +42,13 @@ export function listReportRuns(id: string): Promise<ReportRun[]> {
   return request<ReportRun[]>(`/reports/${id}/runs`);
 }
 
-// include_inactive defaults to true server-side, which is how deactivated
-// accounts ended up cluttering the picker.
+// Fetch all accounts, including inactive ones. AccountPicker is responsible
+// for hiding inactive accounts by default while still surfacing any that are
+// already selected on a report (see is_active handling there) — filtering
+// them out here would silently hide a report's configured-but-deactivated
+// accounts with no way to see or untick them.
 export function listAccounts(): Promise<PickerAccount[]> {
-  return request<PickerAccount[]>("/accounts?include_inactive=false");
+  return request<PickerAccount[]>("/accounts?include_inactive=true");
 }
 
 /**
