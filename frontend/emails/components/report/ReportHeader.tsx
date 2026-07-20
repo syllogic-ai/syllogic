@@ -1,17 +1,31 @@
-import { Heading, Section, Text } from "@react-email/components";
+import { Section, Text } from "@react-email/components";
+import { light } from "./tokens";
 
-export function ReportHeader({ reportName, generatedAt }: { reportName: string; generatedAt: string }) {
-  const formatted = new Date(generatedAt).toLocaleDateString("en-US", {
+export function ReportHeader({
+  reportName,
+  periodLabel,
+  generatedAt,
+}: {
+  reportName: string;
+  periodLabel: string;
+  generatedAt: string;
+}) {
+  const formatted = new Date(generatedAt).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
     year: "numeric",
-    month: "long",
-    day: "numeric",
   });
   return (
-    <Section style={{ padding: "24px 20px 8px" }}>
-      <Heading as="h1" style={{ fontSize: "20px", margin: 0, color: "#111827" }}>
+    <Section style={{ padding: "28px 28px 0" }}>
+      <Text className="sy-muted" style={{ fontSize: "10px", letterSpacing: "0.18em", textTransform: "uppercase", color: light.mutedForeground, margin: 0 }}>
+        Syllogic
+      </Text>
+      <Text className="sy-fg" style={{ fontSize: "22px", fontWeight: 700, color: light.foreground, margin: "10px 0 0", lineHeight: 1.25 }}>
         {reportName}
-      </Heading>
-      <Text style={{ fontSize: "13px", color: "#6B7280", margin: "4px 0 0" }}>{formatted}</Text>
+      </Text>
+      <Text className="sy-muted" style={{ fontSize: "12px", color: light.mutedForeground, margin: "6px 0 0" }}>
+        {periodLabel} · {formatted}
+      </Text>
     </Section>
   );
 }
