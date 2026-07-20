@@ -8,6 +8,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { createReport, sendTestReport, updateReport } from "@/lib/reports/api";
 import type { Report, ReportInput } from "@/lib/reports/types";
 import { Button } from "@/components/ui/button";
+import { AccountPicker } from "./AccountPicker";
+import type { PickerAccount } from "@/lib/reports/account-groups";
 
 const schema = z.object({
   name: z.string().min(1, "Required"),
@@ -48,7 +50,7 @@ export function ReportForm({
   accountsError,
 }: {
   report?: Report;
-  availableAccounts: { id: string; name: string }[];
+  availableAccounts: PickerAccount[];
   accountsLoading?: boolean;
   accountsError?: boolean;
 }) {
@@ -124,30 +126,13 @@ export function ReportForm({
 
       <div>
         <label className="block text-sm font-medium mb-1">Accounts</label>
-        {accountsLoading ? (
-          <p className="text-sm text-muted-foreground">Loading accounts…</p>
-        ) : accountsError ? (
-          <p className="text-sm text-destructive">Failed to load accounts. Please refresh and try again.</p>
-        ) : (
-        <div className="space-y-1 border border-border rounded p-2 max-h-40 overflow-y-auto">
-          {availableAccounts.map((a) => (
-            <label key={a.id} className="flex items-center gap-2 text-sm text-foreground">
-              <input
-                type="checkbox"
-                checked={accountIds.includes(a.id)}
-                onChange={(e) =>
-                  setValue(
-                    "account_ids",
-                    e.target.checked ? [...accountIds, a.id] : accountIds.filter((id) => id !== a.id),
-                    { shouldValidate: true }
-                  )
-                }
-              />
-              {a.name}
-            </label>
-          ))}
-        </div>
-        )}
+        <AccountPicker
+          accounts={availableAccounts}
+          selectedIds={accountIds}
+          onChange={(ids) => setValue("account_ids", ids, { shouldValidate: true })}
+          loading={accountsLoading ?? false}
+          error={accountsError ?? false}
+        />
       </div>
 
       <div className="grid grid-cols-3 gap-3">
