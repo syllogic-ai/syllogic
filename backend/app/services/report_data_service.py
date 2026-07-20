@@ -12,6 +12,7 @@ from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
 from app.models import Account, Report, Transaction
+from app.services.report_horizon import horizon_start, period_label
 
 _DIRECTION_LABELS = {
     "ALL": "transactions",
@@ -42,6 +43,7 @@ def build_report_payload(db: Session, report: Report) -> dict:
         # as UTC rather than the worker container's local timezone (which
         # would silently shift the displayed date/time otherwise).
         "generated_at": datetime.utcnow().isoformat() + "Z",
+        "period_label": period_label(report.frequency),
         "accounts": accounts,
         "transactions": transactions,
     }
@@ -79,9 +81,13 @@ def _fetch_accounts(db: Session, report: Report) -> list[dict]:
 
 def _fetch_transactions(db: Session, report: Report) -> dict:
     types = _DIRECTION_TYPES.get(report.transaction_direction, ("debit", "credit"))
+    # Both TOP_N and RECENT are scoped to the report's own cadence, so a weekly
+    # digest reports on the last seven days rather than on all of history.
+    window_start = horizon_start(report.frequency, datetime.utcnow())
     query = db.query(Transaction).filter(
         Transaction.user_id == report.user_id,
         Transaction.transaction_type.in_(types),
+        Transaction.booked_at >= window_start,
     )
     if report.account_ids:
         account_uuids = [UUID(a) for a in report.account_ids]
