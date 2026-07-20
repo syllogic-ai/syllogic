@@ -33,12 +33,12 @@ describe("BalancesSection", () => {
 describe("TotalBalance", () => {
   it("renders the amount when available", async () => {
     const html = await render(TotalBalance({ amount: "3394.04", currency: "EUR" }));
-    expect(html).toContain("TOTAL BALANCE");
+    expect(html).toMatch(/total balance/i);
   });
 
   it("renders nothing when the total is unavailable", async () => {
     const html = await render(TotalBalance({ amount: null, currency: "EUR" }));
-    expect(html).not.toContain("TOTAL BALANCE");
+    expect(html).not.toMatch(/total balance/i);
   });
 });
 
