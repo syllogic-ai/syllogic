@@ -49,7 +49,7 @@ export const fontStack =
  */
 export function fmtMoney(value: string, currency: string): string {
   const n = Number(value);
-  if (Number.isNaN(n)) return `${value} ${currency}`;
+  if (value.trim() === "" || Number.isNaN(n)) return `${value} ${currency}`;
   return `${n.toLocaleString("en-IE", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,

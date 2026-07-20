@@ -42,4 +42,9 @@ describe("fmtMoney", () => {
   it("passes through unparseable values rather than printing NaN", () => {
     expect(fmtMoney("n/a", "EUR")).toBe("n/a EUR");
   });
+
+  it("passes through empty or whitespace-only values rather than fabricating a zero", () => {
+    expect(fmtMoney("", "EUR")).toBe(" EUR");
+    expect(fmtMoney("   ", "EUR")).toBe("    EUR");
+  });
 });
