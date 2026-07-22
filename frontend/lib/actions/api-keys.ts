@@ -4,7 +4,7 @@ import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { apiKeys } from "@/lib/db/schema";
-import { getAuthenticatedSession, requireAuth } from "@/lib/auth-helpers";
+import { getAuthenticatedSession, isDemoRestrictedSession, requireAuth } from "@/lib/auth-helpers";
 import {
   DEMO_RESTRICTED_ACTION_ERROR,
   isDemoRestrictedUserEmail,
@@ -132,6 +132,10 @@ export async function deleteApiKey(keyId: string): Promise<{
   const userId = await requireAuth();
   if (!userId) {
     return { success: false, error: "Not authenticated" };
+  }
+
+  if (await isDemoRestrictedSession()) {
+    return { success: false, error: DEMO_RESTRICTED_ACTION_ERROR };
   }
 
   try {
