@@ -162,6 +162,7 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
             icon: categoryInput.icon,
             description: categoryInput.description || null,
             categorizationInstructions: categoryInput.categorizationInstructions || null,
+            embedding: null,
             isSystem: false,
             hideFromSelection: false,
             createdAt: new Date(),
