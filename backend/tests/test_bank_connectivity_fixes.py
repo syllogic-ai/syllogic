@@ -189,6 +189,136 @@ class TestSuggestedMappings(unittest.TestCase):
         self.assertEqual(no_match["suggested_action"], "create")
         self.assertIsNone(no_match["suggested_account_id"])
 
+    def test_falls_back_to_iban_when_external_id_is_unknown(self):
+        """Re-authorization mints a new uid; the IBAN still identifies the account.
+
+        Without the fallback the wizard suggests "create", producing a
+        duplicate of an account the user already has.
+        """
+        from app.routes.enable_banking import _build_suggested_mappings
+
+        existing_account = MagicMock()
+        existing_account.id = "acc-uuid-1"
+        existing_account.name = "ABN AMRO Giannis"
+
+        mock_db = MagicMock()
+
+        # The uid lookup misses (new uid after re-consent); the IBAN lookup hits.
+        results_by_hash = {"iban-hash": existing_account, "new-uid-hash": None}
+        captured = []
+
+        def filter_side_effect(*args, **kwargs):
+            captured.append(args)
+            holder = MagicMock()
+            # The second positional filter is the hash comparison; decide from
+            # whichever hash the production code looked up most recently.
+            holder.first.return_value = results_by_hash.get(lookup["hash"])
+            return holder
+
+        lookup = {"hash": None}
+
+        def blind_index_side_effect(value):
+            mapping = {
+                "eb-new-uid": "new-uid-hash",
+                "NL64ABNA0123453784": "iban-hash",
+            }
+            lookup["hash"] = mapping.get(value)
+            return lookup["hash"]
+
+        mock_db.query.return_value.filter.side_effect = filter_side_effect
+
+        with patch("app.routes.enable_banking.blind_index", side_effect=blind_index_side_effect):
+            result = _build_suggested_mappings(
+                db=mock_db,
+                user_id="user-1",
+                raw_accounts=[
+                    {
+                        "uid": "eb-new-uid",
+                        "account_name": "I KOTSAKIACHIDIS",
+                        "iban": "NL64 ABNA 0123 4537 84",
+                    }
+                ],
+            )
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["suggested_action"], "link")
+        self.assertEqual(result[0]["suggested_account_id"], "acc-uuid-1")
+        self.assertEqual(result[0]["suggested_account_name"], "ABN AMRO Giannis")
+
+    def test_unhashable_values_do_not_match_an_arbitrary_account(self):
+        """A null blind index must not compile to `hash IS NULL` and match anything."""
+        from app.routes.enable_banking import _build_suggested_mappings
+
+        stray_account = MagicMock()
+        stray_account.id = "acc-uuid-stray"
+        stray_account.name = "Unrelated Account"
+
+        mock_db = MagicMock()
+        # Any query that reaches the DB returns a row — so if the production
+        # code queries at all with a null hash, the test fails.
+        mock_db.query.return_value.filter.return_value.first.return_value = stray_account
+
+        with patch("app.routes.enable_banking.blind_index", return_value=None):
+            result = _build_suggested_mappings(
+                db=mock_db,
+                user_id="user-1",
+                raw_accounts=[{"uid": "some-uid", "account_name": "X", "iban": "NL64ABNA0123453784"}],
+            )
+
+        self.assertEqual(result[0]["suggested_action"], "create")
+        self.assertIsNone(result[0]["suggested_account_id"])
+
+
+class TestRelinkableConnectionStatuses(unittest.TestCase):
+    """Accounts on a dead connection must be re-linkable after re-authorization."""
+
+    def test_dead_statuses_cover_every_non_syncing_state(self):
+        from app.routes.enable_banking import _RELINKABLE_CONNECTION_STATUSES
+
+        # These are the states a connection lands in when it stops syncing.
+        # If one were missing, its accounts would be permanently unlinkable
+        # and the user would be forced to create a duplicate.
+        for status in ("expired", "disconnected", "error"):
+            self.assertIn(status, _RELINKABLE_CONNECTION_STATUSES)
+
+        # An active connection is a genuine conflict and must NOT be included.
+        self.assertNotIn("active", _RELINKABLE_CONNECTION_STATUSES)
+        self.assertNotIn("pending_setup", _RELINKABLE_CONNECTION_STATUSES)
+
+    def test_frontend_and_backend_status_lists_agree(self):
+        """The wizard offers the account; the API must accept it.
+
+        If these two lists drift, the account is shown as linkable and then
+        rejected on submit — a dead end for the user.
+        """
+        import pathlib
+        import re
+
+        from app.routes.enable_banking import _RELINKABLE_CONNECTION_STATUSES
+
+        ts_path = (
+            pathlib.Path(__file__).resolve().parents[2]
+            / "frontend"
+            / "lib"
+            / "actions"
+            / "bank-connections.ts"
+        )
+        if not ts_path.exists():  # backend-only checkout
+            self.skipTest("frontend source not present")
+
+        source = ts_path.read_text(encoding="utf-8")
+        match = re.search(
+            r"DEAD_CONNECTION_STATUSES\s*=\s*\[([^\]]*)\]", source, re.S
+        )
+        self.assertIsNotNone(match, "DEAD_CONNECTION_STATUSES not found in frontend")
+        frontend_statuses = set(re.findall(r'"([^"]+)"', match.group(1)))
+
+        self.assertEqual(
+            frontend_statuses,
+            set(_RELINKABLE_CONNECTION_STATUSES),
+            "Frontend linkable-account filter and backend link guard disagree.",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

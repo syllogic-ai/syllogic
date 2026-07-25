@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq, and, desc, isNull } from "drizzle-orm";
+import { eq, and, desc, isNull, or, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { bankConnections, accounts } from "@/lib/db/schema";
 import { requireAuth, getAuthenticatedSession } from "@/lib/auth-helpers";
@@ -203,9 +203,29 @@ export async function getConnectionForMapping(connectionId: string) {
   return connection;
 }
 
+/** Connection states that no longer sync, so their accounts are re-linkable. */
+const DEAD_CONNECTION_STATUSES = ["expired", "disconnected", "error"];
+
 export async function getLinkableAccounts() {
   const userId = await requireAuth();
   if (!userId) return [];
+
+  // Accounts attached to a dead connection must stay linkable. A consent
+  // expires roughly every 90 days; when the user re-authorizes, the bank
+  // issues a new account uid, so the only way to reattach history to the
+  // existing account is to pick it here. Offering just the unattached
+  // accounts made that impossible and forced "create new" — which is how
+  // duplicate accounts were produced.
+  const deadConnections = await db
+    .select({ id: bankConnections.id })
+    .from(bankConnections)
+    .where(
+      and(
+        eq(bankConnections.userId, userId),
+        inArray(bankConnections.status, DEAD_CONNECTION_STATUSES)
+      )
+    );
+  const deadConnectionIds = deadConnections.map((c) => c.id);
 
   return db
     .select({
@@ -220,7 +240,12 @@ export async function getLinkableAccounts() {
     .where(
       and(
         eq(accounts.userId, userId),
-        isNull(accounts.bankConnectionId)
+        deadConnectionIds.length > 0
+          ? or(
+              isNull(accounts.bankConnectionId),
+              inArray(accounts.bankConnectionId, deadConnectionIds)
+            )
+          : isNull(accounts.bankConnectionId)
       )
     )
     .orderBy(accounts.name);
