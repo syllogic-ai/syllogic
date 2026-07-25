@@ -76,20 +76,54 @@ class SyncService:
         account.iban_ciphertext = encrypted
         account.iban_hash = hashed
 
-    def _find_existing_account(self, provider: str, external_id: Optional[str]) -> Optional[Account]:
+    def _find_existing_account(
+        self,
+        provider: str,
+        external_id: Optional[str],
+        iban: Optional[str] = None,
+    ) -> Optional[Account]:
+        """Locate the account this payload refers to, by external_id then IBAN.
+
+        The IBAN fallback exists because providers do not guarantee a stable
+        external_id. Enable Banking mints a new account uid on every consent
+        re-authorization, so after a consent expires and the user reconnects,
+        matching on external_id alone misses and the same real account is
+        inserted again — the cause of duplicate account rows in production.
+
+        The IBAN survives re-consent and is globally unique, which makes it a
+        sound identity key. It is only a fallback: external_id stays the
+        primary match, and callers refresh the stored external_id afterwards
+        so subsequent syncs match on the fast path again.
+        """
         query = self.db.query(Account).filter(
             Account.user_id == self.user_id,
             Account.provider == provider,
         )
+
         hashed_candidates = blind_index_candidates(external_id)
         if hashed_candidates:
-            return query.filter(
+            match = query.filter(
                 or_(
                     Account.external_id_hash.in_(hashed_candidates),
                     Account.external_id == external_id,
                 )
             ).first()
-        return query.filter(Account.external_id == external_id).first()
+        else:
+            match = query.filter(Account.external_id == external_id).first()
+
+        if match is not None:
+            return match
+
+        # Fall back to IBAN. A missing IBAN must never reach the query: an
+        # empty candidate list would otherwise match unrelated accounts that
+        # also have no IBAN recorded.
+        if not iban:
+            return None
+        normalized = iban.replace(" ", "").upper()
+        iban_candidates = blind_index_candidates(normalized)
+        if not iban_candidates:
+            return None
+        return query.filter(Account.iban_hash.in_(iban_candidates)).first()
     
     def _match_pending_transaction(
         self, account_id: str, amount, booked_at
@@ -157,7 +191,9 @@ class SyncService:
         
         for account_data in account_data_list:
             # Check if account already exists
-            existing_account = self._find_existing_account(provider, account_data.external_id)
+            existing_account = self._find_existing_account(
+                provider, account_data.external_id, account_data.iban
+            )
             
             if existing_account:
                 # Update existing account
