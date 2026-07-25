@@ -15,10 +15,12 @@ type AppLockState = 'locked' | 'unlocked';
 export function AppLockProvider({ children }: PropsWithChildren) {
   const [state, setState] = useState<AppLockState>('locked');
   const appState = useRef<AppStateStatus>(AppState.currentState);
-  // The native Face ID sheet itself flips AppState to inactive/active as it
-  // presents and dismisses, which would otherwise re-trigger the AppState
-  // listener below and re-launch authenticateAsync mid-prompt — an infinite
-  // retry loop. This guards against that re-entrancy.
+  // The native Face ID sheet itself flips AppState to 'inactive' as it
+  // presents, then back to 'active' as it dismisses — for every attempt,
+  // success or failure. Only a genuine 'background' means the user actually
+  // left the app; relocking on 'inactive' too re-triggers tryUnlock() after
+  // every single attempt, causing an infinite retry loop. Also guards
+  // against concurrent re-entry while a prompt is already in flight.
   const isAuthenticating = useRef(false);
 
   async function tryUnlock() {
@@ -44,7 +46,7 @@ export function AppLockProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     tryUnlock();
     const sub = AppState.addEventListener('change', (next) => {
-      if (appState.current.match(/inactive|background/) && next === 'active' && !isAuthenticating.current) {
+      if (appState.current === 'background' && next === 'active' && !isAuthenticating.current) {
         setState('locked');
         tryUnlock();
       }
