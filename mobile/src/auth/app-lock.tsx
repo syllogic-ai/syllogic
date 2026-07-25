@@ -15,25 +15,36 @@ type AppLockState = 'locked' | 'unlocked';
 export function AppLockProvider({ children }: PropsWithChildren) {
   const [state, setState] = useState<AppLockState>('locked');
   const appState = useRef<AppStateStatus>(AppState.currentState);
+  // The native Face ID sheet itself flips AppState to inactive/active as it
+  // presents and dismisses, which would otherwise re-trigger the AppState
+  // listener below and re-launch authenticateAsync mid-prompt — an infinite
+  // retry loop. This guards against that re-entrancy.
+  const isAuthenticating = useRef(false);
 
   async function tryUnlock() {
-    const hasHardware = await LocalAuthentication.hasHardwareAsync();
-    const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-    if (!hasHardware || !isEnrolled) {
-      // No biometrics configured on this device — don't block access.
-      setState('unlocked');
-      return;
+    if (isAuthenticating.current) return;
+    isAuthenticating.current = true;
+    try {
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      if (!hasHardware || !isEnrolled) {
+        // No biometrics configured on this device — don't block access.
+        setState('unlocked');
+        return;
+      }
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Unlock Syllogic',
+      });
+      setState(result.success ? 'unlocked' : 'locked');
+    } finally {
+      isAuthenticating.current = false;
     }
-    const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: 'Unlock Syllogic',
-    });
-    setState(result.success ? 'unlocked' : 'locked');
   }
 
   useEffect(() => {
     tryUnlock();
     const sub = AppState.addEventListener('change', (next) => {
-      if (appState.current.match(/inactive|background/) && next === 'active') {
+      if (appState.current.match(/inactive|background/) && next === 'active' && !isAuthenticating.current) {
         setState('locked');
         tryUnlock();
       }
