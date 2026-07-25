@@ -29,6 +29,12 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Connection states that no longer sync. An account attached to one of these
+# may be re-linked to a fresh connection; consents expire roughly every 90
+# days, so this is the normal path back to a working link.
+# Mirrored in frontend/lib/actions/bank-connections.ts (DEAD_CONNECTION_STATUSES).
+_RELINKABLE_CONNECTION_STATUSES = {"expired", "disconnected", "error"}
+
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 ASPSP_CACHE_TTL = 86400  # 24 hours
 
@@ -344,11 +350,23 @@ def map_accounts(
                     status_code=404,
                     detail=f"Account '{mapping.existing_account_id}' not found",
                 )
-            if existing.bank_connection_id is not None:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Account '{mapping.existing_account_id}' is already linked to a bank connection",
-                )
+            # Re-linking is only a conflict when the account is still attached
+            # to a LIVE connection. After a consent expires the user must
+            # re-authorize, and reattaching the account to the new connection
+            # is the whole point of this wizard — rejecting it forced "create
+            # new account" and produced duplicates.
+            if existing.bank_connection_id is not None and existing.bank_connection_id != connection.id:
+                current = db.query(BankConnection).filter(
+                    BankConnection.id == existing.bank_connection_id,
+                ).first()
+                if current is not None and current.status not in _RELINKABLE_CONNECTION_STATUSES:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            f"Account '{mapping.existing_account_id}' is already linked to an "
+                            f"active bank connection ({current.aspsp_name})."
+                        ),
+                    )
             existing.bank_connection_id = connection.id
             existing.provider = "enable_banking"
             existing.external_id = mapping.bank_uid
@@ -544,31 +562,47 @@ def _build_suggested_mappings(
     user_id: str,
     raw_accounts: list,
 ) -> list:
-    """For each bank account UID, check if the user has an existing account with that external_id_hash."""
+    """Suggest, per bank account, whether to link to an existing account.
+
+    Matches on external_id_hash first, then falls back to the IBAN. The
+    fallback matters on re-authorization: the bank issues a new account uid
+    each time a consent is granted, so external_id alone stops matching and
+    the wizard would suggest creating a duplicate of an account the user
+    already has. The IBAN survives re-consent and is globally unique.
+    """
     results = []
     for raw_acc in raw_accounts:
         uid = raw_acc.get("uid") or raw_acc.get("id") or ""
         bank_name = raw_acc.get("account_name") or raw_acc.get("name") or "Bank Account"
+        raw_iban = raw_acc.get("iban") or (raw_acc.get("account_id") or {}).get("iban") or ""
 
-        if not uid:
-            results.append({
-                "bank_uid": uid,
-                "bank_name": bank_name,
-                "suggested_action": "create",
-                "suggested_account_id": None,
-                "suggested_account_name": None,
-            })
-            continue
+        existing = None
 
-        uid_hash = blind_index(uid)
-        existing = (
-            db.query(Account)
-            .filter(
-                Account.user_id == user_id,
-                Account.external_id_hash == uid_hash,
-            )
-            .first()
-        )
+        if uid:
+            uid_hash = blind_index(uid)
+            # A null hash (encryption unconfigured) would compile to
+            # `external_id_hash IS NULL` and match an unrelated account.
+            if uid_hash:
+                existing = (
+                    db.query(Account)
+                    .filter(
+                        Account.user_id == user_id,
+                        Account.external_id_hash == uid_hash,
+                    )
+                    .first()
+                )
+
+        if existing is None and raw_iban:
+            iban_hash = blind_index(raw_iban.replace(" ", "").upper())
+            if iban_hash:
+                existing = (
+                    db.query(Account)
+                    .filter(
+                        Account.user_id == user_id,
+                        Account.iban_hash == iban_hash,
+                    )
+                    .first()
+                )
 
         if existing:
             results.append({
