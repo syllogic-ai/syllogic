@@ -100,19 +100,24 @@ class SyncService:
             Account.provider == provider,
         )
 
-        hashed_candidates = blind_index_candidates(external_id)
-        if hashed_candidates:
-            match = query.filter(
-                or_(
-                    Account.external_id_hash.in_(hashed_candidates),
-                    Account.external_id == external_id,
-                )
-            ).first()
-        else:
-            match = query.filter(Account.external_id == external_id).first()
-
-        if match is not None:
-            return match
+        # A blank external_id is not an identity. `Account.external_id == None`
+        # renders as `IS NULL`, which would match the first account that also
+        # has none recorded and silently merge unrelated accounts — providers
+        # that omit external_id (ibkr_flex, manual) have several such rows.
+        # Skipping the lookup also lets an available IBAN reach the fallback.
+        if external_id:
+            hashed_candidates = blind_index_candidates(external_id)
+            if hashed_candidates:
+                match = query.filter(
+                    or_(
+                        Account.external_id_hash.in_(hashed_candidates),
+                        Account.external_id == external_id,
+                    )
+                ).first()
+            else:
+                match = query.filter(Account.external_id == external_id).first()
+            if match is not None:
+                return match
 
         # Fall back to IBAN. A missing IBAN must never reach the query: an
         # empty candidate list would otherwise match unrelated accounts that

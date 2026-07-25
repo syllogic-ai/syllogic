@@ -35,11 +35,34 @@ from app.services.sync_service import SyncService  # noqa: E402
 PROVIDER = "iban-dedupe-test"
 
 
-def _set_encryption_env() -> None:
+def _set_encryption_env() -> dict[str, Optional[str]]:
+    """Enable encryption, returning the prior env so it can be restored.
+
+    Leaking this key into the process env and the config cache would change
+    how sibling tests in the same pytest session hash their values.
+    """
+    previous = {
+        k: os.environ.get(k)
+        for k in (
+            "DATA_ENCRYPTION_KEY_CURRENT",
+            "DATA_ENCRYPTION_KEY_ID",
+            "DATA_ENCRYPTION_KEY_PREVIOUS",
+        )
+    }
     key = base64.urlsafe_b64encode(b"a" * 32).decode("utf-8").rstrip("=")
     os.environ["DATA_ENCRYPTION_KEY_CURRENT"] = key
     os.environ["DATA_ENCRYPTION_KEY_ID"] = "k-test"
     os.environ.pop("DATA_ENCRYPTION_KEY_PREVIOUS", None)
+    reset_encryption_config_cache()
+    return previous
+
+
+def _restore_encryption_env(previous: dict[str, Optional[str]]) -> None:
+    for name, value in previous.items():
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
     reset_encryption_config_cache()
 
 
@@ -101,7 +124,7 @@ def _cleanup(db, user_id: str) -> None:
 
 def test_reconsent_with_new_external_id_reuses_account_via_iban():
     """The regression: a re-consent must NOT duplicate the account."""
-    _set_encryption_env()
+    _prev_env = _set_encryption_env()
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     user_id = None
@@ -129,11 +152,12 @@ def test_reconsent_with_new_external_id_reuses_account_via_iban():
         if user_id:
             _cleanup(db, user_id)
         db.close()
+        _restore_encryption_env(_prev_env)
 
 
 def test_accounts_without_iban_are_not_collapsed():
     """Guard: a null IBAN must never match other null-IBAN accounts."""
-    _set_encryption_env()
+    _prev_env = _set_encryption_env()
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     user_id = None
@@ -153,10 +177,11 @@ def test_accounts_without_iban_are_not_collapsed():
         if user_id:
             _cleanup(db, user_id)
         db.close()
+        _restore_encryption_env(_prev_env)
 
 
 def test_distinct_ibans_remain_distinct_accounts():
-    _set_encryption_env()
+    _prev_env = _set_encryption_env()
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     user_id = None
@@ -173,11 +198,67 @@ def test_distinct_ibans_remain_distinct_accounts():
         if user_id:
             _cleanup(db, user_id)
         db.close()
+        _restore_encryption_env(_prev_env)
+
+
+def test_blank_external_id_does_not_merge_unrelated_accounts():
+    """A blank external_id is not an identity.
+
+    `Account.external_id == None` renders as `IS NULL`, so an unguarded
+    lookup matches the first account that also has none recorded. Providers
+    that omit external_id (ibkr_flex, manual) have many such rows, and
+    merging them would silently fuse unrelated accounts. A blank value must
+    also let an available IBAN reach the fallback.
+    """
+    _prev_env = _set_encryption_env()
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    user_id = None
+    try:
+        user_id = str(get_or_create_system_user(db).id)
+        _cleanup(db, user_id)
+
+        # Seed two accounts that carry no external_id at all, the way manual
+        # and ibkr_flex rows exist in production. Postgres permits several
+        # NULLs under the (user_id, provider, external_id) unique constraint.
+        suffix = uuid.uuid4().hex[:8].upper()
+        for name, iban_value in (("No-ID One", f"NL11ABNA{suffix}1"), ("No-ID Two", None)):
+            account = Account(
+                user_id=user_id,
+                name=name,
+                account_type="checking",
+                institution="Test Bank",
+                currency="EUR",
+                provider=PROVIDER,
+                external_id=None,
+            )
+            SyncService._set_account_iban_fields(account, iban_value)
+            db.add(account)
+        db.commit()
+
+        service = SyncService(db, user_id=user_id)
+
+        # A missing external_id must not resolve to a NULL-external_id row.
+        assert service._find_existing_account(PROVIDER, None) is None, (
+            "A missing external_id matched a NULL-external_id account: "
+            "`external_id == None` renders as `IS NULL` and fuses unrelated rows."
+        )
+
+        # ...and it must let an available IBAN reach the fallback.
+        matched = service._find_existing_account(PROVIDER, None, f"nl11 abna {suffix.lower()}1")
+        assert matched is not None and matched.name == "No-ID One", (
+            "A missing external_id must fall through to IBAN matching."
+        )
+    finally:
+        if user_id:
+            _cleanup(db, user_id)
+        db.close()
+        _restore_encryption_env(_prev_env)
 
 
 def test_iban_matching_ignores_spacing_and_case():
     """Banks format IBANs inconsistently between responses."""
-    _set_encryption_env()
+    _prev_env = _set_encryption_env()
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     user_id = None
@@ -198,3 +279,4 @@ def test_iban_matching_ignores_spacing_and_case():
         if user_id:
             _cleanup(db, user_id)
         db.close()
+        _restore_encryption_env(_prev_env)
