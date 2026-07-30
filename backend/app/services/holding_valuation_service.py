@@ -56,8 +56,19 @@ class HoldingValuationService:
         if h.instrument_type == "cash":
             return Decimal("1"), h.currency, False
         lookup_symbol = h.provider_symbol or h.symbol
+
+        # First, try to fetch the price for the requested date (or most recent)
+        quotes = self.price_service.get_or_fetch([lookup_symbol], on)
+        if lookup_symbol in quotes:
+            quote = quotes[lookup_symbol]
+            gap_days = (on - quote.date).days
+            is_stale = gap_days > self.STALE_AFTER_DAYS
+            return quote.close, quote.currency, is_stale
+
+        # If fetch failed, fall back to latest snapshot in DB
         snap = self.price_service.latest_snapshot(lookup_symbol, on)
         if snap is None:
+            logger.warning("No price available for %s on %s", lookup_symbol, on)
             return Decimal("0"), h.currency, True
         gap_days = (on - snap.date).days
         is_stale = gap_days > self.STALE_AFTER_DAYS

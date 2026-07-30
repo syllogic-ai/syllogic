@@ -3,14 +3,21 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   RiBankLine,
-  RiExternalLinkLine,
   RiEyeLine,
   RiEyeOffLine,
+  RiInformationLine,
   RiRefreshLine,
 } from "@remixicon/react";
 import { createBrokerConnection } from "@/lib/api/investments";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -19,6 +26,76 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Field, Input } from "./_form-bits";
+
+const SETUP_STEPS = [
+  {
+    step: 1,
+    title: "Open Flex Queries",
+    description:
+      'In IBKR Account Management, go to "Performance & Reports" → "Flex Queries".',
+  },
+  {
+    step: 2,
+    title: "Create Activity Flex Query",
+    description:
+      'Click the "+" next to Activity Flex Query. Give it a name (e.g. "Syllogic Positions"), then in Sections select "Open Positions" and "Cash Report". Set format to XML and save.',
+  },
+  {
+    step: 3,
+    title: "Create Trade Confirmation Flex Query",
+    description:
+      'Click the "+" next to Trade Confirmation Flex Query. Name it (e.g. "Syllogic Trades"), select the "Trades" section, set format to XML and save.',
+  },
+  {
+    step: 4,
+    title: "Enable Flex Web Service",
+    description:
+      'At the top of the Flex Queries page, click the gear icon next to "Flex Web Service" and enable it. Copy the "Current Token" shown.',
+  },
+  {
+    step: 5,
+    title: "Copy Query IDs",
+    description:
+      "Note down the Query ID shown next to each Flex Query you created. You'll need the Activity Query ID and Trade Confirmation Query ID.",
+  },
+];
+
+function FlexQuerySetupGuide() {
+  return (
+    <Dialog>
+      <DialogTrigger className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+        <RiInformationLine size={14} />
+        <span>How to set up Flex Queries</span>
+      </DialogTrigger>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Setting up IBKR Flex Queries</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 mt-2">
+          {SETUP_STEPS.map(({ step, title, description }) => (
+            <div key={step} className="flex gap-3">
+              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center">
+                {step}
+              </div>
+              <div className="space-y-0.5">
+                <div className="text-sm font-medium">{title}</div>
+                <div className="text-xs text-muted-foreground leading-relaxed">
+                  {description}
+                </div>
+              </div>
+            </div>
+          ))}
+          <div className="pt-2 border-t border-border">
+            <p className="text-xs text-muted-foreground">
+              Once complete, paste your Flex Token and both Query IDs in the
+              form below.
+            </p>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export function BrokerForm({ onCancel }: { onCancel: () => void }) {
   const router = useRouter();
@@ -71,13 +148,16 @@ export function BrokerForm({ onCancel }: { onCancel: () => void }) {
             </div>
           </div>
           <div className="bg-muted/40 border border-border px-4 py-3 space-y-2">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              What you need
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                What you need
+              </div>
+              <FlexQuerySetupGuide />
             </div>
             {[
-              "A Flex Web Service token — from IBKR Account Management → Reports → Flex Queries",
-              "A Positions Flex Query ID configured to export account positions",
-              "A Trades Flex Query ID configured to export trade history",
+              "Flex Web Service token",
+              "Activity Flex Query ID (with Open Positions)",
+              "Trade Confirmation Flex Query ID",
             ].map((t) => (
               <div
                 key={t}
@@ -87,14 +167,6 @@ export function BrokerForm({ onCancel }: { onCancel: () => void }) {
                 <span>{t}</span>
               </div>
             ))}
-            <a
-              href="https://www.interactivebrokers.com/en/index.php?f=1325"
-              target="_blank"
-              rel="noreferrer"
-              className="text-xs text-foreground mt-1 inline-flex items-center gap-1 hover:underline"
-            >
-              <RiExternalLinkLine size={11} /> How to set up Flex Queries →
-            </a>
           </div>
           <div className="space-y-3.5">
             <div className="flex gap-3">
