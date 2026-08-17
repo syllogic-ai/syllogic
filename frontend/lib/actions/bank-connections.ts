@@ -133,9 +133,15 @@ export async function disconnectBank(
   }
 }
 
+/**
+ * Start a bank authorization. Pass connectionId to renew an existing
+ * connection's consent in place — its accounts stay mapped and the callback
+ * skips the mapping wizard.
+ */
 export async function initiateAuth(
   aspspName: string,
-  aspspCountry: string
+  aspspCountry: string,
+  connectionId?: string
 ): Promise<{ success: boolean; url?: string; error?: string }> {
   const session = await getAuthenticatedSession();
   const userId = session?.user?.id;
@@ -163,6 +169,7 @@ export async function initiateAuth(
       body: JSON.stringify({
         aspsp_name: aspspName,
         aspsp_country: aspspCountry,
+        connection_id: connectionId,
       }),
     });
 

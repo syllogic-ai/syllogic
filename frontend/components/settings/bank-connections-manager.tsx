@@ -25,7 +25,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { triggerSync, disconnectBank, triggerRecategorize } from "@/lib/actions/bank-connections";
+import { triggerSync, disconnectBank, triggerRecategorize, initiateAuth } from "@/lib/actions/bank-connections";
 type BankConnectionItem = {
   id: string;
   aspspName: string;
@@ -55,6 +55,8 @@ export function BankConnectionsManager({ connections }: BankConnectionsManagerPr
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
   const [recategorizingIds, setRecategorizingIds] = useState<Set<string>>(new Set());
   const [disconnectingIds, setDisconnectingIds] = useState<Set<string>>(new Set());
+  const [reconnectingIds, setReconnectingIds] = useState<Set<string>>(new Set());
+  const [reconnectError, setReconnectError] = useState<Map<string, string>>(new Map());
   const [pollingIds, setPollingIds] = useState<Set<string>>(new Set());
   const [syncProgress, setSyncProgress] = useState<Map<string, SyncProgress>>(new Map());
   const [elapsedSeconds, setElapsedSeconds] = useState<Map<string, number>>(new Map());
@@ -217,6 +219,45 @@ export function BankConnectionsManager({ connections }: BankConnectionsManagerPr
     }
   };
 
+  // Renews the consent on the existing connection: accounts stay linked, so no
+  // disconnect and no mapping wizard. The backend re-points the account uids.
+  const handleReconnect = async (connection: BankConnectionItem) => {
+    setReconnectingIds((prev) => new Set(prev).add(connection.id));
+    setReconnectError((prev) => {
+      const next = new Map(prev);
+      next.delete(connection.id);
+      return next;
+    });
+    try {
+      const result = await initiateAuth(
+        connection.aspspName,
+        connection.aspspCountry,
+        connection.id
+      );
+      if (!result.success || !result.url) {
+        setReconnectError((prev) =>
+          new Map(prev).set(connection.id, result.error || "Could not start reconnect")
+        );
+        setReconnectingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(connection.id);
+          return next;
+        });
+        return;
+      }
+      window.location.href = result.url;
+    } catch {
+      setReconnectError((prev) =>
+        new Map(prev).set(connection.id, "Could not start reconnect")
+      );
+      setReconnectingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(connection.id);
+        return next;
+      });
+    }
+  };
+
   const handleDisconnect = async (connectionId: string) => {
     setDisconnectingIds((prev) => new Set(prev).add(connectionId));
     try {
@@ -325,12 +366,14 @@ export function BankConnectionsManager({ connections }: BankConnectionsManagerPr
                       <RiAlertLine className="h-3 w-3" />
                       <span>
                         Connection expires in {daysUntilExpiry(connection)} days.{" "}
-                        <Link
-                          href="/settings/connect-bank"
-                          className="underline"
+                        <button
+                          type="button"
+                          onClick={() => handleReconnect(connection)}
+                          disabled={reconnectingIds.has(connection.id)}
+                          className="underline disabled:opacity-60"
                         >
-                          Reconnect
-                        </Link>
+                          {reconnectingIds.has(connection.id) ? "Redirecting..." : "Reconnect"}
+                        </button>
                       </span>
                     </div>
                   )}
@@ -339,14 +382,21 @@ export function BankConnectionsManager({ connections }: BankConnectionsManagerPr
                       <RiAlertLine className="h-3 w-3" />
                       <span>
                         Connection expired.{" "}
-                        <Link
-                          href="/settings/connect-bank"
-                          className="underline"
+                        <button
+                          type="button"
+                          onClick={() => handleReconnect(connection)}
+                          disabled={reconnectingIds.has(connection.id)}
+                          className="underline disabled:opacity-60"
                         >
-                          Reconnect
-                        </Link>
+                          {reconnectingIds.has(connection.id) ? "Redirecting..." : "Reconnect"}
+                        </button>
                       </span>
                     </div>
+                  )}
+                  {reconnectError.has(connection.id) && (
+                    <p className="mt-1 text-xs text-destructive">
+                      {reconnectError.get(connection.id)}
+                    </p>
                   )}
                   {connection.lastSyncError && connection.status === "error" && (
                     <p className="mt-1 text-xs text-destructive">
