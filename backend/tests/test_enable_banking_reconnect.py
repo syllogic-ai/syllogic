@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
-def _account(name, uid=None, iban=None):
+def _account(name, uid=None, iban=None, currency="EUR"):
     """An unsaved Account with encrypted uid/IBAN fields populated."""
     from app.models import Account
     from app.services.sync_service import SyncService
@@ -24,7 +24,7 @@ def _account(name, uid=None, iban=None):
         user_id="user-1",
         name=name,
         account_type="checking",
-        currency="EUR",
+        currency=currency,
     )
     if uid:
         SyncService._set_account_external_id_fields(acc, uid)
@@ -106,6 +106,31 @@ class TestRepointAccountUids(unittest.TestCase):
 
         self.assertEqual(count, 1)
         self.assertEqual(SyncService._resolve_account_external_id(acc), "new-uid-1")
+
+    def test_two_accounts_sharing_an_iban_are_both_repointed(self):
+        """Multi-currency accounts share an IBAN. Leaving one on a dead uid fails the
+        whole connection sync, because a per-account failure re-raises."""
+        from app.routes.enable_banking import _repoint_account_uids
+        from app.services.sync_service import SyncService
+
+        eur = _account("eur", uid="old-eur", iban="NL01ABNA0123456789", currency="EUR")
+        usd = _account("usd", uid="old-usd", iban="NL01ABNA0123456789", currency="USD")
+        db = _db_with_linked_accounts([eur, usd])
+
+        count = _repoint_account_uids(
+            db,
+            MagicMock(id="conn-1"),
+            [
+                {"uid": "new-usd", "iban": "NL01ABNA0123456789", "currency": "USD"},
+                {"uid": "new-eur", "iban": "NL01ABNA0123456789", "currency": "EUR"},
+            ],
+        )
+
+        self.assertEqual(count, 2)
+        # Currency, not arrival order, decides which account gets which uid —
+        # otherwise one currency's transactions land in the other's account.
+        self.assertEqual(SyncService._resolve_account_external_id(usd), "new-usd")
+        self.assertEqual(SyncService._resolve_account_external_id(eur), "new-eur")
 
     def test_scheme_form_iban_is_matched(self):
         """EB also returns the IBAN nested under account_id in scheme form."""
@@ -245,6 +270,76 @@ class TestReconnectSession(unittest.TestCase):
                 "aspsp": {"name": "ABN AMRO", "country": "NL"},
                 "accounts": [{"uid": "uid-1"}],
             }
+            result = create_session(
+                SessionRequest(code="auth-code", state="nonce"), user_id="user-1", db=db
+            )
+
+        self.assertFalse(result.reconnected)
+        db.add.assert_called_once()
+
+
+class TestUnreadableState(unittest.TestCase):
+    """A state that cannot be read must not silently become a second connection."""
+
+    def _patch_client(self, aspsp_name="ABN AMRO"):
+        client_patch = patch("app.routes.enable_banking._get_eb_client")
+        client = client_patch.start()
+        client.return_value.post.return_value.json.return_value = {
+            "session_id": "new-session",
+            "aspsp": {"name": aspsp_name, "country": "NL"},
+            "accounts": [{"uid": "uid-1"}],
+        }
+        self.addCleanup(client_patch.stop)
+
+    def test_refuses_when_that_bank_is_already_connected(self):
+        """Redis down mid-renewal would otherwise reopen the duplicate-account path."""
+        from fastapi import HTTPException
+        from app.routes.enable_banking import create_session, SessionRequest
+
+        redis_mock = MagicMock()
+        redis_mock.get.side_effect = Exception("redis down")
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = MagicMock(id="conn-1")
+        self._patch_client()
+
+        with patch("app.routes.enable_banking._get_redis", return_value=redis_mock):
+            with self.assertRaises(HTTPException) as ctx:
+                create_session(
+                    SessionRequest(code="auth-code", state="nonce"), user_id="user-1", db=db
+                )
+
+        self.assertEqual(ctx.exception.status_code, 409)
+        db.add.assert_not_called()
+
+    def test_expired_nonce_is_treated_the_same_as_an_unreachable_redis(self):
+        from fastapi import HTTPException
+        from app.routes.enable_banking import create_session, SessionRequest
+
+        redis_mock = MagicMock()
+        redis_mock.get.return_value = None  # nonce outlived its TTL
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = MagicMock(id="conn-1")
+        self._patch_client()
+
+        with patch("app.routes.enable_banking._get_redis", return_value=redis_mock):
+            with self.assertRaises(HTTPException) as ctx:
+                create_session(
+                    SessionRequest(code="auth-code", state="nonce"), user_id="user-1", db=db
+                )
+
+        self.assertEqual(ctx.exception.status_code, 409)
+
+    def test_first_time_connect_to_a_new_bank_still_proceeds(self):
+        """No existing connection means no ambiguity, so this must not regress."""
+        from app.routes.enable_banking import create_session, SessionRequest
+
+        redis_mock = MagicMock()
+        redis_mock.get.side_effect = Exception("redis down")
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = None
+        self._patch_client()
+
+        with patch("app.routes.enable_banking._get_redis", return_value=redis_mock):
             result = create_session(
                 SessionRequest(code="auth-code", state="nonce"), user_id="user-1", db=db
             )

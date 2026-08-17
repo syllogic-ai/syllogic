@@ -172,7 +172,14 @@ def _repoint_account_uids(db: Session, connection: BankConnection, raw_accounts:
         for a in linked
         if (uid := SyncService._resolve_account_external_id(a))
     }
-    by_iban_hash = {a.iban_hash: a for a in linked if a.iban_hash}
+    # IBAN maps to a list, not a single account: multi-currency accounts share
+    # one IBAN, and collapsing them would leave all but one holding a dead uid —
+    # which fails the whole connection sync, since a per-account failure re-raises
+    # (tasks.enable_banking_tasks).
+    by_iban_hash: dict = {}
+    for a in linked:
+        if a.iban_hash:
+            by_iban_hash.setdefault(a.iban_hash, []).append(a)
     claimed: set = set()
 
     repointed = 0
@@ -183,17 +190,20 @@ def _repoint_account_uids(db: Session, connection: BankConnection, raw_accounts:
 
         account = by_uid.get(uid)
         if account is None:
-            # Two bank accounts can share an IBAN (multi-currency), so an
-            # account already claimed by a uid or earlier IBAN hit is not
-            # re-pointed — that would leave the first one holding a dead uid.
+            # Currency breaks the tie between accounts sharing an IBAN. Choosing
+            # arbitrarily would file one currency's transactions under the other
+            # currency's account.
             iban = _extract_iban(raw) or _extract_iban(raw.get("account_id"))
+            currency = (raw.get("currency") or "").upper()
+            candidates = [
+                a
+                for h in blind_index_candidates(iban)
+                for a in by_iban_hash.get(h, ())
+                if a.id not in claimed
+            ]
             account = next(
-                (
-                    by_iban_hash[h]
-                    for h in blind_index_candidates(iban)
-                    if h in by_iban_hash and by_iban_hash[h].id not in claimed
-                ),
-                None,
+                (a for a in candidates if (a.currency or "").upper() == currency),
+                candidates[0] if candidates else None,
             )
         if account is None:
             logger.info(
@@ -361,6 +371,28 @@ def create_session(
         consent_expires_at = datetime.now(timezone.utc) + timedelta(days=90)
 
     accounts_count = len(session_data.get("accounts", []))
+
+    # A state that was supplied but could not be read — Redis unreachable, or a
+    # nonce that outlived its TTL — leaves the renewal intent unknown. Falling
+    # through would open a second connection to a bank the user already has, and
+    # the wizard could then only offer "create new": duplicate accounts, the very
+    # thing this flow exists to prevent. Refuse, and let them retry from Settings.
+    # An unambiguous first-time connect still proceeds, as it always has.
+    if body.state and not state_payload:
+        already_connected = db.query(BankConnection).filter(
+            BankConnection.user_id == user_id,
+            BankConnection.aspsp_name == aspsp_name,
+            BankConnection.status != "disconnected",
+        ).first()
+        if already_connected:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"You are already connected to {aspsp_name}, and this "
+                    "authorization could not be confirmed. Reconnect that bank from "
+                    "Settings › Bank Connections instead of connecting it again."
+                ),
+            )
 
     reconnect_id = state_payload.get("connection_id")
     if reconnect_id:
