@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 import redis
 import json
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -201,9 +202,12 @@ def _repoint_account_uids(db: Session, connection: BankConnection, raw_accounts:
                 for a in by_iban_hash.get(h, ())
                 if a.id not in claimed
             ]
+            # With several candidates and no currency agreeing, guessing would file
+            # one currency's transactions under another's account. Leave it
+            # unmapped: its sync fails loudly, which beats silent misfiling.
             account = next(
                 (a for a in candidates if (a.currency or "").upper() == currency),
-                candidates[0] if candidates else None,
+                candidates[0] if len(candidates) == 1 else None,
             )
         if account is None:
             logger.info(
@@ -379,9 +383,12 @@ def create_session(
     # thing this flow exists to prevent. Refuse, and let them retry from Settings.
     # An unambiguous first-time connect still proceeds, as it always has.
     if body.state and not state_payload:
+        # Normalized like the takeover check below: an exact comparison would miss
+        # a stored name differing only by case or padding, fall through, and open
+        # the second connection this guard exists to prevent.
         already_connected = db.query(BankConnection).filter(
             BankConnection.user_id == user_id,
-            BankConnection.aspsp_name == aspsp_name,
+            func.lower(func.trim(BankConnection.aspsp_name)) == aspsp_name.strip().lower(),
             BankConnection.status != "disconnected",
         ).first()
         if already_connected:

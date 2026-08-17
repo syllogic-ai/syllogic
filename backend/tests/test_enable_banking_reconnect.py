@@ -132,6 +132,44 @@ class TestRepointAccountUids(unittest.TestCase):
         self.assertEqual(SyncService._resolve_account_external_id(usd), "new-usd")
         self.assertEqual(SyncService._resolve_account_external_id(eur), "new-eur")
 
+    def test_ambiguous_shared_iban_is_left_unmapped(self):
+        """No currency agrees and several accounts share the IBAN: guessing would file
+        one currency's transactions under another's account."""
+        from app.routes.enable_banking import _repoint_account_uids
+        from app.services.sync_service import SyncService
+
+        eur = _account("eur", uid="old-eur", iban="NL01ABNA0123456789", currency="EUR")
+        usd = _account("usd", uid="old-usd", iban="NL01ABNA0123456789", currency="USD")
+        db = _db_with_linked_accounts([eur, usd])
+
+        count = _repoint_account_uids(
+            db,
+            MagicMock(id="conn-1"),
+            [{"uid": "new-gbp", "iban": "NL01ABNA0123456789", "currency": "GBP"}],
+        )
+
+        self.assertEqual(count, 0)
+        self.assertEqual(SyncService._resolve_account_external_id(eur), "old-eur")
+        self.assertEqual(SyncService._resolve_account_external_id(usd), "old-usd")
+
+    def test_lone_candidate_still_matches_on_a_currency_mismatch(self):
+        """One account on the IBAN is unambiguous, so a currency disagreement (a
+        never-recorded currency, say) must not block the re-point."""
+        from app.routes.enable_banking import _repoint_account_uids
+        from app.services.sync_service import SyncService
+
+        acc = _account("only", uid="old-uid", iban="NL01ABNA0123456789", currency="EUR")
+        db = _db_with_linked_accounts([acc])
+
+        count = _repoint_account_uids(
+            db,
+            MagicMock(id="conn-1"),
+            [{"uid": "new-uid", "iban": "NL01ABNA0123456789", "currency": "GBP"}],
+        )
+
+        self.assertEqual(count, 1)
+        self.assertEqual(SyncService._resolve_account_external_id(acc), "new-uid")
+
     def test_scheme_form_iban_is_matched(self):
         """EB also returns the IBAN nested under account_id in scheme form."""
         from app.routes.enable_banking import _repoint_account_uids
@@ -346,6 +384,63 @@ class TestUnreadableState(unittest.TestCase):
 
         self.assertFalse(result.reconnected)
         db.add.assert_called_once()
+
+
+class TestUnreadableStateAgainstTheDatabase(unittest.TestCase):
+    """The bank-name match happens in SQL, so a mocked session cannot prove it."""
+
+    def test_matches_a_stored_name_differing_by_case_and_padding(self):
+        from fastapi import HTTPException
+        from app.database import Base, SessionLocal, engine
+        from app.db_helpers import get_or_create_system_user
+        from app.models import BankConnection
+        from app.routes.enable_banking import create_session, SessionRequest
+
+        Base.metadata.create_all(bind=engine)
+        db = SessionLocal()
+        user_id = None
+        try:
+            user_id = str(get_or_create_system_user(db).id)
+            db.add(BankConnection(
+                user_id=user_id,
+                provider="enable_banking",
+                session_id="old-session",
+                aspsp_name="  abn amro  ",  # as stored
+                aspsp_country="NL",
+                status="expired",
+            ))
+            db.commit()
+
+            redis_mock = MagicMock()
+            redis_mock.get.return_value = None  # nonce gone: intent unknown
+
+            with patch("app.routes.enable_banking._get_redis", return_value=redis_mock), \
+                 patch("app.routes.enable_banking._get_eb_client") as client:
+                client.return_value.post.return_value.json.return_value = {
+                    "session_id": "new-session",
+                    "aspsp": {"name": "ABN AMRO", "country": "NL"},  # as returned now
+                    "accounts": [{"uid": "uid-1"}],
+                }
+                with self.assertRaises(HTTPException) as ctx:
+                    create_session(
+                        SessionRequest(code="auth-code", state="nonce"),
+                        user_id=user_id,
+                        db=db,
+                    )
+
+            self.assertEqual(ctx.exception.status_code, 409)
+            self.assertEqual(
+                db.query(BankConnection).filter(BankConnection.user_id == user_id).count(),
+                1,
+                "the guard must not have opened a second connection",
+            )
+        finally:
+            if user_id:
+                db.query(BankConnection).filter(
+                    BankConnection.user_id == user_id,
+                ).delete()
+                db.commit()
+            db.close()
 
 
 class TestReconnectAuth(unittest.TestCase):
