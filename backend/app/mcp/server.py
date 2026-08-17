@@ -8,7 +8,7 @@ from pydantic import AnyHttpUrl
 
 from app.db_helpers import get_mcp_user_id
 from app.mcp.auth import CompositeAuthProvider, AS_ISSUER, MCP_PUBLIC_URL
-from app.mcp.tools import accounts, categories, transactions, analytics, recurring, investments, people as people_tools
+from app.mcp.tools import accounts, categories, transactions, analytics, recurring, investments, people as people_tools, reports as report_tools
 
 _auth = RemoteAuthProvider(
     token_verifier=CompositeAuthProvider(),
@@ -42,6 +42,9 @@ The `user_id` parameter is optional on all tools but must match the authenticate
 - **Recurring**: List and view subscriptions/bills
 - **Investments**: List holdings, portfolio summary/history, symbol search,
   import broker trades (CSV/PDF/XLSX statements), realized & unrealized P&L (FIFO)
+- **Reports**: Create, list, view, update, delete, and send-test scheduled
+  email newsletters (account balances + transaction digest, on a
+  daily/weekly/biweekly/monthly cadence)
 
 ## Bulk recategorization workflow (recommended)
 
@@ -983,3 +986,199 @@ def get_household_summary(
         investments, properties, vehicles, total (all share-attributed).
     """
     return people_tools.get_household_summary(get_mcp_user_id(user_id), person_ids)
+
+
+# ============================================================================
+# Report Tools
+# ============================================================================
+
+@mcp.tool
+def list_reports(user_id: str | None = None) -> list[dict]:
+    """
+    List all scheduled report newsletters for the user.
+
+    Args:
+        user_id: The user's ID (optional, defaults to configured user)
+
+    Returns:
+        List of report dicts (id, name, frequency, schedule fields,
+        recipient_emails, next_run_at, is_active, etc.)
+    """
+    return report_tools.list_reports(get_mcp_user_id(user_id))
+
+
+@mcp.tool
+def get_report(report_id: str, user_id: str | None = None) -> dict | None:
+    """
+    Get a single scheduled report by ID.
+
+    Args:
+        report_id: The report's ID
+        user_id: The user's ID (optional, defaults to configured user)
+
+    Returns:
+        Report dict, or None if not found / not owned by this user.
+    """
+    return report_tools.get_report(get_mcp_user_id(user_id), report_id)
+
+
+@mcp.tool
+def create_report(
+    name: str,
+    frequency: str,
+    recipient_emails: list[str],
+    account_ids: list[str] | None = None,
+    transaction_mode: str = "RECENT",
+    transaction_count: int = 10,
+    transaction_direction: str = "ALL",
+    send_time: str = "08:00:00",
+    send_day_of_week: int | None = None,
+    send_day_of_month: int | None = None,
+    timezone: str = "UTC",
+    is_active: bool = True,
+    user_id: str | None = None,
+) -> dict:
+    """
+    Create a new scheduled report newsletter.
+
+    Args:
+        name: Display name for this report
+        frequency: One of "DAILY", "WEEKLY", "BIWEEKLY", "MONTHLY"
+        recipient_emails: List of email addresses to send to (at least one required)
+        account_ids: Account IDs whose balances to include (optional, defaults to none)
+        transaction_mode: "RECENT" (most recent N transactions) or "TOP_N"
+            (largest by amount) — defaults to "RECENT"
+        transaction_count: How many transactions to include, 1-100 (default 10)
+        transaction_direction: "ALL", "EXPENSE", "INCOME", "INFLOW", or
+            "OUTFLOW" — filters which transactions are eligible (default "ALL")
+        send_time: Local send time as "HH:MM" or "HH:MM:SS" (default "08:00:00")
+        send_day_of_week: Required if frequency is WEEKLY or BIWEEKLY.
+            0=Monday .. 6=Sunday
+        send_day_of_month: Required if frequency is MONTHLY. 1-28
+        timezone: IANA timezone name, e.g. "Europe/Brussels" (default "UTC")
+        is_active: Whether the report is active/scheduled (default True)
+        user_id: The user's ID (optional, defaults to configured user)
+
+    Returns:
+        {"success": True, "report": {...}} on success, or
+        {"success": False, "error": "<message>"} on validation failure
+        (e.g. bad frequency, missing required day field, invalid email,
+        unowned account_id).
+    """
+    return report_tools.create_report(
+        user_id=get_mcp_user_id(user_id),
+        name=name,
+        frequency=frequency,
+        recipient_emails=recipient_emails,
+        account_ids=account_ids,
+        transaction_mode=transaction_mode,
+        transaction_count=transaction_count,
+        transaction_direction=transaction_direction,
+        send_time=send_time,
+        send_day_of_week=send_day_of_week,
+        send_day_of_month=send_day_of_month,
+        timezone=timezone,
+        is_active=is_active,
+    )
+
+
+@mcp.tool
+def update_report(
+    report_id: str,
+    name: str | None = None,
+    account_ids: list[str] | None = None,
+    transaction_mode: str | None = None,
+    transaction_count: int | None = None,
+    transaction_direction: str | None = None,
+    frequency: str | None = None,
+    send_time: str | None = None,
+    send_day_of_week: int | None = None,
+    send_day_of_month: int | None = None,
+    timezone: str | None = None,
+    recipient_emails: list[str] | None = None,
+    is_active: bool | None = None,
+    user_id: str | None = None,
+) -> dict:
+    """
+    Update a scheduled report. Only provided (non-None) fields are changed;
+    all others keep their current value.
+
+    Changing frequency to WEEKLY/BIWEEKLY without send_day_of_week, or to
+    MONTHLY without send_day_of_month, will fail — either provide the day
+    field in the same call, or ensure the report already has one set.
+
+    Args:
+        report_id: The report's ID
+        (see create_report for the meaning of each other field)
+        user_id: The user's ID (optional, defaults to configured user)
+
+    Returns:
+        {"success": True, "report": {...}} on success, or
+        {"success": False, "error": "<message>"} if not found or invalid.
+    """
+    return report_tools.update_report(
+        user_id=get_mcp_user_id(user_id),
+        report_id=report_id,
+        name=name,
+        account_ids=account_ids,
+        transaction_mode=transaction_mode,
+        transaction_count=transaction_count,
+        transaction_direction=transaction_direction,
+        frequency=frequency,
+        send_time=send_time,
+        send_day_of_week=send_day_of_week,
+        send_day_of_month=send_day_of_month,
+        timezone=timezone,
+        recipient_emails=recipient_emails,
+        is_active=is_active,
+    )
+
+
+@mcp.tool
+def delete_report(report_id: str, user_id: str | None = None) -> dict:
+    """
+    Permanently delete a scheduled report (and its run history).
+
+    Args:
+        report_id: The report's ID
+        user_id: The user's ID (optional, defaults to configured user)
+
+    Returns:
+        {"success": True, "error": None} on success, or
+        {"success": False, "error": "<message>"} if not found.
+    """
+    return report_tools.delete_report(get_mcp_user_id(user_id), report_id)
+
+
+@mcp.tool
+def send_test_report(report_id: str, user_id: str | None = None) -> dict:
+    """
+    Trigger an immediate test send of a report, bypassing its schedule.
+
+    Args:
+        report_id: The report's ID
+        user_id: The user's ID (optional, defaults to configured user)
+
+    Returns:
+        {"success": True, "run": {...}} with the created (SCHEDULED,
+        then asynchronously RUNNING/SUCCEEDED/FAILED) run record, or
+        {"success": False, "error": "<message>"} if the report isn't found.
+    """
+    return report_tools.send_test_report(get_mcp_user_id(user_id), report_id)
+
+
+@mcp.tool
+def list_report_runs(report_id: str, user_id: str | None = None) -> list[dict]:
+    """
+    List scheduled and executed send history for a report.
+
+    Args:
+        report_id: The report's ID
+        user_id: The user's ID (optional, defaults to configured user)
+
+    Returns:
+        List of run dicts (status, scheduled_for, started_at, finished_at,
+        error_message, is_test), most recent first. Empty list if the
+        report isn't found.
+    """
+    return report_tools.list_report_runs(get_mcp_user_id(user_id), report_id)

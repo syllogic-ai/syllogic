@@ -89,6 +89,12 @@ export async function GET(req: NextRequest) {
 
     const data = await resp.json();
     const connectionId = data.connection_id;
+
+    // A renewed consent keeps its account mapping, so there is nothing to map.
+    if (data.reconnected) {
+      return NextResponse.redirect(`${baseUrl}/settings?tab=bank-connections`);
+    }
+
     return NextResponse.redirect(
       `${baseUrl}/settings/connect-bank/map-accounts?connectionId=${connectionId}`
     );

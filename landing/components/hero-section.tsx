@@ -80,6 +80,24 @@ export function HeroSection() {
         </a>
       </div>
 
+      {/* Product Hunt badge */}
+      <div className="mt-8">
+        <a
+          href="https://www.producthunt.com/products/syllogic?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-syllogic"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block transition-opacity hover:opacity-80"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            alt="Syllogic - Self-hosted personal finance. Your data, your server. | Product Hunt"
+            width={250}
+            height={54}
+            src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1172114&theme=light&t=1781509839879"
+          />
+        </a>
+      </div>
+
       {/* Scroll hint */}
       <div
         className="absolute bottom-8 left-8 lg:left-24 flex items-center gap-2 text-xs font-mono uppercase tracking-widest"

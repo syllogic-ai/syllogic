@@ -93,8 +93,8 @@ export const auth = betterAuth({
     expiresIn: 60 * 60 * 24 * 30, // 30 days — must outlive OAuth access token TTL
     updateAge: 60 * 60 * 24, // 1 day
     cookieCache: {
-      enabled: false,
-      maxAge: 5 * 60, // 5 minutes
+      enabled: true,
+      maxAge: 5 * 60, // 5 minutes — serve session from signed cookie instead of a DB hit
     },
   },
   trustedOrigins: (() => {

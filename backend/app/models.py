@@ -3,13 +3,14 @@ SQLAlchemy models matching the Drizzle schema.ts structure.
 These models mirror the frontend Drizzle schema for consistency.
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, time
 from sqlalchemy import (
     Column,
     String,
     Boolean,
     Date,
     DateTime,
+    Time,
     Numeric,
     Text,
     Integer,
@@ -219,6 +220,60 @@ class Transaction(Base):
         Index("idx_transactions_csv_import", "csv_import_id"),
         UniqueConstraint("account_id", "external_id", name="transactions_account_external_id"),
         Index("idx_transactions_user_counterparty_iban", "user_id", "counterparty_iban_hash"),
+    )
+
+
+class Report(Base):
+    """Newsletter report configuration."""
+    __tablename__ = "reports"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(255), nullable=False)
+    account_ids = Column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    transaction_mode = Column(String(20), nullable=False, default="RECENT")
+    transaction_count = Column(Integer, nullable=False, default=10)
+    transaction_direction = Column(String(20), nullable=False, default="ALL")
+    frequency = Column(String(20), nullable=False)
+    send_time = Column(Time, nullable=False, default=time(8, 0))
+    send_day_of_week = Column(Integer, nullable=True)
+    send_day_of_month = Column(Integer, nullable=True)
+    timezone = Column(String(64), nullable=False, default="UTC")
+    recipient_emails = Column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    is_active = Column(Boolean, default=True, nullable=False)
+    next_run_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User")
+    runs = relationship("ReportRun", back_populates="report", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("idx_reports_user", "user_id"),
+        Index("idx_reports_next_run_at", "next_run_at"),
+    )
+
+
+class ReportRun(Base):
+    """Single scheduled or ad-hoc execution of a Report."""
+    __tablename__ = "report_runs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    report_id = Column(UUID(as_uuid=True), ForeignKey("reports.id", ondelete="CASCADE"), nullable=False)
+    scheduled_for = Column(DateTime, nullable=True)
+    is_test = Column(Boolean, default=False, nullable=False)
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+    status = Column(String(20), nullable=False, default="SCHEDULED")
+    error_message = Column(Text, nullable=True)
+    recipient_emails = Column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    report = relationship("Report", back_populates="runs")
+
+    __table_args__ = (
+        Index("idx_report_runs_report", "report_id"),
+        Index("idx_report_runs_status", "status"),
     )
 
 

@@ -185,7 +185,7 @@ def _serialize_account(account: Account) -> AccountResponse:
     )
 
 
-@router.get("/", response_model=List[AccountResponse])
+@router.get("", response_model=List[AccountResponse])
 def list_accounts(
     include_inactive: bool = Query(True, description="Include inactive accounts"),
     user_id: Optional[str] = None,

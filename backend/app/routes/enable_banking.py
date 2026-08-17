@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 import redis
 import json
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -21,9 +22,9 @@ from app.database import get_db
 from app.db_helpers import get_user_id
 from app.models import BankConnection, Account
 from app.integrations.enable_banking_auth import EnableBankingClient
-from app.integrations.enable_banking_adapter import EnableBankingAdapter, _ACCOUNT_TYPE_MAP
+from app.integrations.enable_banking_adapter import EnableBankingAdapter, _ACCOUNT_TYPE_MAP, _extract_iban
 from app.services.sync_service import SyncService
-from app.security.data_encryption import encrypt_value, blind_index
+from app.security.data_encryption import encrypt_value, blind_index, blind_index_candidates
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ router = APIRouter()
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 ASPSP_CACHE_TTL = 86400  # 24 hours
+AUTH_STATE_TTL = 1800  # 30 min — must outlast a slow bank login, see initiate_auth
 
 
 # --- Request/Response models ---
@@ -38,6 +40,9 @@ ASPSP_CACHE_TTL = 86400  # 24 hours
 class AuthRequest(BaseModel):
     aspsp_name: str
     aspsp_country: str
+    # Set to re-authorize an existing connection in place (consent renewal)
+    # instead of creating a second one. See initiate_auth.
+    connection_id: Optional[str] = None
 
 class AuthResponse(BaseModel):
     url: str
@@ -49,6 +54,9 @@ class SessionRequest(BaseModel):
 class SessionResponse(BaseModel):
     connection_id: str
     accounts_count: int
+    # True when an existing connection was renewed: accounts stayed mapped, so
+    # the caller must skip the account-mapping wizard.
+    reconnected: bool = False
 
 class SyncProgress(BaseModel):
     stage: str  # "syncing" | "done"
@@ -105,6 +113,116 @@ def _get_redis() -> redis.Redis:
     return redis.from_url(REDIS_URL, decode_responses=True)
 
 
+def _read_auth_state(state: Optional[str], user_id: str) -> dict:
+    """Consume the OAuth state nonce and return its payload.
+
+    Raises 403 if the nonce was issued to a different user. A missing or
+    unreadable nonce yields an empty payload, which the caller treats as a
+    plain first-time connect.
+    """
+    if not state:
+        return {}
+
+    try:
+        r = _get_redis()
+        raw = r.get(f"eb:state:{state}")
+        r.delete(f"eb:state:{state}")  # single use, even on mismatch
+    except Exception:
+        logger.warning("Failed to validate OAuth state from Redis")
+        return {}
+
+    if not raw:
+        return {}
+
+    try:
+        payload = json.loads(raw)
+    except (TypeError, ValueError):
+        payload = {"user_id": raw}  # nonce written before the payload was JSON
+
+    if payload.get("user_id") and payload["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail="OAuth state mismatch")
+
+    return payload
+
+
+def _repoint_account_uids(db: Session, connection: BankConnection, raw_accounts: list) -> int:
+    """Re-point the connection's accounts at the account uids of a fresh consent.
+
+    Enable Banking mints a new account uid on every re-authorization, and the
+    connection sync reads each account's stored uid directly — it cannot call
+    adapter.fetch_accounts(), because EB only returns rich account objects at
+    OAuth time (see the note in tasks.enable_banking_tasks). So a renewed
+    consent must rewrite the uids here, while those objects are in hand, or
+    every subsequent sync requests accounts that no longer exist.
+
+    Accounts are matched on their old uid first, then on IBAN, which survives
+    re-consent. A raw account matching nothing is left alone: it is new at the
+    bank and was never mapped to one of the user's accounts.
+
+    The IBAN leg needs encryption configured, since IBAN is only ever stored as
+    a ciphertext + blind index. The uid leg works either way.
+    """
+    linked = db.query(Account).filter(
+        Account.bank_connection_id == connection.id,
+    ).all()
+    if not linked:
+        return 0
+
+    by_uid = {
+        uid: a
+        for a in linked
+        if (uid := SyncService._resolve_account_external_id(a))
+    }
+    # IBAN maps to a list, not a single account: multi-currency accounts share
+    # one IBAN, and collapsing them would leave all but one holding a dead uid —
+    # which fails the whole connection sync, since a per-account failure re-raises
+    # (tasks.enable_banking_tasks).
+    by_iban_hash: dict = {}
+    for a in linked:
+        if a.iban_hash:
+            by_iban_hash.setdefault(a.iban_hash, []).append(a)
+    claimed: set = set()
+
+    repointed = 0
+    for raw in raw_accounts:
+        uid = raw.get("uid") or raw.get("id")
+        if not uid:
+            continue
+
+        account = by_uid.get(uid)
+        if account is None:
+            # Currency breaks the tie between accounts sharing an IBAN. Choosing
+            # arbitrarily would file one currency's transactions under the other
+            # currency's account.
+            iban = _extract_iban(raw) or _extract_iban(raw.get("account_id"))
+            currency = (raw.get("currency") or "").upper()
+            candidates = [
+                a
+                for h in blind_index_candidates(iban)
+                for a in by_iban_hash.get(h, ())
+                if a.id not in claimed
+            ]
+            # With several candidates and no currency agreeing, guessing would file
+            # one currency's transactions under another's account. Leave it
+            # unmapped: its sync fails loudly, which beats silent misfiling.
+            account = next(
+                (a for a in candidates if (a.currency or "").upper() == currency),
+                candidates[0] if len(candidates) == 1 else None,
+            )
+        if account is None:
+            logger.info(
+                "Reconnect: bank account %s on connection %s matched no mapped account, skipping",
+                uid, connection.id,
+            )
+            continue
+
+        SyncService._set_account_external_id_fields(account, uid)
+        claimed.add(account.id)
+        repointed += 1
+
+    return repointed
+
+
 # --- Routes ---
 
 @router.get("/aspsps")
@@ -150,15 +268,44 @@ def initiate_auth(
     user_id: str = Depends(get_user_id),
     db: Session = Depends(get_db),
 ):
-    """Generate bank authorization URL for PSU redirect."""
+    """Generate bank authorization URL for PSU redirect.
+
+    With body.connection_id set, the resulting consent renews that connection
+    instead of creating a new one — its accounts stay mapped and no wizard runs.
+    """
     client = _get_eb_client()
 
-    # Generate a random state nonce (don't leak user_id in the redirect URL)
+    if body.connection_id:
+        owned = db.query(BankConnection).filter(
+            BankConnection.id == body.connection_id,
+            BankConnection.user_id == user_id,
+        ).first()
+        if not owned:
+            raise HTTPException(status_code=404, detail="Connection not found")
+
+    # Generate a random state nonce (don't leak user_id in the redirect URL).
+    # The connection being renewed rides along here, server-side, so a tampered
+    # callback cannot re-point a connection the user did not choose.
     state_nonce = str(uuid_mod.uuid4())
+    state_payload = json.dumps({"user_id": user_id, "connection_id": body.connection_id})
     try:
         r = _get_redis()
-        r.setex(f"eb:state:{state_nonce}", 600, user_id)  # 10 min TTL
+        # 30 min, not the previous 10: a PSU opening the bank app for 2FA can
+        # easily take longer, and an expired nonce drops a renewal onto the
+        # first-time-connect path, where the accounts are still held by the old
+        # connection and the wizard can only offer "create new" — duplicates.
+        r.setex(f"eb:state:{state_nonce}", AUTH_STATE_TTL, state_payload)
     except Exception:
+        # Losing the state degrades a renewal into a second connection, and from
+        # there into duplicate accounts, so a renewal fails before the redirect
+        # rather than continuing.
+        # ponytail: Redis dying mid-redirect still lands on the wizard; move the
+        # intent to Postgres if that window ever bites.
+        if body.connection_id:
+            raise HTTPException(
+                status_code=503,
+                detail="Cannot start the reconnect right now. Please try again.",
+            )
         logger.warning("Failed to store OAuth state in Redis")
 
     auth_payload = {
@@ -192,20 +339,12 @@ def create_session(
     """
     Exchange authorization code for an Enable Banking session.
     Creates a bank_connections row and upserts accounts.
+
+    When the state nonce carries a connection_id, the consent renews that
+    connection in place instead: its accounts keep their mapping, their uids are
+    re-pointed at the new consent, and a sync is dispatched immediately.
     """
-    # Validate OAuth state nonce if provided
-    if body.state:
-        try:
-            r = _get_redis()
-            stored_user_id = r.get(f"eb:state:{body.state}")
-            if stored_user_id and stored_user_id != user_id:
-                raise HTTPException(status_code=403, detail="OAuth state mismatch")
-            # Clean up used nonce
-            r.delete(f"eb:state:{body.state}")
-        except HTTPException:
-            raise
-        except Exception:
-            logger.warning("Failed to validate OAuth state from Redis")
+    state_payload = _read_auth_state(body.state, user_id)
 
     client = _get_eb_client()
 
@@ -235,6 +374,79 @@ def create_session(
     else:
         consent_expires_at = datetime.now(timezone.utc) + timedelta(days=90)
 
+    accounts_count = len(session_data.get("accounts", []))
+
+    # A state that was supplied but could not be read — Redis unreachable, or a
+    # nonce that outlived its TTL — leaves the renewal intent unknown. Falling
+    # through would open a second connection to a bank the user already has, and
+    # the wizard could then only offer "create new": duplicate accounts, the very
+    # thing this flow exists to prevent. Refuse, and let them retry from Settings.
+    # An unambiguous first-time connect still proceeds, as it always has.
+    if body.state and not state_payload:
+        # Normalized like the takeover check below: an exact comparison would miss
+        # a stored name differing only by case or padding, fall through, and open
+        # the second connection this guard exists to prevent.
+        already_connected = db.query(BankConnection).filter(
+            BankConnection.user_id == user_id,
+            func.lower(func.trim(BankConnection.aspsp_name)) == aspsp_name.strip().lower(),
+            BankConnection.status != "disconnected",
+        ).first()
+        if already_connected:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"You are already connected to {aspsp_name}, and this "
+                    "authorization could not be confirmed. Reconnect that bank from "
+                    "Settings › Bank Connections instead of connecting it again."
+                ),
+            )
+
+    reconnect_id = state_payload.get("connection_id")
+    if reconnect_id:
+        connection = db.query(BankConnection).filter(
+            BankConnection.id == reconnect_id,
+            BankConnection.user_id == user_id,
+        ).first()
+        if not connection:
+            raise HTTPException(status_code=404, detail="Connection to reconnect not found")
+
+        # Authorizing a different bank must never take over this connection: its
+        # accounts would then be re-pointed at another institution's uids.
+        if (connection.aspsp_name or "").strip().lower() != aspsp_name.strip().lower():
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"This authorization is for {aspsp_name}, but the connection "
+                    f"being reconnected is with {connection.aspsp_name}."
+                ),
+            )
+
+        connection.session_id = session_id
+        connection.consent_expires_at = consent_expires_at
+        connection.status = "active"
+        connection.last_sync_error = None
+        repointed = _repoint_account_uids(db, connection, session_data.get("accounts", []))
+        db.commit()
+
+        logger.info(
+            "Reconnected connection %s (%s): re-pointed %d of %d accounts",
+            connection.id, connection.aspsp_name, repointed, accounts_count,
+        )
+
+        # Each account resumes from its own last_synced_at, so the gap since the
+        # consent lapsed is backfilled without asking for a lookback window.
+        try:
+            from tasks.enable_banking_tasks import sync_bank_connection
+            sync_bank_connection.delay(str(connection.id))
+        except Exception:
+            logger.warning("Failed to dispatch sync task after reconnect", exc_info=True)
+
+        return SessionResponse(
+            connection_id=str(connection.id),
+            accounts_count=accounts_count,
+            reconnected=True,
+        )
+
     # Create bank_connections row (status=pending_setup; accounts mapped in a separate step)
     connection = BankConnection(
         user_id=user_id,
@@ -249,8 +461,6 @@ def create_session(
     db.add(connection)
     db.commit()
     db.refresh(connection)
-
-    accounts_count = len(session_data.get("accounts", []))
 
     return SessionResponse(
         connection_id=str(connection.id),

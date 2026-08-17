@@ -5,6 +5,7 @@ import { ProfitLossChart } from "@/components/charts/profit-loss-chart";
 import { SpendingByCategoryChart } from "@/components/charts/spending-by-category-chart";
 import { SankeyFlowChart } from "@/components/charts/sankey-flow-chart";
 import { AssetsOverviewCard } from "@/components/assets";
+import { PortfolioSummaryCard } from "@/components/investments/PortfolioSummaryCard";
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
 import { SearchButton } from "@/components/dashboard/search-button";
 import {
@@ -13,6 +14,7 @@ import {
   type DashboardFilters as DashboardFiltersType,
 } from "@/lib/actions/dashboard";
 import { parseDashboardSearchParams } from "@/lib/dashboard/query-params";
+import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
 
 interface PageProps {
   searchParams: Promise<{
@@ -23,6 +25,25 @@ interface PageProps {
 export default async function HomePage({ searchParams }: PageProps) {
   const params = await searchParams;
   const parsedParams = parseDashboardSearchParams(params);
+
+  return (
+    <>
+      <Header title="Dashboard" />
+      {/* The heavy data fetch lives inside this boundary, so the shell paints
+          immediately and the charts stream in once their queries resolve,
+          rather than blocking the whole navigation. */}
+      <Suspense fallback={<DashboardSkeleton />}>
+        <DashboardContent parsedParams={parsedParams} />
+      </Suspense>
+    </>
+  );
+}
+
+async function DashboardContent({
+  parsedParams,
+}: {
+  parsedParams: ReturnType<typeof parseDashboardSearchParams>;
+}) {
   const accountIds = parsedParams.accountIds;
   const dateFromParam = parsedParams.dateFrom;
   const dateToParam = parsedParams.dateTo;
@@ -59,10 +80,8 @@ export default async function HomePage({ searchParams }: PageProps) {
       : "Selected accounts";
 
   return (
-    <>
-      <Header title="Dashboard" />
-      <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-        {/* Filters Row */}
+    <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+      {/* Filters Row */}
         <div className="flex items-center justify-between" data-walkthrough="walkthrough-filters">
           <Suspense fallback={null}>
             <DashboardFilters accounts={accounts} />
@@ -161,7 +180,10 @@ export default async function HomePage({ searchParams }: PageProps) {
           <AssetsOverviewCard data={data.assetsOverview} />
         </div>
 
-      </div>
-    </>
+        {/* Row 5: Investments Summary */}
+        <div className="grid gap-4">
+          <PortfolioSummaryCard />
+        </div>
+    </div>
   );
 }

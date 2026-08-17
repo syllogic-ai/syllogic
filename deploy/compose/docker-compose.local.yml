@@ -26,6 +26,12 @@ services:
     build:
       context: ../../backend
       dockerfile: Dockerfile
+      # backend/Dockerfile's frontend-deps stage renders report newsletters
+      # via `npx tsx frontend/emails/render-report.ts` and needs frontend/
+      # supplied as a named BuildKit context (see backend/Dockerfile and
+      # ../../docker-compose.yml for the same pattern).
+      additional_contexts:
+        - frontend=../../frontend
 
   mcp:
     # Use the locally-built backend image

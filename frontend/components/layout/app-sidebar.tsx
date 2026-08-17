@@ -12,6 +12,7 @@ import {
   RiArrowUpDownLine,
   RiLoopRightLine,
   RiLineChartLine,
+  RiFileTextLine,
   RiArrowRightSLine,
   RiArrowLeftSLine,
 } from "@remixicon/react";
@@ -77,6 +78,11 @@ const navItems = [
     title: "Assets",
     href: "/assets",
     icon: RiWallet3Line,
+  },
+  {
+    title: "Reports",
+    href: "/reports",
+    icon: RiFileTextLine,
   },
   {
     title: "Settings",
