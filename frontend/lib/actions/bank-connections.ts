@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq, and, desc, isNull, isNotNull } from "drizzle-orm";
+import { eq, and, or, ne, desc, isNull, isNotNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { bankConnections, accounts } from "@/lib/db/schema";
 import { requireAuth, getAuthenticatedSession } from "@/lib/auth-helpers";
@@ -252,10 +252,14 @@ export async function getLinkableAccounts() {
       bankConnectionId: accounts.bankConnectionId,
     })
     .from(accounts)
+    // Accounts held by a dead consent must stay selectable, otherwise the only
+    // option the wizard can offer after an expiry is "create new" — a duplicate.
+    // A live connection still owns its accounts and they are excluded.
+    .leftJoin(bankConnections, eq(accounts.bankConnectionId, bankConnections.id))
     .where(
       and(
         eq(accounts.userId, userId),
-        isNull(accounts.bankConnectionId)
+        or(isNull(accounts.bankConnectionId), ne(bankConnections.status, "active"))
       )
     )
     .orderBy(accounts.name);
