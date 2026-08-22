@@ -86,3 +86,6 @@ deploy/railway/V1_TO_V2_MIGRATION.md
 
 # Superpowers brainstorm scratch (specs live under docs/, already ignored)
 .superpowers/
+
+# SwiftPM build artifacts (mobile/targets WidgetCore package)
+.build/
