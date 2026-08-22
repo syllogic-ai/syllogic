@@ -11,6 +11,14 @@
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "ai.syllogic.mobile",
       "supportsTablet": true,
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.ai.syllogic.mobile"
+        ],
+        "keychain-access-groups": [
+          "$(AppIdentifierPrefix)ai.syllogic.mobile"
+        ]
+      },
       "infoPlist": {
         "NSFaceIDUsageDescription": "Use Face ID to unlock Syllogic and protect access to your account balances.",
         "ITSAppUsesNonExemptEncryption": false
@@ -27,7 +35,8 @@
       "permissions": [
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT"
-      ]
+      ],
+      "package": "ai.syllogic.mobile"
     },
     "web": {
       "output": "static",
@@ -49,7 +58,8 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
-      ]
+      ],
+      "@bacons/apple-targets"
     ],
     "experiments": {
       "typedRoutes": true,
