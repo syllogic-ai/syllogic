@@ -1,3 +1,4 @@
+import Security
 import XCTest
 @testable import WidgetCore
 
@@ -31,5 +32,106 @@ final class SessionStoreTests: XCTestCase {
 
     func testMalformedCountReturnsNil() {
         XCTAssertNil(SessionStore.assemble(marker: "ba-chunks:banana") { _ in "x" })
+    }
+
+    // MARK: - readKeychain round trip
+    //
+    // These write real items into the process's default Keychain with
+    // `SecItemAdd`, using the exact attribute scheme expo-secure-store's iOS
+    // module uses to write them on device (service "app:no-auth", account and
+    // generic both the UTF-8 bytes of the storage key — see SessionStore's
+    // `keychainService` doc comment and `readKeychain`), then read them back
+    // through `SessionStore.readKeychain`/`SessionStore.assemble`, the same
+    // path `SessionStore.cookie()` uses.
+    //
+    // `accessGroup: nil` is required here: `swift test` runs as a plain,
+    // unsigned process with no keychain-access-groups entitlement, so any
+    // query carrying `ai.syllogic.mobile` (the production access group) fails
+    // with errSecMissingEntitlement/errSecNoAccessForItem before it ever gets
+    // to matching. Every item this file adds is also written with no access
+    // group, so writer and reader agree. Production code always uses the
+    // default (`SessionStore.accessGroup`) — only these tests override it.
+
+    private func addKeychainItem(key: String, value: String) {
+        let encodedKey = Data(key.utf8)
+        let addQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: SessionStore.keychainService,
+            kSecAttrAccount as String: encodedKey,
+            kSecAttrGeneric as String: encodedKey,
+            kSecValueData as String: Data(value.utf8),
+        ]
+        // Best-effort: clear out any leftover item from a previous crashed run
+        // before adding, so this doesn't spuriously fail with errSecDuplicateItem.
+        SecItemDelete(addQuery as CFDictionary)
+        let status = SecItemAdd(addQuery as CFDictionary, nil)
+        XCTAssertEqual(status, errSecSuccess, "SecItemAdd failed for key \(key): OSStatus \(status)")
+    }
+
+    private func deleteKeychainItem(key: String) {
+        let encodedKey = Data(key.utf8)
+        let deleteQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: SessionStore.keychainService,
+            kSecAttrAccount as String: encodedKey,
+        ]
+        SecItemDelete(deleteQuery as CFDictionary)
+    }
+
+    func testReadKeychainRoundTripsAPlainValue() {
+        let key = "widget-core-tests.plain.\(UUID().uuidString)"
+        addKeychainItem(key: key, value: "syllogic.session=abc123")
+        defer { deleteKeychainItem(key: key) }
+
+        XCTAssertEqual(SessionStore.readKeychain(key: key, accessGroup: nil), "syllogic.session=abc123")
+    }
+
+    func testReadKeychainReturnsNilWhenItemIsAbsent() {
+        let key = "widget-core-tests.missing.\(UUID().uuidString)"
+        XCTAssertNil(SessionStore.readKeychain(key: key, accessGroup: nil))
+    }
+
+    /// macOS's Keychain (the one `swift test` runs against — a plain, unsigned
+    /// process has no data-protection keychain, so this always lands in the
+    /// classic file-based login Keychain) does not honor a `Data`-typed
+    /// `kSecAttrAccount` as a unique item identity. Verified directly: two
+    /// `SecItemAdd` calls with the same `kSecAttrService` but different
+    /// `Data`-typed `kSecAttrAccount` values collide with `errSecDuplicateItem`
+    /// (-25299) — the second add fails as if the first item's account were
+    /// empty — and a `Data`-typed account query fails to match an item stored
+    /// with a `String`-typed account (`errSecItemNotFound`). That is exactly
+    /// the encoding expo-secure-store uses and that `readKeychain` mirrors, so
+    /// on a real iOS device (the data-protection keychain `expo-secure-store`
+    /// actually targets) distinct `Data`-typed accounts under one service
+    /// coexist and match correctly — this is a macOS-test-Keychain-only
+    /// limitation, not a bug in `SessionStore`.
+    ///
+    /// Because of that, this environment cannot hold the marker item and all
+    /// three chunk items in the Keychain at once under the shared
+    /// "app:no-auth" service. Rather than fake full coexistence, this test
+    /// keeps only the single item currently being looked up present at any
+    /// moment — swapping it for the next chunk just before `assemble` asks for
+    /// it — so every read still goes through the real `SecItemAdd`-written
+    /// item and the real `SessionStore.readKeychain` / `SessionStore.assemble`
+    /// production code paths.
+    func testChunkedCookieReassemblesThroughTheRealKeychain() {
+        let cookieKey = "widget-core-tests.cookie.\(UUID().uuidString)"
+        let chunks = ["first-chunk-", "second-chunk-", "third-chunk"]
+
+        addKeychainItem(key: cookieKey, value: "ba-chunks:3")
+        var currentlyStored = cookieKey
+        defer { deleteKeychainItem(key: currentlyStored) }
+
+        let result = SessionStore.assemble(
+            marker: SessionStore.readKeychain(key: cookieKey, accessGroup: nil)
+        ) { index in
+            deleteKeychainItem(key: currentlyStored)
+            let chunkKey = "\(cookieKey).\(index)"
+            addKeychainItem(key: chunkKey, value: chunks[index])
+            currentlyStored = chunkKey
+            return SessionStore.readKeychain(key: chunkKey, accessGroup: nil)
+        }
+
+        XCTAssertEqual(result, "first-chunk-second-chunk-third-chunk")
     }
 }
