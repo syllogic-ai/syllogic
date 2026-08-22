@@ -48,9 +48,12 @@ struct AccountEntityQuery: EntityQuery {
         await allAccounts()
     }
 
+    /// Fetches accounts from the network, falling back to cache if unavailable.
+    /// This is a read-only path with respect to the cache — it does not persist
+    /// network results. The timeline provider owns all cache writes to avoid
+    /// redundant network calls and cache thrashing when browsing the configuration UI.
     private func allAccounts() async -> [AccountEntity] {
         if let fresh = try? await SyllogicAPI.shared.fetchBalances(), !fresh.isEmpty {
-            BalanceCache.shared.save(fresh)
             return fresh.map(AccountEntity.init(balance:))
         }
         return BalanceCache.shared.load().map(AccountEntity.init(balance:))
