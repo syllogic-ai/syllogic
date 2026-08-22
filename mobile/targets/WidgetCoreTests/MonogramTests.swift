@@ -19,12 +19,18 @@ final class MonogramTests: XCTestCase {
         XCTAssertEqual(Monogram.initials(for: "   "), "?")
     }
 
-    /// Swift's Hasher is seeded per launch, so hashValue must not be used —
-    /// the colour would change every time the widget process restarts.
-    func testColorIsStableForSameID() {
-        let first = Monogram.color(for: "a1b2c3")
-        let second = Monogram.color(for: "a1b2c3")
-        XCTAssertEqual(first, second)
+    /// Pins the actual DJB2-derived palette indices for fixed ids. This only
+    /// proves the hash algorithm itself (seed 5381, multiplier 33) is
+    /// launch-stable — it does NOT prove `color(for:)` is stable across
+    /// process launches by running it twice in one process, since Swift's
+    /// per-launch-seeded Hasher/hashValue would also return the same value
+    /// twice within a single run and pass trivially. A future swap to
+    /// Hasher-based hashing changes these indices and fails this test.
+    func testPaletteIndexIsPinnedForKnownIDs() {
+        XCTAssertEqual(Monogram.paletteIndex(for: "a1b2c3"), 3)
+        XCTAssertEqual(Monogram.paletteIndex(for: "user-1"), 4)
+        XCTAssertEqual(Monogram.paletteIndex(for: "acct-42"), 5)
+        XCTAssertEqual(Monogram.paletteIndex(for: "xyz"), 2)
     }
 
     func testColorDiffersForDifferentIDs() {

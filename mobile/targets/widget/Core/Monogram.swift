@@ -27,13 +27,22 @@ enum Monogram {
         return first.prefix(2).uppercased()
     }
 
-    /// Deterministic across process launches. Swift's built-in hashValue is
-    /// seeded per launch and must not be used here.
-    static func color(for id: String) -> Color {
+    /// Computes the palette index for `id` using a fixed DJB2 hash (seed
+    /// 5381, multiplier 33). Deterministic across process launches — unlike
+    /// Swift's built-in hashValue/Hasher, which are reseeded per launch and
+    /// must not be used here. Exposed internally so tests can pin exact
+    /// index values instead of only asserting idempotence within one run.
+    static func paletteIndex(for id: String) -> Int {
         var hash: UInt64 = 5381
         for byte in id.utf8 {
             hash = (hash &* 33) &+ UInt64(byte)
         }
-        return palette[Int(hash % UInt64(palette.count))]
+        return Int(hash % UInt64(palette.count))
+    }
+
+    /// Deterministic across process launches. Swift's built-in hashValue is
+    /// seeded per launch and must not be used here.
+    static func color(for id: String) -> Color {
+        palette[paletteIndex(for: id)]
     }
 }
