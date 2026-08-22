@@ -373,8 +373,12 @@ def get_account_balances(
             ).scalar() or 0
             balance = float(balance)
         else:
-            # No date or category filters, use current balance
-            balance = float(account.balance_current)
+            # No date or category filters, use current balance.
+            # balance_current was removed from the Account model in favour of
+            # functional_balance (starting_balance + transactions); this branch
+            # was missed when the rest of the file was migrated at line 331,
+            # so it raised AttributeError on every unfiltered request.
+            balance = float(account.functional_balance) if account.functional_balance else 0.0
         
         result.append({
             "account_id": str(account.id),
