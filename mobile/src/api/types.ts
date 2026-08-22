@@ -10,6 +10,29 @@ export type AccountBalance = {
   account_type: string;
 };
 
+// The investments routes declare `response_model=`, so Pydantic v2 serializes
+// their Decimal fields as JSON *strings* ("570.30"), unlike the plain-dict
+// analytics routes where FastAPI's jsonable_encoder emits numbers. The web
+// client models this the same way (frontend/lib/api/investments.ts). These
+// `*Wire` types are the raw shape; api/client.ts coerces them to the number
+// types below so components can do arithmetic without thinking about it.
+export type HoldingWire = Omit<
+  Holding,
+  'quantity' | 'current_price' | 'current_value_user_currency'
+> & {
+  quantity: string;
+  current_price: string | null;
+  current_value_user_currency: string | null;
+};
+
+export type PortfolioSummaryWire = Omit<
+  PortfolioSummary,
+  'total_value' | 'total_value_today_change'
+> & {
+  total_value: string;
+  total_value_today_change: string;
+};
+
 export type Holding = {
   id: string;
   account_id: string;

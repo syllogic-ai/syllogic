@@ -1,6 +1,14 @@
 import { API_URL } from '@/config';
 import { getSessionToken, getAuthHeader } from '@/auth/session';
-import type { AccountBalance, Holding, PortfolioSummary, SavedView, SavedViewFilters } from './types';
+import type {
+  AccountBalance,
+  Holding,
+  HoldingWire,
+  PortfolioSummary,
+  PortfolioSummaryWire,
+  SavedView,
+  SavedViewFilters,
+} from './types';
 
 class ApiError extends Error {
   status: number;
@@ -27,10 +35,36 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// Decimal-as-string → number. Returns null for null/undefined so optional
+// money fields stay optional rather than becoming NaN.
+function num(value: string | null | undefined): number | null {
+  if (value == null) return null;
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function toHolding(wire: HoldingWire): Holding {
+  return {
+    ...wire,
+    quantity: num(wire.quantity) ?? 0,
+    current_price: num(wire.current_price),
+    current_value_user_currency: num(wire.current_value_user_currency),
+  };
+}
+
+function toPortfolioSummary(wire: PortfolioSummaryWire): PortfolioSummary {
+  return {
+    ...wire,
+    total_value: num(wire.total_value) ?? 0,
+    total_value_today_change: num(wire.total_value_today_change) ?? 0,
+  };
+}
+
 export const api = {
   getAccountBalances: () => request<AccountBalance[]>('/analytics/account-balances'),
-  getHoldings: () => request<Holding[]>('/investments/holdings'),
-  getPortfolioSummary: () => request<PortfolioSummary>('/investments/portfolio/summary'),
+  getHoldings: () => request<HoldingWire[]>('/investments/holdings').then((h) => h.map(toHolding)),
+  getPortfolioSummary: () =>
+    request<PortfolioSummaryWire>('/investments/portfolio/summary').then(toPortfolioSummary),
   listSavedViews: () => request<SavedView[]>('/saved-views'),
   createSavedView: (name: string, filters: SavedViewFilters) =>
     request<SavedView>('/saved-views', {
