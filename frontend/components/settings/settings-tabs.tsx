@@ -45,6 +45,7 @@ interface SettingsTabsProps {
     lastSyncError: string | null;
     consentExpiresAt: Date | null;
     createdAt: Date | null;
+    accounts: { id: string; name: string; currency: string | null }[];
   }>;
   people: Person[];
 }

@@ -499,6 +499,27 @@ def map_accounts(
             detail=f"Connection is not in pending_setup state (current: {connection.status})",
         )
 
+    # One account per bank account, both ways. Without this, a repeated
+    # existing_account_id would pass the link guard on its second use — the
+    # first link already moved the account onto this very connection, which is
+    # not "active" yet — and silently overwrite the uid written moments before,
+    # leaving one bank account mapped to nothing.
+    # existing_account_id is compared case-insensitively: Postgres parses a UUID
+    # without regard to case, so two spellings of one id would slip past an exact
+    # match and both resolve to the same account. bank_uid is an opaque token
+    # from the bank and is compared as sent.
+    for field, label, normalize in (
+        ("existing_account_id", "account", lambda v: v.strip().lower()),
+        ("bank_uid", "bank account", lambda v: v),
+    ):
+        seen = [normalize(getattr(m, field)) for m in request.mappings if getattr(m, field)]
+        duplicate = next((v for v in seen if seen.count(v) > 1), None)
+        if duplicate:
+            raise HTTPException(
+                status_code=400,
+                detail=f"The same {label} '{duplicate}' appears in more than one mapping",
+            )
+
     # Index raw bank accounts by UID for quick lookup
     raw_accounts = connection.raw_session_data.get("accounts", []) if connection.raw_session_data else []
     raw_by_uid = {acc["uid"]: acc for acc in raw_accounts}
@@ -554,10 +575,16 @@ def map_accounts(
                     status_code=404,
                     detail=f"Account '{mapping.existing_account_id}' not found",
                 )
-            if existing.bank_connection_id is not None:
+            # Only a live consent blocks re-linking. Refusing accounts held by an
+            # expired one is what forced users to disconnect before reconnecting,
+            # and that detour is where duplicate accounts came from.
+            if _is_held_by_active_connection(db, existing):
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Account '{mapping.existing_account_id}' is already linked to a bank connection",
+                    detail=(
+                        f"Account '{mapping.existing_account_id}' is already linked to an "
+                        "active bank connection"
+                    ),
                 )
             existing.bank_connection_id = connection.id
             existing.provider = "enable_banking"
@@ -749,18 +776,105 @@ def list_connections(
     return results
 
 
+def _is_held_by_active_connection(db: Session, account: Account) -> bool:
+    """True if another, still-live consent owns this account.
+
+    Such an account cannot be re-linked: moving it would silently break the
+    working connection. An account held by an expired or errored consent is fair
+    game — re-linking it is exactly how a renewal is meant to work.
+
+    A lapsed consent is treated as dead even while its row still says "active":
+    check_consent_expiry only runs daily, and until it does, the status lags
+    reality and would block exactly the relink the user came to do.
+    """
+    if account.bank_connection_id is None:
+        return False
+    holder = db.query(BankConnection).filter(
+        BankConnection.id == account.bank_connection_id,
+    ).first()
+    if holder is None or holder.status != "active":
+        return False
+    if holder.consent_expires_at is None:
+        return True
+    expires_at = holder.consent_expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    return expires_at > datetime.now(timezone.utc)
+
+
+def _find_account_for_bank_account(
+    db: Session,
+    user_id: str,
+    uid: str,
+    iban: Optional[str],
+    currency: Optional[str] = None,
+) -> Optional[Account]:
+    """Locate the user's account for one bank account, by uid and then by IBAN.
+
+    The IBAN leg is what makes re-connecting work at all: Enable Banking mints a
+    new account uid on every authorization, so uid alone misses whenever the user
+    reconnects, the wizard falls back to "create new", and the same real account
+    is added a second time.
+
+    Accounts held by a live connection are skipped — see
+    _is_held_by_active_connection.
+    """
+    query = db.query(Account).filter(Account.user_id == user_id)
+
+    # The uid identifies one account exactly, so it needs no tie-break.
+    if uid:
+        uid_hashes = blind_index_candidates(uid)
+        by_uid = []
+        if uid_hashes:
+            by_uid = query.filter(Account.external_id_hash.in_(uid_hashes)).all()
+        if not by_uid:
+            # Deployments without encryption configured keep the uid in plaintext.
+            by_uid = query.filter(Account.external_id == uid).all()
+        for account in by_uid:
+            if not _is_held_by_active_connection(db, account):
+                return account
+
+    if not iban:
+        return None
+    iban_hashes = blind_index_candidates(iban)
+    if not iban_hashes:
+        return None
+    candidates = [
+        account
+        for account in query.filter(Account.iban_hash.in_(iban_hashes)).all()
+        if not _is_held_by_active_connection(db, account)
+    ]
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+
+    # Multi-currency accounts share one IBAN, and .all() gives no meaningful
+    # order. Only currency can tell them apart; without it, auto-linking would
+    # file one currency's transactions under another currency's account, so
+    # leave it for the user to map by hand.
+    wanted = (currency or "").upper()
+    matches = [a for a in candidates if (a.currency or "").upper() == wanted]
+    return matches[0] if len(matches) == 1 else None
+
+
 def _build_suggested_mappings(
     db: Session,
     user_id: str,
     raw_accounts: list,
 ) -> list:
-    """For each bank account UID, check if the user has an existing account with that external_id_hash."""
+    """Suggest, for each bank account, the user's existing account to link to.
+
+    Matching is by uid first and IBAN second, so an account the user already has
+    is recognized after a re-consent rather than duplicated.
+    """
     results = []
     for raw_acc in raw_accounts:
         uid = raw_acc.get("uid") or raw_acc.get("id") or ""
         bank_name = raw_acc.get("account_name") or raw_acc.get("name") or "Bank Account"
+        iban = _extract_iban(raw_acc) or _extract_iban(raw_acc.get("account_id"))
 
-        if not uid:
+        if not uid and not iban:
             results.append({
                 "bank_uid": uid,
                 "bank_name": bank_name,
@@ -770,14 +884,8 @@ def _build_suggested_mappings(
             })
             continue
 
-        uid_hash = blind_index(uid)
-        existing = (
-            db.query(Account)
-            .filter(
-                Account.user_id == user_id,
-                Account.external_id_hash == uid_hash,
-            )
-            .first()
+        existing = _find_account_for_bank_account(
+            db, user_id, uid, iban, raw_acc.get("currency")
         )
 
         if existing:
