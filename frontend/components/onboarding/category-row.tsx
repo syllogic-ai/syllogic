@@ -8,9 +8,10 @@ interface CategoryRowProps {
   category: CategoryInput;
   onEdit: () => void;
   onDelete: () => void;
+  readOnly?: boolean;
 }
 
-export function CategoryRow({ category, onEdit, onDelete }: CategoryRowProps) {
+export function CategoryRow({ category, onEdit, onDelete, readOnly = false }: CategoryRowProps) {
   const isSystem = category.isSystem ?? false;
 
   return (
@@ -39,30 +40,32 @@ export function CategoryRow({ category, onEdit, onDelete }: CategoryRowProps) {
       </div>
 
       {/* Action buttons */}
-      <div className="flex items-center gap-1 shrink-0">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={onEdit}
-          title={isSystem ? "Edit description and categorization instructions" : "Edit category"}
-        >
-          <RiEditLine className="h-4 w-4" />
-        </Button>
-        {!isSystem && (
+      {!readOnly && (
+        <div className="flex items-center gap-1 shrink-0">
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-destructive hover:text-destructive"
-            onClick={onDelete}
-            title="Delete category"
+            className="h-8 w-8"
+            onClick={onEdit}
+            title={isSystem ? "Edit description and categorization instructions" : "Edit category"}
           >
-            <RiDeleteBinLine className="h-4 w-4" />
+            <RiEditLine className="h-4 w-4" />
           </Button>
-        )}
-      </div>
+          {!isSystem && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-destructive hover:text-destructive"
+              onClick={onDelete}
+              title="Delete category"
+            >
+              <RiDeleteBinLine className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

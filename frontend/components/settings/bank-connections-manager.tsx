@@ -26,6 +26,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { triggerSync, disconnectBank, triggerRecategorize, initiateAuth } from "@/lib/actions/bank-connections";
+import { DemoReadOnlyNotice } from "./demo-readonly-notice";
 type BankConnectionItem = {
   id: string;
   aspspName: string;
@@ -40,6 +41,7 @@ type BankConnectionItem = {
 
 interface BankConnectionsManagerProps {
   connections: BankConnectionItem[];
+  isDemoUser?: boolean;
 }
 
 type SyncProgress = {
@@ -51,7 +53,7 @@ type SyncProgress = {
   started_at?: string;
 };
 
-export function BankConnectionsManager({ connections }: BankConnectionsManagerProps) {
+export function BankConnectionsManager({ connections, isDemoUser = false }: BankConnectionsManagerProps) {
   const router = useRouter();
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
   const [recategorizingIds, setRecategorizingIds] = useState<Set<string>>(new Set());
@@ -310,6 +312,7 @@ export function BankConnectionsManager({ connections }: BankConnectionsManagerPr
 
   return (
     <div className="space-y-6">
+      {isDemoUser && <DemoReadOnlyNotice />}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold">Bank Connections</h2>
@@ -317,13 +320,20 @@ export function BankConnectionsManager({ connections }: BankConnectionsManagerPr
             Connect your bank accounts via Open Banking to automatically sync transactions.
           </p>
         </div>
-        <Link
-          href="/settings/connect-bank"
-          className={buttonVariants({ variant: "default", size: "default" })}
-        >
-          <RiAddLine className="mr-1.5 h-4 w-4" />
-          Connect Bank
-        </Link>
+        {isDemoUser ? (
+          <Button variant="default" size="default" disabled>
+            <RiAddLine className="mr-1.5 h-4 w-4" />
+            Connect Bank
+          </Button>
+        ) : (
+          <Link
+            href="/settings/connect-bank"
+            className={buttonVariants({ variant: "default", size: "default" })}
+          >
+            <RiAddLine className="mr-1.5 h-4 w-4" />
+            Connect Bank
+          </Link>
+        )}
       </div>
 
       {activeConnections.length === 0 ? (
@@ -416,6 +426,7 @@ export function BankConnectionsManager({ connections }: BankConnectionsManagerPr
                   )}
                 </div>
               </div>
+              {!isDemoUser && (
               <div className="flex items-center gap-2">
                 {connection.status === "active" && (
                   <Button
@@ -480,6 +491,7 @@ export function BankConnectionsManager({ connections }: BankConnectionsManagerPr
                   </AlertDialogContent>
                 </AlertDialog>
               </div>
+              )}
               </div>
               {syncingIds.has(connection.id) && (
                 <div className="mt-3 space-y-1.5">

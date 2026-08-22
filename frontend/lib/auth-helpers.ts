@@ -2,12 +2,22 @@
 
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
+import { isDemoRestrictedUserEmail } from "@/lib/demo-access";
 
 /**
  * Get the authenticated session from BetterAuth
  */
 export async function getAuthenticatedSession() {
   return auth.api.getSession({ headers: await headers() });
+}
+
+/**
+ * Returns true when the current session belongs to the restricted demo account.
+ * Use to block mutating server actions / route handlers for the demo user.
+ */
+export async function isDemoRestrictedSession(): Promise<boolean> {
+  const session = await getAuthenticatedSession();
+  return isDemoRestrictedUserEmail(session?.user?.email);
 }
 
 /**
