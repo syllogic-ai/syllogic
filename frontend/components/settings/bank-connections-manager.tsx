@@ -35,6 +35,7 @@ type BankConnectionItem = {
   lastSyncError: string | null;
   consentExpiresAt: Date | null;
   createdAt: Date | null;
+  accounts: { id: string; name: string; currency: string | null }[];
 };
 
 interface BankConnectionsManagerProps {
@@ -361,6 +362,16 @@ export function BankConnectionsManager({ connections }: BankConnectionsManagerPr
                       </>
                     )}
                   </div>
+                  {/* Two connections to the same bank look identical without this. */}
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {connection.accounts.length > 0 ? (
+                      connection.accounts
+                        .map((a) => (a.currency ? `${a.name} (${a.currency})` : a.name))
+                        .join(" · ")
+                    ) : (
+                      <span className="italic">No accounts linked</span>
+                    )}
+                  </p>
                   {isConsentExpiringSoon(connection) && (
                     <div className="mt-1 flex items-center gap-1 text-xs text-amber-600">
                       <RiAlertLine className="h-3 w-3" />

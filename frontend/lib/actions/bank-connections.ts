@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq, and, desc, isNull } from "drizzle-orm";
+import { eq, and, desc, isNull, isNotNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { bankConnections, accounts } from "@/lib/db/schema";
 import { requireAuth, getAuthenticatedSession } from "@/lib/auth-helpers";
@@ -13,23 +13,51 @@ export async function getBankConnections() {
   const userId = await requireAuth();
   if (!userId) return [];
 
-  return db
-    .select({
-      id: bankConnections.id,
-      userId: bankConnections.userId,
-      provider: bankConnections.provider,
-      aspspName: bankConnections.aspspName,
-      aspspCountry: bankConnections.aspspCountry,
-      consentExpiresAt: bankConnections.consentExpiresAt,
-      status: bankConnections.status,
-      lastSyncedAt: bankConnections.lastSyncedAt,
-      lastSyncError: bankConnections.lastSyncError,
-      createdAt: bankConnections.createdAt,
-      updatedAt: bankConnections.updatedAt,
-    })
-    .from(bankConnections)
-    .where(eq(bankConnections.userId, userId))
-    .orderBy(desc(bankConnections.createdAt));
+  const [connections, linkedAccounts] = await Promise.all([
+    db
+      .select({
+        id: bankConnections.id,
+        userId: bankConnections.userId,
+        provider: bankConnections.provider,
+        aspspName: bankConnections.aspspName,
+        aspspCountry: bankConnections.aspspCountry,
+        consentExpiresAt: bankConnections.consentExpiresAt,
+        status: bankConnections.status,
+        lastSyncedAt: bankConnections.lastSyncedAt,
+        lastSyncError: bankConnections.lastSyncError,
+        createdAt: bankConnections.createdAt,
+        updatedAt: bankConnections.updatedAt,
+      })
+      .from(bankConnections)
+      .where(eq(bankConnections.userId, userId))
+      .orderBy(desc(bankConnections.createdAt)),
+    // Several connections to the same bank are otherwise indistinguishable —
+    // same name, same country. The mapped accounts are what tells them apart.
+    // IBAN can't be shown: it is only stored encrypted, and the key is server-side.
+    db
+      .select({
+        id: accounts.id,
+        name: accounts.name,
+        currency: accounts.currency,
+        bankConnectionId: accounts.bankConnectionId,
+      })
+      .from(accounts)
+      .where(and(eq(accounts.userId, userId), isNotNull(accounts.bankConnectionId)))
+      .orderBy(accounts.name),
+  ]);
+
+  const byConnection = new Map<string, { id: string; name: string; currency: string | null }[]>();
+  for (const account of linkedAccounts) {
+    const key = account.bankConnectionId!;
+    const list = byConnection.get(key) ?? [];
+    list.push({ id: account.id, name: account.name, currency: account.currency });
+    byConnection.set(key, list);
+  }
+
+  return connections.map((connection) => ({
+    ...connection,
+    accounts: byConnection.get(connection.id) ?? [],
+  }));
 }
 
 export async function getActiveBankConnectionsWithExpiry(): Promise<
