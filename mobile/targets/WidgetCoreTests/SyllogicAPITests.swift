@@ -24,6 +24,13 @@ final class StubURLProtocol: URLProtocol {
 }
 
 final class SyllogicAPITests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        StubURLProtocol.statusCode = 200
+        StubURLProtocol.body = Data()
+        StubURLProtocol.lastRequest = nil
+    }
+
     private func makeAPI(cookie: String? = "syllogic.session=abc") -> SyllogicAPI {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [StubURLProtocol.self]
@@ -56,14 +63,18 @@ final class SyllogicAPITests: XCTestCase {
             StubURLProtocol.lastRequest?.value(forHTTPHeaderField: "Cookie"),
             "syllogic.session=abc"
         )
+        XCTAssertEqual(StubURLProtocol.lastRequest?.url?.path, "/api/analytics/account-balances")
     }
 
     func testUnauthorizedWithoutCookie() async {
+        StubURLProtocol.lastRequest = nil
+
         do {
             _ = try await makeAPI(cookie: nil).fetchBalances()
             XCTFail("expected unauthorized")
         } catch let error as SyllogicAPI.APIError {
             XCTAssertEqual(error, .unauthorized)
+            XCTAssertNil(StubURLProtocol.lastRequest, "no request should have been made without a cookie")
         } catch {
             XCTFail("unexpected error \(error)")
         }
