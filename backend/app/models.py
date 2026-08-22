@@ -635,7 +635,10 @@ class VerificationToken(Base):
 
     id = Column(String, primary_key=True)
     identifier = Column(String, nullable=False)
-    token = Column(String, unique=True, nullable=False)
+    # 0017_verification_value_rename.sql renamed this column from `token` to
+    # `value` (and dropped its unique constraint) to match what better-auth's
+    # verification model reads/writes; the model lagged behind the rename.
+    value = Column(String, nullable=False)
     expires_at = Column(DateTime, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
