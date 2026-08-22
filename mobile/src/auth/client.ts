@@ -1,8 +1,8 @@
 import { createAuthClient } from 'better-auth/react';
 import { expoClient } from '@better-auth/expo/client';
-import * as SecureStore from 'expo-secure-store';
 
 import { AUTH_URL } from '@/config';
+import { sharedSecureStore } from './shared-secure-store';
 
 // Talks to the same better-auth instance the web app (frontend/lib/auth.ts)
 // exposes on the Next.js origin, so a Syllogic login works identically on
@@ -14,7 +14,7 @@ export const authClient = createAuthClient({
     expoClient({
       scheme: 'syllogic',
       storagePrefix: 'syllogic',
-      storage: SecureStore,
+      storage: sharedSecureStore,
     }),
   ],
 });
