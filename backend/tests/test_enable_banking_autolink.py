@@ -16,16 +16,23 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 class AutoLinkTestCase(unittest.TestCase):
     """Real database: the matching runs in SQL over blind indexes."""
 
+    def _requires_iban_matching(self):
+        """Skip a test that can only work with encryption configured.
+
+        IBAN exists solely as ciphertext plus a blind index, so with no key
+        _set_account_iban_fields writes nothing and the IBAN leg cannot match.
+        Tests asserting "create" would then pass for the wrong reason, which is
+        worse than skipping. Applied per test: the uid-matching and
+        link-by-id tests work either way and must keep running.
+        """
+        from app.security.data_encryption import blind_index
+
+        if blind_index("probe") is None:
+            self.skipTest("DATA_ENCRYPTION_KEY_CURRENT unset; IBAN matching is unavailable")
+
     def setUp(self):
         from app.database import Base, SessionLocal, engine
         from app.db_helpers import get_or_create_system_user
-        from app.security.data_encryption import blind_index
-
-        # IBAN exists only as ciphertext plus a blind index, so with encryption
-        # unconfigured _set_account_iban_fields silently writes nothing and the
-        # IBAN leg cannot match. Skip loudly rather than fail as "create".
-        if blind_index("probe") is None:
-            self.skipTest("DATA_ENCRYPTION_KEY_CURRENT unset; IBAN matching is unavailable")
 
         Base.metadata.create_all(bind=engine)
         self.db = SessionLocal()
@@ -107,6 +114,7 @@ class AutoLinkTestCase(unittest.TestCase):
 class TestSuggestedMappings(AutoLinkTestCase):
     def test_rotated_uid_is_matched_by_iban(self):
         """The core case: reconnecting must recognize the account, not duplicate it."""
+        self._requires_iban_matching()
         account = self._account(self._connection("expired"))
 
         suggestion = self._suggest()
@@ -117,6 +125,7 @@ class TestSuggestedMappings(AutoLinkTestCase):
 
     def test_unlinked_account_is_matched_by_iban(self):
         """After a manual disconnect the account is unlinked but still the same account."""
+        self._requires_iban_matching()
         account = self._account(connection=None)
 
         suggestion = self._suggest()
@@ -126,6 +135,7 @@ class TestSuggestedMappings(AutoLinkTestCase):
 
     def test_account_held_by_a_live_connection_is_not_suggested(self):
         """Re-linking it would silently break the connection that still works."""
+        self._requires_iban_matching()
         self._account(self._connection("active"))
 
         suggestion = self._suggest()
@@ -135,6 +145,7 @@ class TestSuggestedMappings(AutoLinkTestCase):
 
     def test_an_unrelated_iban_is_not_matched(self):
         """A genuinely new bank account must still be created, not linked to a stranger."""
+        self._requires_iban_matching()
         self._account(self._connection("expired"))
         from app.routes.enable_banking import _build_suggested_mappings
 
@@ -152,6 +163,7 @@ class TestSuggestedMappings(AutoLinkTestCase):
 
     def test_known_and_unknown_accounts_in_one_batch(self):
         """A consent usually returns a mix; each account is judged on its own."""
+        self._requires_iban_matching()
         account = self._account(self._connection("expired"))
         from app.routes.enable_banking import _build_suggested_mappings
 
@@ -176,6 +188,7 @@ class TestSuggestedMappings(AutoLinkTestCase):
 
     def test_lapsed_consent_still_marked_active_does_not_block(self):
         """check_consent_expiry runs daily, so status lags a consent that just died."""
+        self._requires_iban_matching()
         account = self._account(self._connection("active", consent_expires_at="past"))
 
         suggestion = self._suggest()
@@ -185,6 +198,7 @@ class TestSuggestedMappings(AutoLinkTestCase):
 
     def test_shared_iban_is_split_by_currency(self):
         """Multi-currency accounts share an IBAN; the wrong pick misfiles money."""
+        self._requires_iban_matching()
         conn = self._connection("expired")
         eur = self._account(conn, name="Revo EUR", currency="EUR", uid=f"u-{uuid.uuid4().hex[:8]}")
         self._account(conn, name="Revo USD", currency="USD", uid=f"u-{uuid.uuid4().hex[:8]}")
@@ -201,6 +215,7 @@ class TestSuggestedMappings(AutoLinkTestCase):
 
     def test_shared_iban_with_no_currency_agreeing_is_left_to_the_user(self):
         """Guessing between them would file one currency under the other's account."""
+        self._requires_iban_matching()
         conn = self._connection("expired")
         self._account(conn, name="Revo EUR", currency="EUR", uid=f"u-{uuid.uuid4().hex[:8]}")
         self._account(conn, name="Revo USD", currency="USD", uid=f"u-{uuid.uuid4().hex[:8]}")
@@ -293,6 +308,43 @@ class TestMapAccountsLinkGuard(AutoLinkTestCase):
                             bank_uid=second_uid,
                             action="link",
                             existing_account_id=str(account.id),
+                        ),
+                    ],
+                    initial_sync_days=90,
+                ),
+                db=self.db,
+                user_id=self.user_id,
+            )
+
+        self.assertEqual(ctx.exception.status_code, 400)
+
+    def test_duplicate_detection_ignores_uuid_casing(self):
+        """Postgres parses a UUID regardless of case, so two spellings are one account."""
+        from fastapi import HTTPException
+        from app.routes.enable_banking import map_accounts, MapAccountsRequest, AccountMapping
+
+        account = self._account(self._connection("expired"))
+        pending = self._pending()
+        second_uid = f"uid-second-{uuid.uuid4().hex[:8]}"
+        pending.raw_session_data = {
+            "accounts": [{"uid": self.new_uid, "iban": self.iban}, {"uid": second_uid}]
+        }
+        self.db.commit()
+
+        with self.assertRaises(HTTPException) as ctx:
+            map_accounts(
+                connection_id=str(pending.id),
+                request=MapAccountsRequest(
+                    mappings=[
+                        AccountMapping(
+                            bank_uid=self.new_uid,
+                            action="link",
+                            existing_account_id=str(account.id).lower(),
+                        ),
+                        AccountMapping(
+                            bank_uid=second_uid,
+                            action="link",
+                            existing_account_id=str(account.id).upper(),
                         ),
                     ],
                     initial_sync_days=90,

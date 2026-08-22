@@ -504,8 +504,15 @@ def map_accounts(
     # first link already moved the account onto this very connection, which is
     # not "active" yet — and silently overwrite the uid written moments before,
     # leaving one bank account mapped to nothing.
-    for field, label in (("existing_account_id", "account"), ("bank_uid", "bank account")):
-        seen = [getattr(m, field) for m in request.mappings if getattr(m, field)]
+    # existing_account_id is compared case-insensitively: Postgres parses a UUID
+    # without regard to case, so two spellings of one id would slip past an exact
+    # match and both resolve to the same account. bank_uid is an opaque token
+    # from the bank and is compared as sent.
+    for field, label, normalize in (
+        ("existing_account_id", "account", lambda v: v.strip().lower()),
+        ("bank_uid", "bank account", lambda v: v),
+    ):
+        seen = [normalize(getattr(m, field)) for m in request.mappings if getattr(m, field)]
         duplicate = next((v for v in seen if seen.count(v) > 1), None)
         if duplicate:
             raise HTTPException(
