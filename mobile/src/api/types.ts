@@ -8,6 +8,7 @@ export type AccountBalance = {
   balance: number;
   currency: string;
   account_type: string;
+  logo_url: string | null;
 };
 
 // The investments routes declare `response_model=`, so Pydantic v2 serializes

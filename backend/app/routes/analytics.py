@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, extract, case
 from typing import Optional
 from datetime import datetime
@@ -239,7 +239,7 @@ def get_account_balances(
     """
     user_id = get_user_id(user_id)
     # Base query for accounts
-    accounts_query = db.query(Account).filter(
+    accounts_query = db.query(Account).options(joinedload(Account.logo)).filter(
         Account.user_id == user_id,
         Account.is_active == True
     )
@@ -386,6 +386,7 @@ def get_account_balances(
             "balance": balance,
             "currency": account.currency,
             "account_type": account.account_type,
+            "logo_url": account.logo.logo_url if account.logo else None,
         })
     
     return result
