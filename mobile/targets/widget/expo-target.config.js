@@ -8,4 +8,7 @@ module.exports = {
     "keychain-access-groups": ["$(AppIdentifierPrefix)ai.syllogic.mobile"],
   },
   deploymentTarget: "17.0",
+  infoPlist: {
+    SyllogicAPIBaseURL: process.env.EXPO_PUBLIC_API_URL || "http://localhost:8000",
+  },
 };
