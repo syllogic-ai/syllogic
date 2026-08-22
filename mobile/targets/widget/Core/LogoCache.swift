@@ -20,20 +20,25 @@ struct LogoCache {
         return LogoCache(directory: dir, session: .shared)
     }()
 
-    /// Account IDs are UUID strings, so they are already filesystem-safe.
-    private func fileURL(forAccount accountId: String) -> URL {
-        directory.appendingPathComponent("\(accountId).img")
+    /// Account IDs are validated as UUID strings before any path is built, so
+    /// a malformed id (e.g. containing "/" or "..") can never escape the
+    /// `logos/` directory.
+    private func fileURL(forAccount accountId: String) -> URL? {
+        guard UUID(uuidString: accountId) != nil else { return nil }
+        return directory.appendingPathComponent("\(accountId).img")
     }
 
     func localURL(forAccount accountId: String) -> URL? {
-        let url = fileURL(forAccount: accountId)
+        guard let url = fileURL(forAccount: accountId) else { return nil }
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
     /// Best-effort. A missing logo is the normal case, not an error — callers
     /// fall back to Monogram.
     func cache(logoUrl: String?, forAccount accountId: String) async {
-        guard let logoUrl, let remote = URL(string: logoUrl) else { return }
+        guard let logoUrl, let remote = URL(string: logoUrl),
+              let destination = fileURL(forAccount: accountId)
+        else { return }
 
         var request = URLRequest(url: remote)
         request.timeoutInterval = 10
@@ -44,6 +49,6 @@ struct LogoCache {
               !data.isEmpty
         else { return }
 
-        try? data.write(to: fileURL(forAccount: accountId), options: .atomic)
+        try? data.write(to: destination, options: .atomic)
     }
 }
