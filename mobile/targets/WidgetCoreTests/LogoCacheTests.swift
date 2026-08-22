@@ -70,8 +70,19 @@ final class LogoCacheTests: XCTestCase {
     }
 
     func testUnparseableLogoUrlCachesNothing() async {
+        // Non-empty body isolates the URL-parsing guard: if the URL guard
+        // were broken and a request went through, the download would SUCCEED
+        // and the file would be cached, making the test fail. The nil return
+        // from URL(string:) for "https://%" proves the guard is exercised.
+        StubURLProtocol.statusCode = 200
+        StubURLProtocol.body = Data([0x89, 0x50, 0x4E, 0x47])  // PNG magic bytes
+
         let cache = makeCache()
-        await cache.cache(logoUrl: "not a url", forAccount: accountId)
+        await cache.cache(logoUrl: "https://%", forAccount: accountId)
+
+        // Verify no network request was attempted.
+        XCTAssertNil(StubURLProtocol.lastRequest)
+        // Verify no file was cached.
         XCTAssertNil(cache.localURL(forAccount: accountId))
     }
 
