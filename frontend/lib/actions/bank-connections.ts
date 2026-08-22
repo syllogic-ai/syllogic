@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq, and, or, ne, desc, isNull, isNotNull } from "drizzle-orm";
+import { eq, and, or, ne, lt, desc, isNull, isNotNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { bankConnections, accounts } from "@/lib/db/schema";
 import { requireAuth, getAuthenticatedSession } from "@/lib/auth-helpers";
@@ -255,11 +255,18 @@ export async function getLinkableAccounts() {
     // Accounts held by a dead consent must stay selectable, otherwise the only
     // option the wizard can offer after an expiry is "create new" — a duplicate.
     // A live connection still owns its accounts and they are excluded.
+    // A lapsed consent counts as dead even while its row still says "active":
+    // check_consent_expiry only runs daily, so the status lags reality and would
+    // otherwise hide the very account the user is trying to relink.
     .leftJoin(bankConnections, eq(accounts.bankConnectionId, bankConnections.id))
     .where(
       and(
         eq(accounts.userId, userId),
-        or(isNull(accounts.bankConnectionId), ne(bankConnections.status, "active"))
+        or(
+          isNull(accounts.bankConnectionId),
+          ne(bankConnections.status, "active"),
+          lt(bankConnections.consentExpiresAt, new Date())
+        )
       )
     )
     .orderBy(accounts.name);

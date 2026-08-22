@@ -19,6 +19,13 @@ class AutoLinkTestCase(unittest.TestCase):
     def setUp(self):
         from app.database import Base, SessionLocal, engine
         from app.db_helpers import get_or_create_system_user
+        from app.security.data_encryption import blind_index
+
+        # IBAN exists only as ciphertext plus a blind index, so with encryption
+        # unconfigured _set_account_iban_fields silently writes nothing and the
+        # IBAN leg cannot match. Skip loudly rather than fail as "create".
+        if blind_index("probe") is None:
+            self.skipTest("DATA_ENCRYPTION_KEY_CURRENT unset; IBAN matching is unavailable")
 
         Base.metadata.create_all(bind=engine)
         self.db = SessionLocal()
@@ -40,8 +47,14 @@ class AutoLinkTestCase(unittest.TestCase):
         self.db.commit()
         self.db.close()
 
-    def _connection(self, status):
+    def _connection(self, status, consent_expires_at="future"):
+        from datetime import datetime, timedelta, timezone
         from app.models import BankConnection
+
+        if consent_expires_at == "future":
+            consent_expires_at = datetime.now(timezone.utc) + timedelta(days=60)
+        elif consent_expires_at == "past":
+            consent_expires_at = datetime.now(timezone.utc) - timedelta(days=1)
 
         conn = BankConnection(
             user_id=self.user_id,
@@ -50,25 +63,26 @@ class AutoLinkTestCase(unittest.TestCase):
             aspsp_name="ABN AMRO",
             aspsp_country="NL",
             status=status,
+            consent_expires_at=consent_expires_at,
         )
         self.db.add(conn)
         self.db.commit()
         self.created_connections.append(conn.id)
         return conn
 
-    def _account(self, connection=None):
+    def _account(self, connection=None, name="ABN AMRO Giannis", currency="EUR", uid=None):
         from app.models import Account
         from app.services.sync_service import SyncService
 
         acc = Account(
             user_id=self.user_id,
-            name="ABN AMRO Giannis",
+            name=name,
             account_type="checking",
-            currency="EUR",
+            currency=currency,
             provider="enable_banking",
             bank_connection_id=connection.id if connection else None,
         )
-        SyncService._set_account_external_id_fields(acc, self.old_uid)
+        SyncService._set_account_external_id_fields(acc, uid or self.old_uid)
         SyncService._set_account_iban_fields(acc, self.iban)
         self.db.add(acc)
         self.db.commit()
@@ -160,6 +174,46 @@ class TestSuggestedMappings(AutoLinkTestCase):
         self.assertEqual(unknown["suggested_action"], "create")
         self.assertIsNone(unknown["suggested_account_id"])
 
+    def test_lapsed_consent_still_marked_active_does_not_block(self):
+        """check_consent_expiry runs daily, so status lags a consent that just died."""
+        account = self._account(self._connection("active", consent_expires_at="past"))
+
+        suggestion = self._suggest()
+
+        self.assertEqual(suggestion["suggested_action"], "link")
+        self.assertEqual(suggestion["suggested_account_id"], str(account.id))
+
+    def test_shared_iban_is_split_by_currency(self):
+        """Multi-currency accounts share an IBAN; the wrong pick misfiles money."""
+        conn = self._connection("expired")
+        eur = self._account(conn, name="Revo EUR", currency="EUR", uid=f"u-{uuid.uuid4().hex[:8]}")
+        self._account(conn, name="Revo USD", currency="USD", uid=f"u-{uuid.uuid4().hex[:8]}")
+        from app.routes.enable_banking import _build_suggested_mappings
+
+        suggestion = _build_suggested_mappings(
+            db=self.db,
+            user_id=self.user_id,
+            raw_accounts=[{"uid": self.new_uid, "iban": self.iban, "currency": "EUR"}],
+        )[0]
+
+        self.assertEqual(suggestion["suggested_action"], "link")
+        self.assertEqual(suggestion["suggested_account_id"], str(eur.id))
+
+    def test_shared_iban_with_no_currency_agreeing_is_left_to_the_user(self):
+        """Guessing between them would file one currency under the other's account."""
+        conn = self._connection("expired")
+        self._account(conn, name="Revo EUR", currency="EUR", uid=f"u-{uuid.uuid4().hex[:8]}")
+        self._account(conn, name="Revo USD", currency="USD", uid=f"u-{uuid.uuid4().hex[:8]}")
+        from app.routes.enable_banking import _build_suggested_mappings
+
+        suggestion = _build_suggested_mappings(
+            db=self.db,
+            user_id=self.user_id,
+            raw_accounts=[{"uid": self.new_uid, "iban": self.iban, "currency": "GBP"}],
+        )[0]
+
+        self.assertEqual(suggestion["suggested_action"], "create")
+
     def test_unchanged_uid_still_matches(self):
         """Banks that keep uids stable must not depend on the IBAN leg."""
         account = self._account(self._connection("expired"))
@@ -210,6 +264,44 @@ class TestMapAccountsLinkGuard(AutoLinkTestCase):
         self.assertEqual(result.accounts_linked, 1)
         self.db.refresh(account)
         self.assertEqual(account.bank_connection_id, pending.id)
+
+    def test_the_same_account_cannot_be_linked_twice_in_one_request(self):
+        """The first link moves the account onto this pending connection, which would
+        otherwise look un-held to the second and let it overwrite the uid."""
+        from fastapi import HTTPException
+        from app.routes.enable_banking import map_accounts, MapAccountsRequest, AccountMapping
+
+        account = self._account(self._connection("expired"))
+        pending = self._pending()
+        second_uid = f"uid-second-{uuid.uuid4().hex[:8]}"
+        pending.raw_session_data = {
+            "accounts": [{"uid": self.new_uid, "iban": self.iban}, {"uid": second_uid}]
+        }
+        self.db.commit()
+
+        with self.assertRaises(HTTPException) as ctx:
+            map_accounts(
+                connection_id=str(pending.id),
+                request=MapAccountsRequest(
+                    mappings=[
+                        AccountMapping(
+                            bank_uid=self.new_uid,
+                            action="link",
+                            existing_account_id=str(account.id),
+                        ),
+                        AccountMapping(
+                            bank_uid=second_uid,
+                            action="link",
+                            existing_account_id=str(account.id),
+                        ),
+                    ],
+                    initial_sync_days=90,
+                ),
+                db=self.db,
+                user_id=self.user_id,
+            )
+
+        self.assertEqual(ctx.exception.status_code, 400)
 
     def test_account_on_a_live_consent_is_refused(self):
         from fastapi import HTTPException

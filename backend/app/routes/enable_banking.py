@@ -499,6 +499,20 @@ def map_accounts(
             detail=f"Connection is not in pending_setup state (current: {connection.status})",
         )
 
+    # One account per bank account, both ways. Without this, a repeated
+    # existing_account_id would pass the link guard on its second use — the
+    # first link already moved the account onto this very connection, which is
+    # not "active" yet — and silently overwrite the uid written moments before,
+    # leaving one bank account mapped to nothing.
+    for field, label in (("existing_account_id", "account"), ("bank_uid", "bank account")):
+        seen = [getattr(m, field) for m in request.mappings if getattr(m, field)]
+        duplicate = next((v for v in seen if seen.count(v) > 1), None)
+        if duplicate:
+            raise HTTPException(
+                status_code=400,
+                detail=f"The same {label} '{duplicate}' appears in more than one mapping",
+            )
+
     # Index raw bank accounts by UID for quick lookup
     raw_accounts = connection.raw_session_data.get("accounts", []) if connection.raw_session_data else []
     raw_by_uid = {acc["uid"]: acc for acc in raw_accounts}
@@ -761,13 +775,24 @@ def _is_held_by_active_connection(db: Session, account: Account) -> bool:
     Such an account cannot be re-linked: moving it would silently break the
     working connection. An account held by an expired or errored consent is fair
     game — re-linking it is exactly how a renewal is meant to work.
+
+    A lapsed consent is treated as dead even while its row still says "active":
+    check_consent_expiry only runs daily, and until it does, the status lags
+    reality and would block exactly the relink the user came to do.
     """
     if account.bank_connection_id is None:
         return False
     holder = db.query(BankConnection).filter(
         BankConnection.id == account.bank_connection_id,
     ).first()
-    return holder is not None and holder.status == "active"
+    if holder is None or holder.status != "active":
+        return False
+    if holder.consent_expires_at is None:
+        return True
+    expires_at = holder.consent_expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    return expires_at > datetime.now(timezone.utc)
 
 
 def _find_account_for_bank_account(
@@ -775,6 +800,7 @@ def _find_account_for_bank_account(
     user_id: str,
     uid: str,
     iban: Optional[str],
+    currency: Optional[str] = None,
 ) -> Optional[Account]:
     """Locate the user's account for one bank account, by uid and then by IBAN.
 
@@ -788,23 +814,41 @@ def _find_account_for_bank_account(
     """
     query = db.query(Account).filter(Account.user_id == user_id)
 
-    candidates = []
+    # The uid identifies one account exactly, so it needs no tie-break.
     if uid:
         uid_hashes = blind_index_candidates(uid)
+        by_uid = []
         if uid_hashes:
-            candidates.extend(query.filter(Account.external_id_hash.in_(uid_hashes)).all())
-        # Deployments without encryption configured keep the uid in plaintext.
-        candidates.extend(query.filter(Account.external_id == uid).all())
+            by_uid = query.filter(Account.external_id_hash.in_(uid_hashes)).all()
+        if not by_uid:
+            # Deployments without encryption configured keep the uid in plaintext.
+            by_uid = query.filter(Account.external_id == uid).all()
+        for account in by_uid:
+            if not _is_held_by_active_connection(db, account):
+                return account
 
-    if iban:
-        iban_hashes = blind_index_candidates(iban)
-        if iban_hashes:
-            candidates.extend(query.filter(Account.iban_hash.in_(iban_hashes)).all())
+    if not iban:
+        return None
+    iban_hashes = blind_index_candidates(iban)
+    if not iban_hashes:
+        return None
+    candidates = [
+        account
+        for account in query.filter(Account.iban_hash.in_(iban_hashes)).all()
+        if not _is_held_by_active_connection(db, account)
+    ]
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
 
-    for account in candidates:
-        if not _is_held_by_active_connection(db, account):
-            return account
-    return None
+    # Multi-currency accounts share one IBAN, and .all() gives no meaningful
+    # order. Only currency can tell them apart; without it, auto-linking would
+    # file one currency's transactions under another currency's account, so
+    # leave it for the user to map by hand.
+    wanted = (currency or "").upper()
+    matches = [a for a in candidates if (a.currency or "").upper() == wanted]
+    return matches[0] if len(matches) == 1 else None
 
 
 def _build_suggested_mappings(
@@ -833,7 +877,9 @@ def _build_suggested_mappings(
             })
             continue
 
-        existing = _find_account_for_bank_account(db, user_id, uid, iban)
+        existing = _find_account_for_bank_account(
+            db, user_id, uid, iban, raw_acc.get("currency")
+        )
 
         if existing:
             results.append({
