@@ -66,7 +66,11 @@ struct BalanceProvider: AppIntentTimelineProvider {
             for balance in fetched where renderable.contains(balance.accountId) {
                 guard LogoCache.shared.localURL(forAccount: balance.accountId) == nil else { continue }
                 group.addTask {
-                    await LogoCache.shared.cache(logoUrl: balance.logoUrl,
+                    // logo_url is often a relative path; resolve against the
+                    // API origin (the same origin the web app resolves against).
+                    let resolved = SyllogicAPI.resolveAssetURL(
+                        balance.logoUrl, against: SyllogicAPI.shared.baseURL)
+                    await LogoCache.shared.cache(logoUrl: resolved?.absoluteString,
                                                  forAccount: balance.accountId)
                 }
             }

@@ -147,3 +147,42 @@ final class SyllogicAPITests: XCTestCase {
         }
     }
 }
+
+/// Pins the logo-URL resolution contract: company_logos.logo_url stores
+/// relative paths that the web resolves against its page origin; the widget
+/// must resolve them against the API origin or logos silently never load.
+final class ResolveAssetURLTests: XCTestCase {
+    private let base = URL(string: "https://app.syllogic.ai")!
+
+    func testRelativePathResolvesAgainstBase() {
+        XCTAssertEqual(
+            SyllogicAPI.resolveAssetURL("/uploads/logos/abnamro.png", against: base)?.absoluteString,
+            "https://app.syllogic.ai/uploads/logos/abnamro.png"
+        )
+    }
+
+    func testAbsoluteURLPassesThroughUnchanged() {
+        XCTAssertEqual(
+            SyllogicAPI.resolveAssetURL("https://img.logo.dev/ing.com?size=64", against: base)?.absoluteString,
+            "https://img.logo.dev/ing.com?size=64"
+        )
+    }
+
+    func testNilEmptyAndWhitespaceReturnNil() {
+        XCTAssertNil(SyllogicAPI.resolveAssetURL(nil, against: base))
+        XCTAssertNil(SyllogicAPI.resolveAssetURL("", against: base))
+        XCTAssertNil(SyllogicAPI.resolveAssetURL("   ", against: base))
+    }
+
+    func testGarbageWithoutSchemeOrSlashReturnsNil() {
+        XCTAssertNil(SyllogicAPI.resolveAssetURL("logos/x.png", against: base))
+    }
+
+    func testBaseWithPathStillYieldsRootedResolution() {
+        let deepBase = URL(string: "https://app.syllogic.ai/api")!
+        XCTAssertEqual(
+            SyllogicAPI.resolveAssetURL("/uploads/logos/x.png", against: deepBase)?.absoluteString,
+            "https://app.syllogic.ai/uploads/logos/x.png"
+        )
+    }
+}

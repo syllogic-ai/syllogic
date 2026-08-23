@@ -31,6 +31,25 @@ struct SyllogicAPI {
                            cookieProvider: SessionStore.cookie)
     }()
 
+    /// Resolve a stored logo reference into a fetchable URL.
+    ///
+    /// `company_logos.logo_url` stores RELATIVE paths ("/uploads/logos/x.png");
+    /// the web app works because the browser resolves them against the page
+    /// origin. The widget has no page origin, so an unresolved relative path
+    /// fails silently and every account falls back to a monogram. Pure and
+    /// static so the contract is unit-testable.
+    static func resolveAssetURL(_ raw: String?, against base: URL) -> URL? {
+        guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty else { return nil }
+        if raw.hasPrefix("http://") || raw.hasPrefix("https://") {
+            return URL(string: raw)
+        }
+        if raw.hasPrefix("/") {
+            return URL(string: raw, relativeTo: base)?.absoluteURL
+        }
+        return nil
+    }
+
     func fetchBalances() async throws -> [AccountBalance] {
         let cookie: String?
         do {
