@@ -40,3 +40,9 @@ struct SyllogicWidgetBundle: WidgetBundle {
 #Preview("Small — no selection", as: .systemSmall) { SyllogicWidget() } timeline: {
     WidgetEntry(date: .now, rows: [], state: .noSelection)
 }
+#Preview("Large — 1 account", as: .systemLarge) { SyllogicWidget() } timeline: {
+    WidgetEntry(date: .now, rows: [
+        AccountRow(id: "s1", name: "Main Checking", balance: 7425.00,
+                   currency: "EUR", logoFileURL: nil, institution: "ING", accountType: "checking"),
+    ], state: .ready)
+}

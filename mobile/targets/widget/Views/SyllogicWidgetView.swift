@@ -28,6 +28,7 @@ struct SyllogicWidgetView: View {
         case .noSelection: stateView(chip: "—", message: "Open Syllogic to pick accounts")
         case .ready:
             if entry.rows.isEmpty {
+                // Unreachable today — BalanceProvider forces .noSelection when rows are empty — but kept so an empty .ready never renders a blank card (or traps on rows[0]) if that invariant is ever loosened.
                 stateView(chip: "—", message: "Open Syllogic to pick accounts")
             } else {
                 switch family {
@@ -40,7 +41,7 @@ struct SyllogicWidgetView: View {
     }
 
     private var small: some View {
-        VStack(alignment: .leading) {
+        VStack(alignment: .leading, spacing: 2) {
             LogoSquare(row: entry.rows[0], size: 28, dark: dark)
             Spacer()
             MicroLabel(text: entry.rows[0].name, dark: dark)
@@ -50,7 +51,7 @@ struct SyllogicWidgetView: View {
     }
 
     private var medium: some View {
-        VStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 10) {
             HeroBlock(row: entry.rows[0], balanceSize: 20, logoSize: 24, dark: dark)
             if entry.rows.count > 1 {
                 Hairline(dark: dark)
@@ -65,10 +66,12 @@ struct SyllogicWidgetView: View {
     private var large: some View {
         VStack(alignment: .leading, spacing: 12) {
             HeroBlock(row: entry.rows[0], balanceSize: 26, logoSize: 28, dark: dark)
-            Hairline(dark: dark, weight: 2, strong: true)
-            ForEach(Array(entry.rows.dropFirst().enumerated()), id: \.element.id) { index, row in
-                if index > 0 { Hairline(dark: dark) }
-                LargeRow(row: row, dark: dark)
+            if entry.rows.count > 1 {
+                Hairline(dark: dark, weight: 2, strong: true)
+                ForEach(Array(entry.rows.dropFirst().enumerated()), id: \.element.id) { index, row in
+                    if index > 0 { Hairline(dark: dark) }
+                    LargeRow(row: row, dark: dark)
+                }
             }
             Spacer(minLength: 0)
             MicroLabel(text: "Syllogic", dark: dark).opacity(0.7)
@@ -78,11 +81,9 @@ struct SyllogicWidgetView: View {
 
     private func stateView(chip: String, message: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(chip)
-                .font(Theme.font(size: 10, weight: .medium))
-                .foregroundStyle(Theme.color(.mutedForeground, dark: dark))
+            MicroLabel(text: chip, dark: dark)
                 .padding(.horizontal, 6).padding(.vertical, 3)
-                .overlay(Rectangle().stroke(Theme.color(.hairline, dark: dark), lineWidth: 1))
+                .overlay(Rectangle().strokeBorder(Theme.color(.hairline, dark: dark), lineWidth: 1))
             Text(message)
                 .font(Theme.font(size: 11, weight: .medium))
                 .foregroundStyle(Theme.color(.foreground, dark: dark))

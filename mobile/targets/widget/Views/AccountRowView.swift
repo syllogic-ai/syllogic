@@ -61,11 +61,13 @@ struct BalanceText: View {
 
     static func formatted(_ row: AccountRow) -> String {
         let f = formatter(for: row.currency)
+        // Fallback keeps the code attached: a bare number would be misleading next to a correctly formatted row in a different currency.
         return f.string(from: NSNumber(value: row.balance)) ?? "\(String(format: "%.2f", row.balance)) \(row.currency)"
     }
 
     private static var cache: [String: NumberFormatter] = [:]
     private static let lock = NSLock()
+    // NumberFormatter construction is expensive; cache per currency code. string(from:) itself is thread-safe.
     private static func formatter(for code: String) -> NumberFormatter {
         lock.lock(); defer { lock.unlock() }
         if let f = cache[code] { return f }
