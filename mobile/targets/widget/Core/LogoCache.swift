@@ -41,7 +41,14 @@ struct LogoCache {
         else { return }
 
         var request = URLRequest(url: remote)
-        request.timeoutInterval = 10
+        // Logos are prefetched concurrently for up to 3 accounts (see
+        // BalanceProvider's TaskGroup), so this timeout no longer sums
+        // serially across accounts — but it still bounds a single entry's
+        // worst case (15s API request + this timeout for the slowest
+        // concurrent logo fetch) well inside WidgetKit's ~30s provider
+        // budget. Best-effort: a missed logo falls through to the monogram,
+        // the normal case.
+        request.timeoutInterval = 5
 
         guard let (data, response) = try? await session.data(for: request),
               let http = response as? HTTPURLResponse,

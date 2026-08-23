@@ -9,6 +9,7 @@ import { ThemedView } from '@/components/themed-view';
 import { FilterSheet } from '@/components/filter-sheet';
 import { SavedViewsBar } from '@/components/saved-views-bar';
 import { applyFilters, useFilterStore } from '@/state/filter-store';
+import { reloadWidgets } from '../../../modules/widget-reload';
 
 export default function AccountsScreen() {
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
@@ -43,7 +44,7 @@ export default function AccountsScreen() {
           <FlatList
             data={accounts}
             keyExtractor={(item) => item.account_id}
-            onRefresh={refetch}
+            onRefresh={() => refetch().then(reloadWidgets)}
             refreshing={isRefetching}
             contentContainerStyle={styles.list}
             ListEmptyComponent={<ThemedText style={styles.padded}>No accounts match this filter.</ThemedText>}

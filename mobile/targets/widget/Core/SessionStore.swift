@@ -52,14 +52,64 @@ enum SessionStore {
     /// chunked values fail there; do not copy that offset.
     private static let chunkMarker = "ba-chunks:"
 
+    /// Thrown by `cookie()` when the Keychain itself could not be queried —
+    /// e.g. `errSecInteractionNotAllowed` because the device is locked and
+    /// no item has become accessible yet since boot — as opposed to the
+    /// session being genuinely absent or expired. Callers must not conflate
+    /// this with "signed out": see `BalanceProvider`, which routes it to the
+    /// silent cache fallback (same path as a network error) instead of
+    /// `.signedOut`. Only a real 401/403 from the server, or a session that
+    /// is genuinely absent/empty once the Keychain *was* readable, may
+    /// produce `.signedOut`.
+    enum AccessError: Error, Equatable {
+        case unavailable
+    }
+
     /// Returns a ready-to-send `Cookie` header string, or `nil` when there is
     /// no usable session. Reassembles any chunking first (`assemble`), then
     /// parses the reassembled JSON cookie jar the same way
     /// `@better-auth/expo`'s own client does (`parseCookieHeader`).
-    static func cookie() -> String? {
-        guard let json = assemble(marker: readKeychain(key: cookieKey), chunk: { index in
-            readKeychain(key: "\(cookieKey).\(index)")
-        }) else { return nil }
+    ///
+    /// Throws `AccessError.unavailable` if any underlying Keychain read (of
+    /// the marker or of any chunk) was temporarily unavailable rather than
+    /// genuinely absent. All of the actual unavailable-vs-absent decision
+    /// logic lives in `resolveCookie(markerResult:chunk:)`, below, which is
+    /// unit-tested directly with synthetic `KeychainReadResult`s — there is
+    /// no reliable way to induce a real `errSecInteractionNotAllowed` from
+    /// `swift test` (an unsigned process with no data-protection keychain),
+    /// so this thin wrapper is the only piece that actually touches
+    /// `SecItemCopyMatching`.
+    static func cookie() throws -> String? {
+        try resolveCookie(markerResult: readKeychainResult(key: cookieKey)) { index in
+            readKeychainResult(key: "\(cookieKey).\(index)")
+        }
+    }
+
+    /// Pure decision logic behind `cookie()`, split out so the
+    /// unavailable-vs-absent distinction is testable without a real
+    /// Keychain. `assemble`'s `chunk` closure is typed `(Int) -> String?`
+    /// and stays that way (its signature is depended on elsewhere), so the
+    /// distinction is captured out-of-band via `sawUnavailable` rather than
+    /// threaded through `assemble` itself.
+    static func resolveCookie(
+        markerResult: KeychainReadResult,
+        chunk: (Int) -> KeychainReadResult
+    ) throws -> String? {
+        var sawUnavailable = false
+        func value(from result: KeychainReadResult) -> String? {
+            switch result {
+            case .value(let value): return value
+            case .absent: return nil
+            case .unavailable: sawUnavailable = true; return nil
+            }
+        }
+
+        let json = assemble(marker: value(from: markerResult), chunk: { index in
+            value(from: chunk(index))
+        })
+
+        if sawUnavailable { throw AccessError.unavailable }
+        guard let json else { return nil }
         return parseCookieHeader(fromJarJSON: json)
     }
 
@@ -156,13 +206,27 @@ enum SessionStore {
         return withoutFraction.date(from: text)
     }
 
+    /// The outcome of a single Keychain query, distinguishing "found" and
+    /// "genuinely absent" (`errSecItemNotFound`) from "could not be queried
+    /// right now" (any other non-success `OSStatus`, most notably
+    /// `errSecInteractionNotAllowed` — returned before first unlock or while
+    /// the device is locked, once the item's accessibility class permits
+    /// being read only after unlock). Only the first two mean anything about
+    /// whether a session exists; the third means the question couldn't be
+    /// answered yet.
+    enum KeychainReadResult: Equatable {
+        case value(String)
+        case absent
+        case unavailable
+    }
+
     /// No `kSecAttrAccessGroup` is set here — see the doc comment at the top
     /// of this type for why: omitting it makes `SecItemCopyMatching` search
     /// every access group the process is entitled to, which is exactly what
     /// both production (the shared app/widget group) and `swift test`
     /// (no keychain-access-groups entitlement at all, so there is nothing to
     /// search but the default group) need.
-    static func readKeychain(key: String) -> String? {
+    static func readKeychainResult(key: String) -> KeychainReadResult {
         // Matches expo-secure-store's `query(with:options:requireAuthentication:)` exactly:
         // both the account and the generic attribute are the UTF-8 bytes of the storage
         // key (not the key as a CFString) — see the `Data(key.utf8)` encoding there.
@@ -177,9 +241,29 @@ enum SessionStore {
         ]
 
         var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-              let data = item as? Data
-        else { return nil }
-        return String(data: data, encoding: .utf8)
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        switch status {
+        case errSecSuccess:
+            guard let data = item as? Data, let string = String(data: data, encoding: .utf8) else {
+                return .absent
+            }
+            return .value(string)
+        case errSecItemNotFound:
+            return .absent
+        default:
+            // Covers errSecInteractionNotAllowed and any other unexpected
+            // status: the Keychain declined to answer, it did not say "no".
+            return .unavailable
+        }
+    }
+
+    /// Thin `String?`-returning wrapper over `readKeychainResult` that
+    /// collapses `.absent` and `.unavailable` together. Kept for call sites
+    /// (and existing tests) that only ever cared about "is there a value" —
+    /// `cookie()` uses `readKeychainResult` directly instead, since it needs
+    /// to keep those two cases apart.
+    static func readKeychain(key: String) -> String? {
+        if case .value(let value) = readKeychainResult(key: key) { return value }
+        return nil
     }
 }

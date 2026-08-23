@@ -35,6 +35,13 @@ struct BalanceProvider: AppIntentTimelineProvider {
             // A 401 is a hard signal: never render stale balances for a session
             // that is definitively gone.
             return WidgetEntry(date: .now, rows: [], state: .signedOut)
+        } catch SyllogicAPI.APIError.keychainUnavailable {
+            // The Keychain was locked (e.g. before first unlock after a
+            // reboot, or WidgetKit refreshing while the device is locked) —
+            // not the same as a genuinely gone session. Same silent
+            // cache-fallback path as a network error, deliberately NOT
+            // `.signedOut`.
+            fetched = BalanceCache.shared.load()
         } catch {
             // Network failures fall back to cache silently, by design.
             fetched = BalanceCache.shared.load()
@@ -44,11 +51,24 @@ struct BalanceProvider: AppIntentTimelineProvider {
         // caps rendering at 3, but iOS lets users select more (AppIntents cannot
         // cap an array parameter), so prefetching every `selected` account would
         // waste the widget's tight network/time budget on logos that never show.
+        //
+        // Fetched concurrently (rather than awaited one at a time) to stay
+        // inside WidgetKit's ~30s provider budget: SyllogicAPI's request can
+        // take up to 15s, and awaiting up to 3 logo fetches serially at 10s
+        // each could add another 30s on top — 45s worst case, well past the
+        // budget, which would kill the extension before even the silent
+        // cache fallback above gets a chance to run. Logos are best-effort;
+        // a missed one falls through to the monogram, the intended normal
+        // case, so nothing here needs to wait for stragglers beyond the
+        // group's own completion.
         let renderable = Set(selected.prefix(3))
-        for balance in fetched where renderable.contains(balance.accountId) {
-            if LogoCache.shared.localURL(forAccount: balance.accountId) == nil {
-                await LogoCache.shared.cache(logoUrl: balance.logoUrl,
-                                             forAccount: balance.accountId)
+        await withTaskGroup(of: Void.self) { group in
+            for balance in fetched where renderable.contains(balance.accountId) {
+                guard LogoCache.shared.localURL(forAccount: balance.accountId) == nil else { continue }
+                group.addTask {
+                    await LogoCache.shared.cache(logoUrl: balance.logoUrl,
+                                                 forAccount: balance.accountId)
+                }
             }
         }
 

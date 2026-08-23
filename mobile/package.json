@@ -16,7 +16,7 @@
     "expo-image": "~57.0.1",
     "expo-linking": "~57.0.3",
     "expo-local-authentication": "~57.0.1",
-    "expo-modules-core": "57.0.6",
+    "expo-modules-core": "~57.0.6",
     "expo-network": "~57.0.1",
     "expo-router": "~57.0.7",
     "expo-secure-store": "~57.0.1",

@@ -6,13 +6,18 @@ struct SyllogicAPI {
         case unauthorized
         case transport
         case decoding
+        /// The Keychain could not be queried right now (e.g. locked before
+        /// first unlock) — distinct from `.unauthorized`, which means the
+        /// session is genuinely gone. Callers must not treat this as a sign-
+        /// out; see `SessionStore.AccessError` and `BalanceProvider`.
+        case keychainUnavailable
     }
 
     let baseURL: URL
     let session: URLSession
-    let cookieProvider: () -> String?
+    let cookieProvider: () throws -> String?
 
-    init(baseURL: URL, session: URLSession, cookieProvider: @escaping () -> String?) {
+    init(baseURL: URL, session: URLSession, cookieProvider: @escaping () throws -> String?) {
         self.baseURL = baseURL
         self.session = session
         self.cookieProvider = cookieProvider
@@ -27,7 +32,15 @@ struct SyllogicAPI {
     }()
 
     func fetchBalances() async throws -> [AccountBalance] {
-        guard let cookie = cookieProvider() else { throw APIError.unauthorized }
+        let cookie: String?
+        do {
+            cookie = try cookieProvider()
+        } catch {
+            // The Keychain itself couldn't be read (e.g. still locked) — not
+            // the same as a genuinely absent session.
+            throw APIError.keychainUnavailable
+        }
+        guard let cookie else { throw APIError.unauthorized }
 
         var request = URLRequest(url: baseURL.appendingPathComponent("/api/analytics/account-balances"))
         request.setValue(cookie, forHTTPHeaderField: "Cookie")

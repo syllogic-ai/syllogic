@@ -108,6 +108,31 @@ final class SyllogicAPITests: XCTestCase {
         }
     }
 
+    /// A `cookieProvider` that throws (mirrors `SessionStore.cookie()`
+    /// throwing `AccessError.unavailable` when the Keychain is locked) must
+    /// map to `.keychainUnavailable`, NOT `.unauthorized` — the whole point
+    /// of the distinction is that `BalanceProvider` treats these
+    /// differently (cache fallback vs. `.signedOut`).
+    func testKeychainUnavailableCookieProviderMapsToKeychainUnavailable() async {
+        struct StubError: Error {}
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [StubURLProtocol.self]
+        let api = SyllogicAPI(baseURL: URL(string: "https://api.example")!,
+                              session: URLSession(configuration: config),
+                              cookieProvider: { throw StubError() })
+        StubURLProtocol.lastRequest = nil
+
+        do {
+            _ = try await api.fetchBalances()
+            XCTFail("expected keychainUnavailable")
+        } catch let error as SyllogicAPI.APIError {
+            XCTAssertEqual(error, .keychainUnavailable)
+            XCTAssertNil(StubURLProtocol.lastRequest, "no request should have been made when the cookie couldn't be read")
+        } catch {
+            XCTFail("unexpected error \(error)")
+        }
+    }
+
     func testMapsBadJSONToDecoding() async {
         StubURLProtocol.statusCode = 200
         StubURLProtocol.body = "not json".data(using: .utf8)!

@@ -168,14 +168,82 @@ final class SessionStoreTests: XCTestCase {
     /// same expo-secure-store attribute scheme as the round-trip tests
     /// above, then asserts `cookie()` returns the parsed `name=value` header,
     /// not the untouched JSON jar.
-    func testCookieReturnsTheParsedHeaderNotTheRawJar() {
+    func testCookieReturnsTheParsedHeaderNotTheRawJar() throws {
         let jar = """
         {"better-auth.session_token":{"value":"tok.sig","expires":null}}
         """
         addKeychainItem(key: SessionStore.cookieKey, value: jar)
         defer { deleteKeychainItem(key: SessionStore.cookieKey) }
 
-        XCTAssertEqual(SessionStore.cookie(), "better-auth.session_token=tok.sig")
+        XCTAssertEqual(try SessionStore.cookie(), "better-auth.session_token=tok.sig")
+    }
+
+    // MARK: - readKeychainResult: absent vs. present
+
+    func testReadKeychainResultIsAbsentWhenItemIsMissing() {
+        let key = "widget-core-tests.result-missing.\(UUID().uuidString)"
+        XCTAssertEqual(SessionStore.readKeychainResult(key: key), .absent)
+    }
+
+    func testReadKeychainResultIsValueWhenItemIsPresent() {
+        let key = "widget-core-tests.result-present.\(UUID().uuidString)"
+        addKeychainItem(key: key, value: "syllogic.session=abc123")
+        defer { deleteKeychainItem(key: key) }
+
+        XCTAssertEqual(SessionStore.readKeychainResult(key: key), .value("syllogic.session=abc123"))
+    }
+
+    // MARK: - resolveCookie: unavailable vs. absent
+    //
+    // There is no reliable way to force a real `errSecInteractionNotAllowed`
+    // from `swift test` (it runs as an unsigned process against the classic
+    // file-based login Keychain, which has no data-protection lock state),
+    // so the unavailable-vs-absent decision is exercised directly through
+    // `resolveCookie(markerResult:chunk:)` with synthetic `KeychainReadResult`s
+    // instead of going through the real Keychain. This is the same logic
+    // `cookie()` runs in production — `cookie()` itself is just a thin
+    // wrapper that supplies real `readKeychainResult` calls.
+
+    func testResolveCookieThrowsUnavailableWhenMarkerIsUnavailable() {
+        XCTAssertThrowsError(
+            try SessionStore.resolveCookie(markerResult: .unavailable) { _ in .absent }
+        ) { error in
+            XCTAssertEqual(error as? SessionStore.AccessError, .unavailable)
+        }
+    }
+
+    func testResolveCookieThrowsUnavailableWhenAChunkIsUnavailable() {
+        let jar = """
+        {"better-auth.session_token":{"value":"tok.sig","expires":null}}
+        """
+        let parts = [String(jar.prefix(20)), String(jar.dropFirst(20))]
+
+        XCTAssertThrowsError(
+            try SessionStore.resolveCookie(markerResult: .value("ba-chunks:2")) { index in
+                // First chunk reads fine, second is locked mid-reassembly.
+                index == 0 ? .value(parts[0]) : .unavailable
+            }
+        ) { error in
+            XCTAssertEqual(error as? SessionStore.AccessError, .unavailable)
+        }
+    }
+
+    /// A genuinely absent marker (never signed in, or signed out and the
+    /// jar deleted rather than zeroed) must NOT throw — it must return `nil`
+    /// so callers can distinguish "no session" from "couldn't check right
+    /// now". This is the exact case the fix must not regress: before it, an
+    /// absent/unreadable marker and a locked Keychain were indistinguishable.
+    func testResolveCookieReturnsNilWithoutThrowingWhenMarkerIsAbsent() throws {
+        let result = try SessionStore.resolveCookie(markerResult: .absent) { _ in .absent }
+        XCTAssertNil(result)
+    }
+
+    func testResolveCookieSucceedsWhenEverythingIsReadable() throws {
+        let jar = """
+        {"better-auth.session_token":{"value":"tok.sig","expires":null}}
+        """
+        let result = try SessionStore.resolveCookie(markerResult: .value(jar)) { _ in .absent }
+        XCTAssertEqual(result, "better-auth.session_token=tok.sig")
     }
 
     /// macOS's Keychain (the one `swift test` runs against — a plain, unsigned

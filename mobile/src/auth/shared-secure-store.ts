@@ -30,9 +30,22 @@ import * as SecureStore from 'expo-secure-store';
 // `mobile/targets/widget/Core/SessionStore.swift` as
 // `SessionStore.accessGroup` -- both sides must agree once a team ID exists.
 const appleTeamId = Constants.expoConfig?.ios?.appleTeamId;
-const options: SecureStore.SecureStoreOptions = appleTeamId
-  ? { accessGroup: `${appleTeamId}.ai.syllogic.mobile` }
-  : {};
+const options: SecureStore.SecureStoreOptions = {
+  // expo-secure-store defaults to `WHEN_UNLOCKED`, which makes
+  // `SecItemCopyMatching` fail with `errSecInteractionNotAllowed` whenever
+  // WidgetKit regenerates a timeline while the device is locked (routine
+  // for a background refresh). `AFTER_FIRST_UNLOCK` keeps the item readable
+  // from the moment the device is first unlocked after a boot until the
+  // next reboot, which covers that case while still not being `ALWAYS`
+  // (deprecated, no protection at all). Must match on both the write side
+  // here and any place that re-adds this item; a mismatched accessibility
+  // class does not itself change what `readKeychain` can find (Keychain
+  // reads aren't filtered by accessibility class), but the item must have
+  // been written with an accessible-enough class in the first place for it
+  // to be there to read.
+  keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
+  ...(appleTeamId ? { accessGroup: `${appleTeamId}.ai.syllogic.mobile` } : {}),
+};
 
 export const sharedSecureStore = {
   getItem: (key: string) => SecureStore.getItem(key, options),
