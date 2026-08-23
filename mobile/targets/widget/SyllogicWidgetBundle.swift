@@ -1,34 +1,17 @@
 import WidgetKit
 import SwiftUI
 
-struct PlaceholderEntry: TimelineEntry {
-    let date: Date
-}
-
-struct PlaceholderProvider: TimelineProvider {
-    func placeholder(in context: Context) -> PlaceholderEntry {
-        PlaceholderEntry(date: .now)
-    }
-
-    func getSnapshot(in context: Context, completion: @escaping (PlaceholderEntry) -> Void) {
-        completion(PlaceholderEntry(date: .now))
-    }
-
-    func getTimeline(in context: Context, completion: @escaping (Timeline<PlaceholderEntry>) -> Void) {
-        completion(Timeline(entries: [PlaceholderEntry(date: .now)], policy: .never))
-    }
-}
-
 struct SyllogicWidget: Widget {
     let kind = "SyllogicBalances"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: PlaceholderProvider()) { _ in
-            Text("Syllogic")
-                .containerBackground(.fill.tertiary, for: .widget)
+        AppIntentConfiguration(kind: kind,
+                               intent: SelectAccountsIntent.self,
+                               provider: BalanceProvider()) { entry in
+            SyllogicWidgetView(entry: entry)
         }
         .configurationDisplayName("Balances")
-        .description("See your account balances at a glance.")
+        .description("See up to 3 account balances at a glance.")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
@@ -38,4 +21,33 @@ struct SyllogicWidgetBundle: WidgetBundle {
     var body: some Widget {
         SyllogicWidget()
     }
+}
+
+#Preview("Medium — 3 accounts", as: .systemMedium) {
+    SyllogicWidget()
+} timeline: {
+    WidgetEntry.placeholder
+}
+
+#Preview("Small — 1 account", as: .systemSmall) {
+    SyllogicWidget()
+} timeline: {
+    WidgetEntry.placeholder
+}
+
+#Preview("Medium — long name", as: .systemMedium) {
+    SyllogicWidget()
+} timeline: {
+    WidgetEntry(date: .now, rows: [
+        AccountRow(id: "l1", name: "Interactive Brokers Ireland Limited",
+                   balance: 43154.12, currency: "EUR", logoFileURL: nil),
+        AccountRow(id: "l2", name: "Travel Card", balance: 1096.06,
+                   currency: "USD", logoFileURL: nil),
+    ], state: .ready)
+}
+
+#Preview("Medium — signed out", as: .systemMedium) {
+    SyllogicWidget()
+} timeline: {
+    WidgetEntry(date: .now, rows: [], state: .signedOut)
 }
