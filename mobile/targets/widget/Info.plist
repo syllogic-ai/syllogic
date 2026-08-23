@@ -7,5 +7,31 @@
       <key>NSExtensionPointIdentifier</key>
       <string>com.apple.widgetkit-extension</string>
     </dict>
+    <!--
+      SyllogicAPIBaseURL is read by SyllogicAPI.shared
+      (mobile/targets/widget/Core/SyllogicAPI.swift) as the widget
+      extension's base URL.
+
+      @bacons/apple-targets' Config type has no `infoPlist` key (see
+      node_modules/@bacons/apple-targets/build/config.d.ts) -- an
+      `infoPlist` block in expo-target.config.js is silently discarded,
+      not applied. This value must instead live directly in this
+      committed Info.plist, because the plugin only writes a *default*
+      Info.plist when this file is absent; a committed one is left
+      untouched by `expo prebuild --clean`.
+
+      IMPORTANT: this value is baked in at `expo prebuild` time. The React
+      Native app itself reads EXPO_PUBLIC_API_URL at JS *bundle* time
+      (see mobile/src/config.ts), which is a completely different step.
+      That means `expo prebuild` (without EXPO_PUBLIC_API_URL set) followed
+      by an app build *with* it set produces an app that talks to
+      production while its widget extension keeps talking to whatever is
+      hardcoded below (localhost by default). To point the widget at a
+      different backend, edit this literal string and re-run
+      `expo prebuild --clean` -- setting the env var alone does nothing
+      here.
+    -->
+    <key>SyllogicAPIBaseURL</key>
+    <string>http://localhost:8000</string>
   </dict>
 </plist>

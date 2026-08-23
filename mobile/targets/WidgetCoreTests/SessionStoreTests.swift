@@ -34,6 +34,74 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertNil(SessionStore.assemble(marker: "ba-chunks:banana") { _ in "x" })
     }
 
+    // MARK: - parseCookieHeader (real @better-auth/expo jar shapes)
+    //
+    // The Keychain does not store a raw `Cookie` header — it stores a JSON
+    // cookie jar written by @better-auth/expo's `getSetCookie`, shaped like
+    // `{"<cookie-name>":{"value":"<token>.<sig>","expires":"<ISO8601>"|null}}`.
+    // These mirror that library's own `getCookie` (dist/client.js) so the
+    // widget sends the same header the app's own better-auth client would.
+
+    func testValidJarProducesCookieHeader() {
+        let jar = """
+        {"better-auth.session_token":{"value":"tok.sig","expires":"2999-01-01T00:00:00.000Z"}}
+        """
+        XCTAssertEqual(
+            SessionStore.parseCookieHeader(fromJarJSON: jar),
+            "better-auth.session_token=tok.sig"
+        )
+    }
+
+    func testJarWithOnlyExpiredCookiesReturnsNil() {
+        let jar = """
+        {"better-auth.session_token":{"value":"tok.sig","expires":"2000-01-01T00:00:00.000Z"}}
+        """
+        XCTAssertNil(SessionStore.parseCookieHeader(fromJarJSON: jar))
+    }
+
+    /// @better-auth/expo's `clearSessionCache` (run on sign-out) overwrites
+    /// the stored jar with the literal string `"{}"` rather than deleting
+    /// the Keychain item. A naive port that treated any non-nil Keychain
+    /// value as a valid session would read this as authenticated forever
+    /// after a sign-out — this must produce no Cookie header at all.
+    func testEmptyJarObjectReturnsNil() {
+        XCTAssertNil(SessionStore.parseCookieHeader(fromJarJSON: "{}"))
+    }
+
+    func testMalformedJSONReturnsNil() {
+        XCTAssertNil(SessionStore.parseCookieHeader(fromJarJSON: "not json"))
+    }
+
+    /// The cookie name differs by scheme (`better-auth.session_token` over
+    /// http, `__Secure-better-auth.session_token` over https) and the
+    /// backend accepts either, so every non-expired entry must be emitted,
+    /// not just one.
+    func testMultiCookieJarEmitsAllNonExpiredPairsSortedByName() {
+        let jar = """
+        {
+          "__Secure-better-auth.session_token": {"value": "secure-tok", "expires": "2999-01-01T00:00:00.000Z"},
+          "better-auth.session_token": {"value": "plain-tok", "expires": null},
+          "better-auth.dropped": {"value": "old", "expires": "2000-01-01T00:00:00.000Z"}
+        }
+        """
+        XCTAssertEqual(
+            SessionStore.parseCookieHeader(fromJarJSON: jar),
+            "__Secure-better-auth.session_token=secure-tok; better-auth.session_token=plain-tok"
+        )
+    }
+
+    func testChunkedJarReassemblesThenParsesAsAValidSession() {
+        let jar = """
+        {"better-auth.session_token":{"value":"tok.sig","expires":null}}
+        """
+        let parts = [String(jar.prefix(20)), String(jar.dropFirst(20))]
+        let reassembled = SessionStore.assemble(marker: "ba-chunks:2") { parts[$0] }
+        XCTAssertEqual(
+            SessionStore.parseCookieHeader(fromJarJSON: reassembled ?? ""),
+            "better-auth.session_token=tok.sig"
+        )
+    }
+
     // MARK: - readKeychain round trip
     //
     // These write real items into the process's default Keychain with

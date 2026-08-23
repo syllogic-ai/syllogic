@@ -8,7 +8,9 @@ module.exports = {
     "keychain-access-groups": ["$(AppIdentifierPrefix)ai.syllogic.mobile"],
   },
   deploymentTarget: "17.0",
-  infoPlist: {
-    SyllogicAPIBaseURL: process.env.EXPO_PUBLIC_API_URL || "http://localhost:8000",
-  },
+  // NOTE: @bacons/apple-targets' Config type has no `infoPlist` key (see
+  // node_modules/@bacons/apple-targets/build/config.d.ts) -- an `infoPlist`
+  // block here would be silently discarded, not applied. SyllogicAPIBaseURL
+  // lives directly in the committed `widget/Info.plist` instead; see the
+  // comment there for why and how to change it.
 };
