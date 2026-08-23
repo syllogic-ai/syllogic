@@ -48,6 +48,22 @@ def _should_skip_sync(connection) -> bool:
     return False
 
 
+BALANCE_TYPE_PRIORITY = ("CLAV", "ITAV", "XPCD", "CLBD", "PRCD", "OTHR")
+
+
+def _choose_balance(balances: list) -> dict | None:
+    """Pick the balance entry to anchor on, by ISO 20022 type priority.
+
+    Pure so it is unit-testable without a database. Falls back to the first
+    returned entry when no known type matches (bank-specific type strings).
+    """
+    for pref in BALANCE_TYPE_PRIORITY:
+        for bal in balances:
+            if bal.get("balance_type", "").upper() == pref:
+                return bal
+    return balances[0] if balances else None
+
+
 def _account_sync_start_date(account, connection) -> "date":
     """Return the start date for syncing a single account.
 
@@ -208,26 +224,29 @@ def sync_bank_connection(self, connection_id: str):
             # Fetch and update balances.
             # Priority order of ISO 20022 balance types:
             #   CLAV/ITAV = (interim) available — most accurate "what you can spend"
-            #   CLBD      = closing booked — authoritative, excludes pending
-            #   XPCD      = expected — booked + pending
+            #   XPCD      = expected — booked + pending; closest proxy for
+            #               "available" when the bank returns no CLAV/ITAV
+            #   CLBD      = closing booked — authoritative but EXCLUDES pending,
+            #               so it lags the bank app's headline number by days
+            #               (weekends especially) while card payments book
             #   PRCD      = previously closed booked
             #   OTHR      = bank-defined fallback
-            # ABN AMRO via Enable Banking does not return CLAV/ITAV, so fall through
-            # the priority list and finally pick the first returned balance.
+            # ABN AMRO via Enable Banking returns no CLAV/ITAV. Anchoring to
+            # CLBD made the shown balance sit ~pending-amount above the bank
+            # app until transactions booked; XPCD is preferred so the balance
+            # matches what the user's banking app shows. Trade-off: the shown
+            # balance then includes pending transactions that are not yet in
+            # the transaction list — the list catches up when they book.
             try:
                 balance_data = adapter.fetch_balances(account_uid)
                 balances = balance_data.get("balances", [])
-                priority = ("CLAV", "ITAV", "CLBD", "XPCD", "PRCD", "OTHR")
-                chosen = None
-                for pref in priority:
-                    for bal in balances:
-                        if bal.get("balance_type", "").upper() == pref:
-                            chosen = bal
-                            break
-                    if chosen:
-                        break
-                if chosen is None and balances:
-                    chosen = balances[0]
+                chosen = _choose_balance(balances)
+                logger.info(
+                    "Balance anchor for account %s: chose type=%s from returned types=%s",
+                    account.id,
+                    (chosen or {}).get("balance_type"),
+                    [b.get("balance_type") for b in balances],
+                )
                 if chosen is not None:
                     account.balance_available = chosen["balance_amount"]["amount"]
                     account.balance_is_anchored = True
