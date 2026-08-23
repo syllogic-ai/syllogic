@@ -4,12 +4,14 @@ import { Pressable, StyleSheet } from 'react-native';
 import { authClient } from '@/auth/client';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { reloadWidgets } from '../../../modules/widget-reload';
 
 export default function SettingsScreen() {
   const { data: session } = authClient.useSession();
 
   async function handleLogout() {
     await authClient.signOut();
+    reloadWidgets();
     router.replace('/login');
   }
 

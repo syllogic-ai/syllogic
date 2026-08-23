@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { authClient } from '@/auth/client';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { reloadWidgets } from '../../modules/widget-reload';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -21,6 +22,7 @@ export default function LoginScreen() {
       setError(signInError.message ?? 'Could not sign in. Check your email and password.');
       return;
     }
+    reloadWidgets();
     router.replace('/(tabs)');
   }
 
