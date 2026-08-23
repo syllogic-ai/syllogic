@@ -237,6 +237,7 @@ def sync_bank_connection(self, connection_id: str):
             # matches what the user's banking app shows. Trade-off: the shown
             # balance then includes pending transactions that are not yet in
             # the transaction list — the list catches up when they book.
+            fresh_balance_fetched = False
             try:
                 balance_data = adapter.fetch_balances(account_uid)
                 balances = balance_data.get("balances", [])
@@ -250,6 +251,7 @@ def sync_bank_connection(self, connection_id: str):
                 if chosen is not None:
                     account.balance_available = chosen["balance_amount"]["amount"]
                     account.balance_is_anchored = True
+                    fresh_balance_fetched = True
                 else:
                     logger.warning(
                         f"No balances returned by Enable Banking for account {account.id}"
@@ -287,7 +289,12 @@ def sync_bank_connection(self, connection_id: str):
 
             # Anchor balance: back-calculate starting_balance so functional_balance = balance_available.
             # This fixes the displayed balance for accounts that only have partial history imported.
-            if account.balance_is_anchored and account.balance_available is not None:
+            # Gate on THIS run having fetched a balance: when two syncs overlap and the
+            # loser's balance fetch fails (Enable Banking rate-limits back-to-back calls),
+            # its session still holds the pre-sync balance_available, and anchoring to
+            # that stale value clobbers the winner's freshly-anchored starting_balance /
+            # functional_balance on commit (observed in prod, 2026-08-23).
+            if fresh_balance_fetched and account.balance_available is not None:
                 from sqlalchemy import func as _sa_func2
                 from app.models import Transaction
                 _txn_sum_result = db.query(_sa_func2.sum(Transaction.amount)).filter(
