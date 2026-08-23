@@ -31,8 +31,10 @@ enum Monogram {
         return Int(hash % UInt64(Theme.grayRamp.count))
     }
 
-    /// Square monogram background: a step on the web chart-gray ramp,
-    /// scheme-invariant (the ramp is the same in light and dark).
+    /// Square monogram background: a step on the web chart-gray ramp. The
+    /// web inverts its chart ramp in dark mode; here we deliberately pin
+    /// the LIGHT ramp for both schemes, because `initialsColor` below flips
+    /// the initials' foreground/background instead of the ramp itself.
     static func backgroundColor(for id: String) -> Color {
         Theme.grayRampColor(paletteIndex(for: id))
     }

@@ -29,6 +29,8 @@ struct LogoSquare: View {
                     Text(Monogram.initials(for: row.name))
                         .font(Theme.font(size: size * 0.36, weight: .bold))
                         .foregroundStyle(Monogram.initialsColor(for: row.id))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
                 )
         }
     }
@@ -88,7 +90,10 @@ struct HeroBlock: View {
     let dark: Bool
 
     private var label: String {
-        if let inst = row.institution, !inst.isEmpty { return "\(row.name) · \(inst)" }
+        if let inst = row.institution {
+            let trimmed = inst.trimmingCharacters(in: .whitespaces)
+            if !trimmed.isEmpty { return "\(row.name) · \(trimmed)" }
+        }
         return row.name
     }
 
@@ -132,12 +137,16 @@ struct LargeRow: View {
                     .font(Theme.font(size: 12, weight: .medium))
                     .foregroundStyle(Theme.color(.foreground, dark: dark))
                     .lineLimit(1)
-                if let type = row.accountType, !type.isEmpty {
-                    MicroLabel(text: type, dark: dark)
+                if let type = row.accountType {
+                    let trimmed = type.trimmingCharacters(in: .whitespaces)
+                    if !trimmed.isEmpty {
+                        MicroLabel(text: trimmed.replacingOccurrences(of: "_", with: " "), dark: dark)
+                    }
                 }
             }
             Spacer(minLength: 6)
             BalanceText(row: row, size: 15, dark: dark)
+                .layoutPriority(1)
         }
     }
 }

@@ -52,12 +52,17 @@ enum Theme {
         .regular: "JetBrainsMono-Regular", .medium: "JetBrainsMono-Medium", .bold: "JetBrainsMono-Bold",
     ]
 
-    /// Custom face with a monospaced-system fallback: a packaging failure
-    /// degrades to SF Mono, never to the default sans.
+    /// Custom face, fixed size (no Dynamic Type scaling) so it always agrees
+    /// with the fixed frames (logo squares, hairlines) it sits alongside.
+    /// The `guard` below is unreachable in practice — `jetBrainsMonoNames`
+    /// is a total map over `Weight` — so it is not a real fallback path:
+    /// if the font failed to package, `Font.custom` with an unregistered
+    /// name degrades to the system SANS, not SF Mono. The device
+    /// checklist's digit-shape check is the real net that catches that.
     static func font(size: CGFloat, weight: Weight) -> Font {
         guard let name = jetBrainsMonoNames[weight] else {
             return .system(size: size, design: .monospaced)
         }
-        return Font.custom(name, size: size)
+        return Font.custom(name, fixedSize: size)
     }
 }
