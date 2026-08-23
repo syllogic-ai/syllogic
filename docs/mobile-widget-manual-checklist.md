@@ -29,6 +29,27 @@ input.
       and the widget shows "Tap to sign in" forever with nothing on screen
       explaining why.
 
+## Pointing at production
+
+FastAPI is not publicly reachable. Coolify exposes only `app.syllogic.ai` and
+`mcp.syllogic.ai`; the backend is an internal Docker address
+(`BACKEND_URL=http://backend:8000`). Both the app and the widget therefore talk
+to the **Next.js origin**, whose catch-all at
+`frontend/app/api/[...path]/route.ts` authenticates the session cookie and
+re-signs the request with HMAC internal-auth headers before forwarding.
+
+- [ ] Export BOTH variables before prebuilding — the widget bakes its URL into
+      Info.plist at prebuild time, so setting them only for the JS build leaves
+      the app on production and the widget on localhost:
+
+      export EXPO_PUBLIC_AUTH_URL=https://app.syllogic.ai
+      export EXPO_PUBLIC_API_URL=https://app.syllogic.ai
+
+- [ ] Confirm the value actually landed:
+      `/usr/libexec/PlistBuddy -c "Print :SyllogicAPIBaseURL" mobile/targets/widget/Info.plist`
+- [ ] https is required: the widget's ATS config only permits local networking,
+      so a cleartext http production host would be blocked inside the extension.
+
 ## Setup
 
 - [ ] `cd mobile && LANG=en_US.UTF-8 npx expo prebuild --clean`
