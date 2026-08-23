@@ -10,12 +10,24 @@ input.
 
 - [ ] **Set `expo.ios.appleTeamId` in `mobile/app.json`** and replace
       `REPLACE_WITH_YOUR_APPLE_TEAM_ID` in `eas.json`.
-      Everything below is untrustworthy without it. The Keychain access group
-      is `$(AppIdentifierPrefix)ai.syllogic.mobile`, and `AppIdentifierPrefix`
-      resolves from the team ID. Simulator builds paper over this because the
-      simulator keychain is permissive; on device the group will not resolve,
-      `SessionStore.cookie()` returns nil, and the widget shows "Tap to sign in"
-      forever with nothing on screen explaining why.
+      Everything below is untrustworthy without it — a device build needs a
+      real team ID to be signed and provisioned at all. Neither
+      `SessionStore.readKeychain` (widget) nor `sharedSecureStore` (app) ever
+      passes an explicit `kSecAttrAccessGroup`/`accessGroup`: reads search
+      every access group the process is entitled to, and writes fall back to
+      the first `keychain-access-groups` entry, which is the shared
+      `$(AppIdentifierPrefix)ai.syllogic.mobile` group either way, so there is
+      no access-group *string* to get wrong on either side. What actually
+      differs on a real device is entitlement *enforcement*: the WRITE side
+      (`SecItemAdd` in `sharedSecureStore.setItem`) only lands in the shared
+      group if the process is properly signed and provisioned with that
+      keychain-access-groups entitlement — which requires a real team ID —
+      whereas the Simulator does not enforce this and lets an improperly
+      provisioned write through anyway. If provisioning is wrong, the app's
+      write silently lands somewhere the widget's read (which just searches
+      all entitled groups) can't see, `SessionStore.cookie()` returns nil,
+      and the widget shows "Tap to sign in" forever with nothing on screen
+      explaining why.
 
 ## Setup
 

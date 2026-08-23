@@ -112,13 +112,13 @@ final class SessionStoreTests: XCTestCase {
     // through `SessionStore.readKeychain`/`SessionStore.assemble`, the same
     // path `SessionStore.cookie()` uses.
     //
-    // `accessGroup: nil` is required here: `swift test` runs as a plain,
-    // unsigned process with no keychain-access-groups entitlement, so any
-    // query carrying `ai.syllogic.mobile` (the production access group) fails
-    // with errSecMissingEntitlement/errSecNoAccessForItem before it ever gets
-    // to matching. Every item this file adds is also written with no access
-    // group, so writer and reader agree. Production code always uses the
-    // default (`SessionStore.accessGroup`) — only these tests override it.
+    // Neither the items added here nor `SessionStore.readKeychain` specify
+    // `kSecAttrAccessGroup` — production code never does either (see
+    // `SessionStore`'s top-of-type doc comment for why), so there is no
+    // access-group mismatch to worry about here: `swift test` runs as a
+    // plain, unsigned process with no keychain-access-groups entitlement,
+    // and every query in this file, exactly like production, just searches
+    // whatever default group that process has.
 
     private func addKeychainItem(key: String, value: String) {
         let encodedKey = Data(key.utf8)
@@ -151,12 +151,31 @@ final class SessionStoreTests: XCTestCase {
         addKeychainItem(key: key, value: "syllogic.session=abc123")
         defer { deleteKeychainItem(key: key) }
 
-        XCTAssertEqual(SessionStore.readKeychain(key: key, accessGroup: nil), "syllogic.session=abc123")
+        XCTAssertEqual(SessionStore.readKeychain(key: key), "syllogic.session=abc123")
     }
 
     func testReadKeychainReturnsNilWhenItemIsAbsent() {
         let key = "widget-core-tests.missing.\(UUID().uuidString)"
-        XCTAssertNil(SessionStore.readKeychain(key: key, accessGroup: nil))
+        XCTAssertNil(SessionStore.readKeychain(key: key))
+    }
+
+    /// Every other test in this file exercises `parseCookieHeader` directly,
+    /// never `SessionStore.cookie()` itself — so a regression that stopped
+    /// `cookie()` from calling into `assemble`/`parseCookieHeader` at all
+    /// (e.g. returning the raw Keychain value, or always `nil`) would pass
+    /// every other test here. This writes a real jar into the Keychain under
+    /// `SessionStore.cookieKey` — the exact key `cookie()` reads — using the
+    /// same expo-secure-store attribute scheme as the round-trip tests
+    /// above, then asserts `cookie()` returns the parsed `name=value` header,
+    /// not the untouched JSON jar.
+    func testCookieReturnsTheParsedHeaderNotTheRawJar() {
+        let jar = """
+        {"better-auth.session_token":{"value":"tok.sig","expires":null}}
+        """
+        addKeychainItem(key: SessionStore.cookieKey, value: jar)
+        defer { deleteKeychainItem(key: SessionStore.cookieKey) }
+
+        XCTAssertEqual(SessionStore.cookie(), "better-auth.session_token=tok.sig")
     }
 
     /// macOS's Keychain (the one `swift test` runs against — a plain, unsigned
@@ -191,13 +210,13 @@ final class SessionStoreTests: XCTestCase {
         defer { deleteKeychainItem(key: currentlyStored) }
 
         let result = SessionStore.assemble(
-            marker: SessionStore.readKeychain(key: cookieKey, accessGroup: nil)
+            marker: SessionStore.readKeychain(key: cookieKey)
         ) { index in
             deleteKeychainItem(key: currentlyStored)
             let chunkKey = "\(cookieKey).\(index)"
             addKeychainItem(key: chunkKey, value: chunks[index])
             currentlyStored = chunkKey
-            return SessionStore.readKeychain(key: chunkKey, accessGroup: nil)
+            return SessionStore.readKeychain(key: chunkKey)
         }
 
         XCTAssertEqual(result, "first-chunk-second-chunk-third-chunk")

@@ -15,23 +15,47 @@
       @bacons/apple-targets' Config type has no `infoPlist` key (see
       node_modules/@bacons/apple-targets/build/config.d.ts) -- an
       `infoPlist` block in expo-target.config.js is silently discarded,
-      not applied. This value must instead live directly in this
-      committed Info.plist, because the plugin only writes a *default*
-      Info.plist when this file is absent; a committed one is left
-      untouched by `expo prebuild --clean`.
+      not applied. Instead, `mobile/plugins/with-widget-api-url.js`
+      (registered in mobile/app.json's `plugins` array, after
+      @bacons/apple-targets) rewrites the <string> value below in place at
+      every `expo prebuild`, sourced from `process.env.EXPO_PUBLIC_API_URL`
+      -- the same env var `mobile/src/config.ts` reads for the app's own
+      API_URL -- falling back to this committed `http://localhost:8000`
+      when that env var is unset, so a plain `expo prebuild` with no env
+      configured still produces a working (if localhost-pointed) build.
 
-      IMPORTANT: this value is baked in at `expo prebuild` time. The React
-      Native app itself reads EXPO_PUBLIC_API_URL at JS *bundle* time
-      (see mobile/src/config.ts), which is a completely different step.
-      That means `expo prebuild` (without EXPO_PUBLIC_API_URL set) followed
-      by an app build *with* it set produces an app that talks to
-      production while its widget extension keeps talking to whatever is
-      hardcoded below (localhost by default). To point the widget at a
-      different backend, edit this literal string and re-run
-      `expo prebuild --clean` -- setting the env var alone does nothing
-      here.
+      IMPORTANT: this value is baked in at `expo prebuild` time, same as
+      the app's own EXPO_PUBLIC_API_URL is baked in at JS *bundle* time
+      (see mobile/src/config.ts) -- both now read the same env var, but as
+      two separate build steps. Set EXPO_PUBLIC_API_URL before running
+      `expo prebuild --clean` (not just before the JS bundle step) or the
+      widget extension will keep talking to whatever this literal string
+      last resolved to.
+
+      Because the plugin rewrites this committed file on every prebuild,
+      `git diff` after running `expo prebuild` may show this string
+      changed -- that's expected. Run one more `expo prebuild` with
+      EXPO_PUBLIC_API_URL unset (or pointed back at the right backend) to
+      restore it if that's not desired in the working tree.
     -->
     <key>SyllogicAPIBaseURL</key>
     <string>http://localhost:8000</string>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+      <!--
+        Mirrors the app target's NSAllowsLocalNetworking (see the
+        generated Info.plist produced from mobile/app.json's
+        ios.infoPlist / ATS defaults). The widget extension has its own
+        Info.plist and inherits none of the app's ATS configuration, so
+        without this, default ATS blocks cleartext http requests --
+        including the committed `http://localhost:8000` above and any
+        http LAN dev URL -- and the widget silently never shows a
+        balance. Deliberately NOT NSAllowsArbitraryLoads: that would
+        allow arbitrary cleartext loads to ANY host, not just
+        local/LAN ones.
+      -->
+      <key>NSAllowsLocalNetworking</key>
+      <true/>
+    </dict>
   </dict>
 </plist>

@@ -59,7 +59,8 @@
           "imageWidth": 76
         }
       ],
-      "@bacons/apple-targets"
+      "@bacons/apple-targets",
+      "./plugins/with-widget-api-url.js"
     ],
     "experiments": {
       "typedRoutes": true,

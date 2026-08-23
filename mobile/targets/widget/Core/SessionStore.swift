@@ -5,80 +5,34 @@ import Security
 /// format, including its chunking scheme for values over 1800 characters and
 /// its JSON cookie-jar shape (see `cookie()`/`parseCookieHeader` below).
 enum SessionStore {
-    /// The keychain-access-groups entitlement (see `expo-target.config.js`
-    /// and the generated `mobile/ios` entitlements) declares
-    /// `$(AppIdentifierPrefix)ai.syllogic.mobile`. Xcode expands
-    /// `$(AppIdentifierPrefix)` to `<TeamID>.` only at signing time — neither
-    /// `SecItemAdd`/`SecItemCopyMatching` nor expo-secure-store performs that
-    /// expansion for us, so `kSecAttrAccessGroup` at runtime must be the
-    /// fully-expanded string. `accessGroupPrefix()` below resolves
-    /// `<TeamID>.` at runtime (the standard throwaway-keychain-item trick)
-    /// instead of hardcoding a team ID, since none is configured yet
-    /// (`expo.ios.appleTeamId` is unset in `mobile/app.json`). The
-    /// TypeScript half of this — reading
-    /// `Constants.expoConfig?.ios?.appleTeamId` and building the same
-    /// string, or omitting `accessGroup` entirely when that's absent — lives
-    /// in `mobile/src/auth/shared-secure-store.ts`. Both sides must resolve
-    /// to the same fully-expanded group once a team ID exists, or the app
-    /// and the widget will read/write different keychain access groups and
-    /// neither will see the other's session.
-    static var accessGroup: String? {
-        guard let prefix = accessGroupPrefix() else { return nil }
-        return "\(prefix)ai.syllogic.mobile"
-    }
-
-    /// Cached per-process. `nil` (the outer Optional) means "not resolved
-    /// yet"; `.some(nil)` (a present value wrapping a nil String) means
-    /// "resolution ran and failed", so a failed resolution isn't retried on
-    /// every keychain read.
-    private static var cachedAccessGroupPrefix: String??
-
-    /// Adds (or finds) a throwaway generic-password item with no explicit
-    /// `kSecAttrAccessGroup`, then reads back the access group the Keychain
-    /// assigned it — which, when the process holds a keychain-access-groups
-    /// entitlement, is `<TeamID>.<first-declared-group>`. Only the
-    /// `<TeamID>.` prefix is needed, so this works even though the probe
-    /// item's own suffix doesn't match our real group. Resolves to `nil`
-    /// (meaning: pass no access group) when there is no entitlement at all —
-    /// unsigned `swift test` runs, and per Apple's docs the iOS Simulator's
-    /// keychain, which does not enforce access groups.
-    private static func accessGroupPrefix() -> String? {
-        if let cached = cachedAccessGroupPrefix { return cached }
-
-        let probeAccount = "ai.syllogic.mobile.access-group-probe"
-        let probeService = "ai.syllogic.mobile.access-group-probe"
-        let baseQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: probeService,
-            kSecAttrAccount as String: probeAccount,
-        ]
-
-        var lookupQuery = baseQuery
-        lookupQuery[kSecReturnAttributes as String] = true
-        var item: CFTypeRef?
-        var status = SecItemCopyMatching(lookupQuery as CFDictionary, &item)
-
-        if status == errSecItemNotFound {
-            var addQuery = baseQuery
-            addQuery[kSecValueData as String] = Data()
-            addQuery[kSecReturnAttributes as String] = true
-            status = SecItemAdd(addQuery as CFDictionary, &item)
-        }
-
-        guard status == errSecSuccess,
-              let attributes = item as? [String: Any],
-              let group = attributes[kSecAttrAccessGroup as String] as? String,
-              let dotIndex = group.firstIndex(of: ".")
-        else {
-            cachedAccessGroupPrefix = .some(nil)
-            return nil
-        }
-
-        let prefix = String(group[...dotIndex]) // includes the trailing "."
-        cachedAccessGroupPrefix = .some(prefix)
-        return prefix
-    }
-
+    /// Reads (`readKeychain`, below) deliberately never specify
+    /// `kSecAttrAccessGroup`. `SecItemCopyMatching` without that attribute
+    /// searches every access group the process is entitled to — which
+    /// includes the shared `$(AppIdentifierPrefix)ai.syllogic.mobile` group
+    /// both the app and widget declare under `keychain-access-groups` — so
+    /// there is nothing to resolve at read time, and specifying one only
+    /// creates a way to get it wrong.
+    ///
+    /// `$(AppIdentifierPrefix)` is expanded by Xcode at signing time, not by
+    /// `SecItemAdd`/`SecItemCopyMatching` or expo-secure-store, so any
+    /// runtime-constructed access-group string risks not matching the
+    /// entitlement's real expansion. A previous version of this file
+    /// "resolved" a team-ID prefix at runtime via a throwaway-keychain-item
+    /// probe and built `<prefix>ai.syllogic.mobile` from it; with no team ID
+    /// configured (`expo.ios.appleTeamId` is unset in `mobile/app.json`),
+    /// `$(AppIdentifierPrefix)` expands to nothing, the real entitlement is
+    /// the bare `ai.syllogic.mobile`, and that probe instead produced
+    /// `ai.ai.syllogic.mobile` — a group the process was never entitled to —
+    /// so every read silently matched nothing and the widget was permanently
+    /// stuck on "Tap to sign in". Do not reintroduce an access group on the
+    /// read side.
+    ///
+    /// The *write* side is different and is handled separately:
+    /// `SecItemAdd` without an access group falls back to the first entry in
+    /// `keychain-access-groups`, which is also the shared group, so
+    /// `mobile/src/auth/shared-secure-store.ts` omitting `accessGroup` when
+    /// `appleTeamId` is unset is correct by construction — see that file's
+    /// comment for the full reasoning.
     static let cookieKey = "syllogic_cookie"
 
     /// expo-secure-store's iOS module builds `kSecAttrService` as
@@ -202,16 +156,18 @@ enum SessionStore {
         return withoutFraction.date(from: text)
     }
 
-    /// `accessGroup` is injectable (defaulting to the production `SessionStore.accessGroup`)
-    /// purely so tests can pass `nil`: `swift test` runs as a plain process with no
-    /// keychain-access-groups entitlement, and any query carrying an access group fails
-    /// with `errSecMissingEntitlement` there. Production call sites never override this.
-    static func readKeychain(key: String, accessGroup: String? = SessionStore.accessGroup) -> String? {
+    /// No `kSecAttrAccessGroup` is set here — see the doc comment at the top
+    /// of this type for why: omitting it makes `SecItemCopyMatching` search
+    /// every access group the process is entitled to, which is exactly what
+    /// both production (the shared app/widget group) and `swift test`
+    /// (no keychain-access-groups entitlement at all, so there is nothing to
+    /// search but the default group) need.
+    static func readKeychain(key: String) -> String? {
         // Matches expo-secure-store's `query(with:options:requireAuthentication:)` exactly:
         // both the account and the generic attribute are the UTF-8 bytes of the storage
         // key (not the key as a CFString) — see the `Data(key.utf8)` encoding there.
         let encodedKey = Data(key.utf8)
-        var query: [String: Any] = [
+        let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: keychainService,
             kSecAttrAccount as String: encodedKey,
@@ -219,9 +175,6 @@ enum SessionStore {
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
-        if let accessGroup {
-            query[kSecAttrAccessGroup as String] = accessGroup
-        }
 
         var item: CFTypeRef?
         guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
