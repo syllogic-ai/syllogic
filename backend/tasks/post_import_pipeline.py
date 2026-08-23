@@ -307,19 +307,46 @@ def _run_post_import_pipeline(
             is_initial_sync,
         )
 
+        # Steps are isolated: one failing step must not stop the ones after it.
+        # Before this, a failing LLM categorization (step 4) aborted the whole
+        # pipeline, so balances (step 5) were never recalculated and account
+        # functional_balance froze at its pre-import value until a human
+        # intervened. Every step is idempotent, so the task still re-raises at
+        # the end to keep Celery's retry semantics for the failed steps.
+        failed_steps: List[str] = []
+
+        def _step(name: str, fn) -> None:
+            try:
+                fn()
+            except Exception as e:
+                # A failed flush poisons the session; roll back so later
+                # steps can still query and commit.
+                db.rollback()
+                logger.error(
+                    "[POST_IMPORT_PIPELINE] Step %s failed for user=%s: %s",
+                    name, user_id, e, exc_info=True,
+                )
+                failed_steps.append(name)
+
         # Step 1: FX rate sync
-        _sync_exchange_rates(db, user_id, transaction_ids)
+        _step("fx_rates", lambda: _sync_exchange_rates(db, user_id, transaction_ids))
 
         # Step 2: Functional amount calculation
-        _update_functional_amounts(db, user_id, transaction_ids)
+        _step("functional_amounts", lambda: _update_functional_amounts(db, user_id, transaction_ids))
 
         # Step 3: Internal transfer detection (must run before LLM categorization)
-        detection = _detect_internal_transfers(db, user_id, transaction_ids)
-        logger.info(
-            "[POST_IMPORT_PIPELINE] Internal transfers detected: %d (touched %d pocket(s))",
-            detection["detected"],
-            len(detection["pocket_account_ids"]),
-        )
+        detection = {"detected": 0, "pocket_account_ids": []}
+
+        def _run_detection():
+            nonlocal detection
+            detection = _detect_internal_transfers(db, user_id, transaction_ids)
+            logger.info(
+                "[POST_IMPORT_PIPELINE] Internal transfers detected: %d (touched %d pocket(s))",
+                detection["detected"],
+                len(detection["pocket_account_ids"]),
+            )
+
+        _step("internal_transfers", _run_detection)
 
         # Mirror transactions created in step 3 live on the pocket account; if
         # that pocket isn't in the sync's original account_ids scope, its
@@ -329,18 +356,23 @@ def _run_post_import_pipeline(
         recalc_account_ids = list({*account_ids, *touched_pocket_ids})
 
         # Step 4: Batch AI categorization (overwrites wrong system categories; preserves user overrides)
-        _batch_categorize_transactions(db, user_id, transaction_ids)
+        _step("categorization", lambda: _batch_categorize_transactions(db, user_id, transaction_ids))
 
         # Step 5: Balance calculation
-        _calculate_balances(db, user_id, recalc_account_ids)
+        _step("balances", lambda: _calculate_balances(db, user_id, recalc_account_ids))
 
         # Step 6: Balance timeseries
-        _calculate_timeseries(db, user_id, recalc_account_ids)
+        _step("timeseries", lambda: _calculate_timeseries(db, user_id, recalc_account_ids))
 
         # Step 7: Subscription detection
         # For initial sync, pass None so the detector scans ALL user transactions
         effective_txn_ids = None if is_initial_sync else transaction_ids
-        _detect_subscriptions(db, user_id, effective_txn_ids, account_ids)
+        _step("subscriptions", lambda: _detect_subscriptions(db, user_id, effective_txn_ids, account_ids))
+
+        if failed_steps:
+            raise RuntimeError(
+                f"post-import pipeline steps failed: {', '.join(failed_steps)}"
+            )
 
         logger.info("[POST_IMPORT_PIPELINE] Completed for user=%s", user_id)
 

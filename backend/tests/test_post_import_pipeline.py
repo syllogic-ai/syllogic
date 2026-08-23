@@ -553,3 +553,87 @@ if __name__ == "__main__":
             all_passed = False
 
     sys.exit(0 if all_passed else 1)
+
+
+def test_pipeline_step_failure_does_not_block_balance_calculation():
+    """A failing categorization step (e.g. LLM outage) must not stop the
+    balance recalculation that runs after it — that freeze left account
+    functional_balance stale in prod. The pipeline still re-raises at the
+    end so Celery retries the failed step."""
+    print("Running test_pipeline_step_failure_does_not_block_balance_calculation...")
+
+    import pytest
+
+    with patch("tasks.post_import_pipeline.SessionLocal") as mock_session_local, \
+         patch("tasks.post_import_pipeline.set_request_user_id") as mock_set_user, \
+         patch("tasks.post_import_pipeline.clear_request_user_id"), \
+         patch("tasks.post_import_pipeline._sync_exchange_rates"), \
+         patch("tasks.post_import_pipeline._update_functional_amounts"), \
+         patch("tasks.post_import_pipeline._detect_internal_transfers") as mock_it, \
+         patch("tasks.post_import_pipeline._batch_categorize_transactions") as mock_cat, \
+         patch("tasks.post_import_pipeline._calculate_balances") as mock_balances, \
+         patch("tasks.post_import_pipeline._calculate_timeseries") as mock_timeseries, \
+         patch("tasks.post_import_pipeline._detect_subscriptions") as mock_subs:
+
+        mock_db = MagicMock()
+        mock_session_local.return_value = mock_db
+        mock_set_user.return_value = "test-token"
+        mock_it.return_value = {"detected": 0, "pocket_account_ids": []}
+        mock_cat.side_effect = RuntimeError("LLM API unavailable")
+
+        from tasks.post_import_pipeline import _run_post_import_pipeline
+
+        with pytest.raises(RuntimeError, match="categorization"):
+            _run_post_import_pipeline(
+                user_id="user-123",
+                account_ids=["acc-1"],
+                transaction_ids=["txn-1"],
+            )
+
+        # The steps after the failure still ran.
+        mock_balances.assert_called_once()
+        mock_timeseries.assert_called_once()
+        mock_subs.assert_called_once()
+        # The poisoned session was rolled back before continuing.
+        mock_db.rollback.assert_called()
+
+    print("PASSED")
+
+
+def test_pipeline_detection_failure_still_recalculates_original_accounts():
+    """If internal-transfer detection fails, balances are still recalculated
+    for the sync's original accounts (pocket extension degrades to empty)."""
+    print("Running test_pipeline_detection_failure_still_recalculates_original_accounts...")
+
+    import pytest
+
+    with patch("tasks.post_import_pipeline.SessionLocal") as mock_session_local, \
+         patch("tasks.post_import_pipeline.set_request_user_id") as mock_set_user, \
+         patch("tasks.post_import_pipeline.clear_request_user_id"), \
+         patch("tasks.post_import_pipeline._sync_exchange_rates"), \
+         patch("tasks.post_import_pipeline._update_functional_amounts"), \
+         patch("tasks.post_import_pipeline._detect_internal_transfers") as mock_it, \
+         patch("tasks.post_import_pipeline._batch_categorize_transactions"), \
+         patch("tasks.post_import_pipeline._calculate_balances") as mock_balances, \
+         patch("tasks.post_import_pipeline._calculate_timeseries"), \
+         patch("tasks.post_import_pipeline._detect_subscriptions"):
+
+        mock_db = MagicMock()
+        mock_session_local.return_value = mock_db
+        mock_set_user.return_value = "test-token"
+        mock_it.side_effect = RuntimeError("detector blew up")
+
+        from tasks.post_import_pipeline import _run_post_import_pipeline
+
+        with pytest.raises(RuntimeError, match="internal_transfers"):
+            _run_post_import_pipeline(
+                user_id="user-123",
+                account_ids=["acc-1", "acc-2"],
+                transaction_ids=["txn-1"],
+            )
+
+        args, kwargs = mock_balances.call_args
+        recalc_ids = args[2] if len(args) > 2 else kwargs.get("account_ids")
+        assert sorted(recalc_ids) == ["acc-1", "acc-2"]
+
+    print("PASSED")
