@@ -43,7 +43,8 @@ enum Theme {
     ]
 
     static func grayRampColor(_ index: Int) -> Color {
-        let c = grayRamp[index % grayRamp.count]
+        let count = grayRamp.count
+        let c = grayRamp[((index % count) + count) % count]
         return Color(red: c.r, green: c.g, blue: c.b)
     }
 

@@ -40,4 +40,9 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(Theme.jetBrainsMonoNames[.medium], "JetBrainsMono-Medium")
         XCTAssertEqual(Theme.jetBrainsMonoNames[.bold], "JetBrainsMono-Bold")
     }
+
+    func testGrayRampColorWrapsNegativeIndexWithoutTrapping() {
+        XCTAssertEqual(Theme.grayRampColor(-1), Theme.grayRampColor(4))
+        XCTAssertEqual(Theme.grayRampColor(-5), Theme.grayRampColor(0))
+    }
 }
