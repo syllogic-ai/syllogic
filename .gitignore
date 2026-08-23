@@ -83,3 +83,9 @@ marketing/
 deploy/railway/V1_TO_V2_MIGRATION.md
 
 .claude/scheduled_tasks.lock
+
+# Superpowers brainstorm scratch (specs live under docs/, already ignored)
+.superpowers/
+
+# SwiftPM build artifacts (mobile/targets WidgetCore package)
+.build/

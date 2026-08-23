@@ -1,0 +1,40 @@
+{
+  "cli": {
+    "version": ">= 21.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      }
+    },
+    "preview": {
+      "distribution": "store",
+      "channel": "preview",
+      "environment": "preview",
+      "autoIncrement": true,
+      "ios": {
+        "simulator": false,
+        "credentialsSource": "local"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "channel": "production"
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleTeamId": "PG99PS43ZX",
+        "ascAppId": "REPLACE_WITH_YOUR_APP_STORE_CONNECT_APP_ID",
+        "ascApiKeyPath": ".credentials/AuthKey.p8",
+        "ascApiKeyIssuerId": "REPLACE_WITH_YOUR_ASC_API_KEY_ISSUER_ID",
+        "ascApiKeyId": "REPLACE_WITH_YOUR_ASC_API_KEY_ID"
+      }
+    }
+  }
+}

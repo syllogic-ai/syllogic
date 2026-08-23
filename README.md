@@ -149,6 +149,27 @@ Optional auth throttling (recommended for public demos):
 |--------|----------|------|
 | CasaOS | Home lab / NAS users | [`deploy/casaos/`](deploy/casaos/README.md) |
 
+### How the reference instance is hosted
+
+The deployment configs in this repo — `deploy/railway/`, `deploy/compose/`,
+`deploy/casaos/` and the `railway.*.toml` files — describe **how you can host
+Syllogic**. They are the supported, documented paths, and the one-click Railway
+template is built from them.
+
+They do **not** describe how [app.syllogic.ai](https://app.syllogic.ai) is
+wired. That instance runs on [Coolify](https://coolify.io) on a single server,
+and it is itself a self-hosted deployment of this same code — it just happens to
+also serve the public demo login. Coolify is not listed above because it is not
+packaged as a template here; if you want it, the `deploy/compose/` stack is the
+closest starting point.
+
+One difference worth knowing if you are building a client against it: on that
+instance only the web app and the MCP endpoint are publicly reachable. The
+FastAPI service is private, and the web app proxies to it — so a mobile or
+third-party client authenticates against the web origin, not against the API
+directly. A self-hosted deployment can expose the API however it likes; nothing
+in the code requires this arrangement.
+
 ## Configuration
 
 | Variable | Description | Required |
