@@ -1,8 +1,8 @@
 Pod::Spec.new do |s|
   s.name           = 'WidgetReload'
   s.version        = '1.0.0'
-  s.summary        = 'A sample project summary'
-  s.description    = 'A sample project description'
+  s.summary        = 'Native bridge for requesting a WidgetKit timeline reload from the app.'
+  s.description    = 'Wraps WidgetCenter.shared.reloadAllTimelines() so the Expo app can ask iOS home screen widgets to refresh their data after sign-in and settings changes.'
   s.author         = ''
   s.homepage       = 'https://docs.expo.dev/modules/'
   s.platforms      = {
