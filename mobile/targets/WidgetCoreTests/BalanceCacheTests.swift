@@ -23,9 +23,9 @@ final class BalanceCacheTests: XCTestCase {
         let input = [
             AccountBalance(accountId: "a1", name: "Main Checking", balance: 7425.00,
                            currency: "EUR", accountType: "checking",
-                           logoUrl: "https://logo.example/ing.png"),
+                           logoUrl: "https://logo.example/ing.png", institution: "ING"),
             AccountBalance(accountId: "a2", name: "Savings Vault", balance: 18620.00,
-                           currency: "EUR", accountType: "savings", logoUrl: nil),
+                           currency: "EUR", accountType: "savings", logoUrl: nil, institution: nil),
         ]
 
         cache.save(input)
@@ -51,12 +51,13 @@ final class BalanceCacheTests: XCTestCase {
     func testDecodesBalanceAsJSONNumber() throws {
         let json = """
         [{"account_id":"a1","name":"Main Checking","balance":7425.0,
-          "currency":"EUR","account_type":"checking","logo_url":null}]
+          "currency":"EUR","account_type":"checking","logo_url":null,"institution":"ING"}]
         """.data(using: .utf8)!
 
         let decoded = try JSONDecoder().decode([AccountBalance].self, from: json)
 
         XCTAssertEqual(decoded.first?.balance, 7425.0)
         XCTAssertNil(decoded.first?.logoUrl)
+        XCTAssertEqual(decoded.first?.institution, "ING")
     }
 }

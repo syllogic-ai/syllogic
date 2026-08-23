@@ -19,7 +19,9 @@ enum RowBuilder {
                               name: balance.name,
                               balance: balance.balance,
                               currency: balance.currency,
-                              logoFileURL: logoURL(id))
+                              logoFileURL: logoURL(id),
+                              institution: balance.institution,
+                              accountType: balance.accountType)
         }
     }
 }

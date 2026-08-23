@@ -10,11 +10,11 @@ struct WidgetEntry: TimelineEntry {
         date: .now,
         rows: [
             AccountRow(id: "p1", name: "Main Checking", balance: 7425.00,
-                       currency: "EUR", logoFileURL: nil),
+                       currency: "EUR", logoFileURL: nil, institution: "ING", accountType: "checking"),
             AccountRow(id: "p2", name: "Savings Vault", balance: 18620.00,
-                       currency: "EUR", logoFileURL: nil),
+                       currency: "EUR", logoFileURL: nil, institution: "REVOLUT", accountType: "savings"),
             AccountRow(id: "p3", name: "Travel Card", balance: 1096.06,
-                       currency: "USD", logoFileURL: nil),
+                       currency: "USD", logoFileURL: nil, institution: nil, accountType: "credit"),
         ],
         state: .ready
     )

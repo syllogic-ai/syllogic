@@ -13,6 +13,7 @@ struct AccountBalance: Codable, Identifiable, Hashable {
     let currency: String
     let accountType: String
     let logoUrl: String?
+    let institution: String?
 
     var id: String { accountId }
 
@@ -23,5 +24,6 @@ struct AccountBalance: Codable, Identifiable, Hashable {
         case currency
         case accountType = "account_type"
         case logoUrl = "logo_url"
+        case institution
     }
 }

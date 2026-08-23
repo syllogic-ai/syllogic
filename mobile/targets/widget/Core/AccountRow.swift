@@ -12,4 +12,6 @@ struct AccountRow: Identifiable, Hashable {
     let balance: Double
     let currency: String
     let logoFileURL: URL?
+    let institution: String?
+    let accountType: String?
 }

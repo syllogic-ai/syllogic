@@ -4,7 +4,13 @@ import XCTest
 final class RowBuilderTests: XCTestCase {
     private func balance(_ id: String, _ name: String) -> AccountBalance {
         AccountBalance(accountId: id, name: name, balance: 100,
-                       currency: "EUR", accountType: "checking", logoUrl: nil)
+                       currency: "EUR", accountType: "checking", logoUrl: nil, institution: "ING")
+    }
+
+    func testMapsInstitutionAndAccountType() {
+        let rows = RowBuilder.rows(from: [balance("a1", "One")], selected: ["a1"]) { _ in nil }
+        XCTAssertEqual(rows.first?.institution, "ING")
+        XCTAssertEqual(rows.first?.accountType, "checking")
     }
 
     func testRendersAtMostThreeAccounts() {
