@@ -57,5 +57,19 @@
       <key>NSAllowsLocalNetworking</key>
       <true/>
     </dict>
+    <!--
+      The TTFs in ./Fonts land at the SyllogicWidget.appex bundle ROOT, not
+      under Fonts/, because @bacons/apple-targets' fileSystemSynchronizedGroup
+      flattens synchronized folders into the bundle rather than preserving
+      their on-disk subdirectory structure. Verified empirically in
+      DerivedData/.../SyllogicWidget.appex after a build -- so these entries
+      are bare filenames, not "Fonts/...".
+    -->
+    <key>UIAppFonts</key>
+    <array>
+      <string>JetBrainsMono-Regular.ttf</string>
+      <string>JetBrainsMono-Medium.ttf</string>
+      <string>JetBrainsMono-Bold.ttf</string>
+    </array>
   </dict>
 </plist>

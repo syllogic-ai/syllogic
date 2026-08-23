@@ -141,3 +141,19 @@ Open `mobile/targets/widget/SyllogicWidgetBundle.swift` and resume the canvas.
       `ls -d node_modules/.pnpm/expo-modules-core@* | sed 's|.*expo-modules-core@||' | cut -d_ -f1 | sort -u`
       Re-pin it in `mobile/package.json` whenever `expo` is upgraded — see
       `mobile/modules/widget-reload/README.md`.
+
+## Redesign (added 2026-08-23)
+
+- [ ] Digits render in JetBrains Mono, not SF Mono — compare the widget's `1`
+      and `0` glyph shapes against the web app. A silent font-registration
+      failure ships the fallback without any error.
+- [ ] Dark-mode pass: background near-black warm, hairlines faint, monograms
+      flip (dark initials on light squares and vice versa), dark bank logos
+      sit on a light plate and stay visible.
+- [ ] Large widget: hero + heavy rule + typed rows + SYLLOGIC foot; account
+      type labels correct; no timestamp anywhere.
+- [ ] States: bordered 401 chip on signed-out; — chip on no-selection.
+- [ ] A real bank-logo IMAGE renders square in dark mode on its light plate —
+      no preview exercises the image branch, only monograms; device-only check.
+- [ ] Toggle dark mode on-device and eyeball all three sizes — previews don't
+      pin a colour scheme, so dark is otherwise only seen via the canvas toggle.
