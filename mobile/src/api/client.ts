@@ -65,9 +65,17 @@ export const api = {
   getHoldings: () => request<HoldingWire[]>('/investments/holdings').then((h) => h.map(toHolding)),
   getPortfolioSummary: () =>
     request<PortfolioSummaryWire>('/investments/portfolio/summary').then(toPortfolioSummary),
-  listSavedViews: () => request<SavedView[]>('/saved-views'),
+  // The trailing slashes below are load-bearing. These backend routes are
+  // declared as `@router.get("/")` under the `/api/saved-views` prefix, so a
+  // request without the slash gets a 307 from FastAPI. That is harmless in
+  // local dev, where we talk to FastAPI directly and our session cookie
+  // survives the redirect — but in production we go through the Next.js proxy,
+  // which signs an HMAC bound to the exact path. Following the redirect
+  // changes the path, the signature no longer matches, and the request 401s.
+  // See docs/mobile-widget-manual-checklist.md.
+  listSavedViews: () => request<SavedView[]>('/saved-views/'),
   createSavedView: (name: string, filters: SavedViewFilters) =>
-    request<SavedView>('/saved-views', {
+    request<SavedView>('/saved-views/', {
       method: 'POST',
       body: JSON.stringify({ name, filters }),
     }),

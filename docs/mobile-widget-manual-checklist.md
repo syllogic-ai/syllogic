@@ -49,6 +49,13 @@ re-signs the request with HMAC internal-auth headers before forwarding.
       `/usr/libexec/PlistBuddy -c "Print :SyllogicAPIBaseURL" mobile/targets/widget/Info.plist`
 - [ ] https is required: the widget's ATS config only permits local networking,
       so a cleartext http production host would be blocked inside the extension.
+- [ ] Saved views load and can be created **on a production build specifically**.
+      These call trailing-slash paths (`/api/saved-views/`) on purpose: the
+      backend declares them as `@router.get("/")`, so without the slash FastAPI
+      issues a 307, and the proxy's HMAC signature is bound to the pre-redirect
+      path — it stops matching and the request 401s. This works in local dev
+      either way (a cookie survives a redirect, a path-bound signature does
+      not), so it can only be caught against the proxy.
 
 ## Setup
 
