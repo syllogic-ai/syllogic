@@ -24,11 +24,29 @@ export function SavedViewsBar({ accounts }: { accounts: AccountBalance[] }) {
       setName('');
       queryClient.invalidateQueries({ queryKey: ['saved-views'] });
     },
+    onError: (error) => {
+      const status = (error as { status?: number } | undefined)?.status;
+      Alert.alert(
+        'Could not save view',
+        status === 401
+          ? 'Your session has expired. Sign in again and try saving.'
+          : 'The view was not saved. Check your connection and try again.'
+      );
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.deleteSavedView(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['saved-views'] }),
+    onError: (error) => {
+      const status = (error as { status?: number } | undefined)?.status;
+      Alert.alert(
+        'Could not delete view',
+        status === 401
+          ? 'Your session has expired. Sign in again and try again.'
+          : 'The view was not deleted. Check your connection and try again.'
+      );
+    },
   });
 
   const hasActiveFilters =
