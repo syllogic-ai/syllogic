@@ -10,6 +10,7 @@
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "ai.syllogic.mobile",
+      "appleTeamId": "PG99PS43ZX",
       "supportsTablet": true,
       "entitlements": {
         "com.apple.security.application-groups": [

@@ -8,8 +8,17 @@ input.
 
 ## Blocking prerequisite
 
-- [ ] **Set `expo.ios.appleTeamId` in `mobile/app.json`** and replace
-      `REPLACE_WITH_YOUR_APPLE_TEAM_ID` in `eas.json`.
+- [x] ~~Set `expo.ios.appleTeamId` and the `eas.json` placeholder~~ — done,
+      team `PG99PS43ZX` (Ioannis Kotsakiachidis), read from the `OU` field of
+      the Apple Development certificate in the login keychain.
+- [ ] **Re-establish code signing.** The Team ID is set, but the machine has no
+      usable signing identity: `security find-identity -v -p codesigning`
+      reports 0, the Apple Development certificate expired 2023-04-05, its
+      private key is absent, and there are no provisioning profiles. Open Xcode
+      → Settings → Accounts, sign in, and let "Automatically manage signing"
+      issue a fresh certificate and profile — or let `eas build` manage
+      credentials remotely. Until this is done a device build cannot be signed,
+      regardless of the Team ID being correct.
       Everything below is untrustworthy without it — a device build needs a
       real team ID to be signed and provisioned at all. Neither
       `SessionStore.readKeychain` (widget) nor `sharedSecureStore` (app) ever

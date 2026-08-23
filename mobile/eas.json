@@ -29,7 +29,7 @@
   "submit": {
     "production": {
       "ios": {
-        "appleTeamId": "REPLACE_WITH_YOUR_APPLE_TEAM_ID",
+        "appleTeamId": "PG99PS43ZX",
         "ascAppId": "REPLACE_WITH_YOUR_APP_STORE_CONNECT_APP_ID",
         "ascApiKeyPath": ".credentials/AuthKey.p8",
         "ascApiKeyIssuerId": "REPLACE_WITH_YOUR_ASC_API_KEY_ISSUER_ID",
