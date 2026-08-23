@@ -40,7 +40,12 @@ struct BalanceProvider: AppIntentTimelineProvider {
             fetched = BalanceCache.shared.load()
         }
 
-        for balance in fetched where selected.contains(balance.accountId) {
+        // Only prefetch logos for accounts that will actually render: RowBuilder
+        // caps rendering at 3, but iOS lets users select more (AppIntents cannot
+        // cap an array parameter), so prefetching every `selected` account would
+        // waste the widget's tight network/time budget on logos that never show.
+        let renderable = Set(selected.prefix(3))
+        for balance in fetched where renderable.contains(balance.accountId) {
             if LogoCache.shared.localURL(forAccount: balance.accountId) == nil {
                 await LogoCache.shared.cache(logoUrl: balance.logoUrl,
                                              forAccount: balance.accountId)

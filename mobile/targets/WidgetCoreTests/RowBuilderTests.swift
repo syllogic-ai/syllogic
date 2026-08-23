@@ -43,4 +43,27 @@ final class RowBuilderTests: XCTestCase {
 
         XCTAssertEqual(rows.first?.logoFileURL, stub)
     }
+
+    func testDuplicateAccountIdsDoNotTrapAndFirstEntryWins() {
+        let fetched = [balance("a1", "First"), balance("a1", "Second")]
+
+        let rows = RowBuilder.rows(from: fetched, selected: ["a1"]) { _ in nil }
+
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.name, "First")
+    }
+
+    func testCapThenDropCanYieldFewerThanThreeEvenWithAFourthValidSelection() {
+        // selected.prefix(3) takes the first 3 SELECTED ids before checking
+        // existence in `fetched`. If one of those first 3 is missing, the
+        // result is fewer than 3 rows even when a 4th selected id would have
+        // been valid. This is intended behaviour (cap happens before drop);
+        // this test pins it explicitly.
+        let fetched = [balance("a1", "One"), balance("a3", "Three"), balance("a4", "Four")]
+
+        let rows = RowBuilder.rows(from: fetched, selected: ["a1", "a2", "a3", "a4"]) { _ in nil }
+
+        XCTAssertEqual(rows.map(\.id), ["a1", "a3"])
+        XCTAssertFalse(rows.map(\.id).contains("a4"))
+    }
 }

@@ -10,7 +10,9 @@ enum RowBuilder {
     static func rows(from fetched: [AccountBalance],
                      selected: [String],
                      logoURL: (String) -> URL?) -> [AccountRow] {
-        let byId = Dictionary(uniqueKeysWithValues: fetched.map { ($0.accountId, $0) })
+        // First occurrence wins: a duplicate accountId (server bug, retry/merge,
+        // or corrupted cache) must degrade gracefully rather than trap.
+        let byId = Dictionary(fetched.map { ($0.accountId, $0) }, uniquingKeysWith: { first, _ in first })
         return selected.prefix(3).compactMap { id in
             guard let balance = byId[id] else { return nil }
             return AccountRow(id: balance.accountId,
