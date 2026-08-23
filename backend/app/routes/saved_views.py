@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Callable, List
@@ -54,8 +55,8 @@ def _redis_key(user_id: str) -> str:
     return f"saved_views:{user_id}"
 
 
-def _corrupt_redis_key(user_id: str) -> str:
-    return f"{_redis_key(user_id)}:corrupt"
+def _corrupt_redis_key(user_id: str, marker: str) -> str:
+    return f"{_redis_key(user_id)}:corrupt:{marker}"
 
 
 class SavedViewFilters(BaseModel):
@@ -79,8 +80,10 @@ def _parse_blob(raw: str | None, user_id: str, client: redis.Redis) -> List[dict
 
     On a `JSONDecodeError` the raw value is copied to a side key so it is
     not lost, a warning is logged with the user id, and an empty list is
-    returned so the app stays usable. This function never raises on bad
-    input and never writes back to the primary key itself — callers decide
+    returned so the app stays usable. The side key is unique per corruption
+    event (timestamp + uuid) so a second corruption never overwrites the
+    backup written by a prior one. This function never raises on bad input
+    and never writes back to the primary key itself — callers decide
     if/when to persist a fresh value.
     """
     if not raw:
@@ -88,13 +91,15 @@ def _parse_blob(raw: str | None, user_id: str, client: redis.Redis) -> List[dict
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
+        marker = f"{int(time.time())}-{uuid.uuid4().hex[:8]}"
+        corrupt_key = _corrupt_redis_key(user_id, marker)
         logger.warning(
             "Corrupt saved_views JSON blob for user_id=%s; preserving raw value at %s",
             user_id,
-            _corrupt_redis_key(user_id),
+            corrupt_key,
         )
         try:
-            client.set(_corrupt_redis_key(user_id), raw)
+            client.set(corrupt_key, raw)
         except Exception:
             logger.exception(
                 "Failed to preserve corrupt saved_views blob for user_id=%s", user_id

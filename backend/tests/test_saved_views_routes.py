@@ -10,7 +10,12 @@ Redis is faked in-memory (no real Redis dependency, no external service) by
 monkeypatching `app.routes.saved_views.get_redis` — the module always calls
 that function rather than holding a client reference at import time, so
 this is a drop-in replacement. The fake implements just enough of the
-get/set/pipeline(WATCH/MULTI/EXEC) surface that `_atomic_mutate` exercises.
+get/set/pipeline(WATCH/MULTI/EXEC) surface that `_atomic_mutate` exercises,
+including real WATCH semantics: every key carries a version counter bumped
+on write, `FakePipeline.watch()` snapshots that version, and `execute()`
+raises `redis.WatchError` if the watched key's version moved since — so the
+retry/409 branches in `_atomic_mutate` are genuinely exercised rather than
+inferred.
 
 Run with:
     cd backend && .venv/bin/pytest tests/test_saved_views_routes.py -v
@@ -25,6 +30,8 @@ import os
 import sys
 import time
 import uuid
+
+import redis
 
 # Ensure backend/ is importable when pytest is run from anywhere.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -57,15 +64,41 @@ from app.routes import saved_views  # noqa: E402
 
 
 class FakeRedis:
+    """In-memory fake with real per-key WATCH versioning.
+
+    Every `set()`/`delete()` bumps a per-key version counter. `FakePipeline`
+    snapshots that counter on `watch()` and `execute()` fails with
+    `redis.WatchError` if the counter moved — i.e. some other write touched
+    the key — since the watch was taken. This mirrors real Redis optimistic
+    locking closely enough for `_atomic_mutate`'s retry loop to be tested
+    for real instead of assumed to work.
+
+    `on_watch`, if set, is invoked with the watched key every time
+    `watch()` is called — tests use this as a hook to simulate a
+    concurrent writer sneaking in between WATCH and EXEC.
+    """
+
     def __init__(self):
         self.store: dict[str, str] = {}
+        self.versions: dict[str, int] = {}
+        self.on_watch = None
+
+    def _bump(self, key: str) -> None:
+        self.versions[key] = self.versions.get(key, 0) + 1
 
     def get(self, key: str):
         return self.store.get(key)
 
     def set(self, key: str, value: str):
         self.store[key] = value
+        self._bump(key)
         return True
+
+    def delete(self, key: str):
+        existed = key in self.store
+        self.store.pop(key, None)
+        self._bump(key)
+        return 1 if existed else 0
 
     def pipeline(self, transaction: bool = True):
         return FakePipeline(self)
@@ -76,10 +109,13 @@ class FakePipeline:
         self._client = client
         self._queued: list[tuple[str, str]] = []
         self._in_multi = False
+        self._watched: dict[str, int] = {}
 
     def watch(self, key: str):
-        # No real concurrency in these tests; watch is a no-op marker.
-        return None
+        # Snapshot the key's version so execute() can detect a change.
+        self._watched[key] = self._client.versions.get(key, 0)
+        if self._client.on_watch is not None:
+            self._client.on_watch(key)
 
     def get(self, key: str):
         # Pre-MULTI, redis-py pipeline commands execute immediately.
@@ -95,6 +131,10 @@ class FakePipeline:
             self._client.set(key, value)
 
     def execute(self):
+        for key, expected_version in self._watched.items():
+            if self._client.versions.get(key, 0) != expected_version:
+                self._queued = []
+                raise redis.WatchError(f"watched key changed: {key}")
         for key, value in self._queued:
             self._client.set(key, value)
         results = [True] * len(self._queued)
@@ -104,6 +144,7 @@ class FakePipeline:
     def reset(self):
         self._queued = []
         self._in_multi = False
+        self._watched = {}
 
 
 @pytest.fixture
@@ -230,6 +271,11 @@ def test_create_under_cap_succeeds(client, fake_redis):
 # ---------------------------------------------------------------------------
 
 
+def _corrupt_keys_for(fake_redis, user_id: str) -> list[str]:
+    prefix = f"{saved_views._redis_key(user_id)}:corrupt:"
+    return [k for k in fake_redis.store if k.startswith(prefix)]
+
+
 def test_corrupt_blob_returns_empty_list_and_is_preserved(client, fake_redis):
     signing_client, user_id = client
     corrupt_raw = "{not valid json::"
@@ -240,8 +286,31 @@ def test_corrupt_blob_returns_empty_list_and_is_preserved(client, fake_redis):
     assert resp.status_code == 200, resp.text
     assert resp.json() == []
 
-    corrupt_key = saved_views._corrupt_redis_key(user_id)
-    assert fake_redis.store.get(corrupt_key) == corrupt_raw
+    corrupt_keys = _corrupt_keys_for(fake_redis, user_id)
+    assert len(corrupt_keys) == 1
+    assert fake_redis.store[corrupt_keys[0]] == corrupt_raw
+
+
+def test_second_corruption_does_not_overwrite_first_backup(client, fake_redis):
+    # Finding 2 regression: the backup key must be unique per corruption
+    # event so a second corruption doesn't destroy the first preserved blob.
+    signing_client, user_id = client
+    key = saved_views._redis_key(user_id)
+
+    first_corrupt_raw = "{first corrupt blob::"
+    fake_redis.set(key, first_corrupt_raw)
+    resp = signing_client.get("/api/saved-views/")
+    assert resp.status_code == 200, resp.text
+
+    second_corrupt_raw = "{second corrupt blob::"
+    fake_redis.set(key, second_corrupt_raw)
+    resp = signing_client.get("/api/saved-views/")
+    assert resp.status_code == 200, resp.text
+
+    corrupt_keys = _corrupt_keys_for(fake_redis, user_id)
+    assert len(corrupt_keys) == 2
+    preserved_values = {fake_redis.store[k] for k in corrupt_keys}
+    assert preserved_values == {first_corrupt_raw, second_corrupt_raw}
 
 
 # ---------------------------------------------------------------------------
@@ -278,6 +347,84 @@ def test_malformed_entry_is_skipped_valid_entries_returned(client, fake_redis):
     # A GET must not have rewritten the stored blob to drop the bad entry.
     stored = json.loads(fake_redis.store[saved_views._redis_key(user_id)])
     assert len(stored) == 2
+
+
+# ---------------------------------------------------------------------------
+# Atomicity: WATCH/MULTI/EXEC retry-on-conflict and retry-exhaustion (409)
+#
+# These rely on FakeRedis's real per-key version counter (see above) so a
+# concurrent write between WATCH and EXEC is genuinely detected rather than
+# assumed. Proof that this matters: comment out the `pipe.watch(key)` call
+# in `app/routes/saved_views.py::_atomic_mutate` and re-run this file —
+# `test_retry_exhaustion_returns_409` fails (409 never happens, because
+# nothing ever conflicts) with the watch disabled, and passes once it is
+# restored.
+# ---------------------------------------------------------------------------
+
+
+def test_concurrent_write_is_detected_and_retried(client, fake_redis):
+    signing_client, user_id = client
+    key = saved_views._redis_key(user_id)
+    fake_redis.set(key, json.dumps([]))
+
+    watch_calls = {"count": 0}
+    intruder = {
+        "id": "intruder",
+        "name": "sneaked in",
+        "filters": {"account_ids": [], "account_types": [], "currencies": []},
+        "created_at": "2026-01-01T00:00:00+00:00",
+    }
+
+    def sneak_in_on_first_watch(watched_key: str) -> None:
+        watch_calls["count"] += 1
+        if watch_calls["count"] == 1 and watched_key == key:
+            # Simulate a concurrent writer committing a change right after
+            # our WATCH is taken but before our EXEC — this must bump the
+            # key's version so the upcoming execute() raises WatchError.
+            fake_redis.set(key, json.dumps([intruder]))
+
+    fake_redis.on_watch = sneak_in_on_first_watch
+
+    resp = signing_client.post("/api/saved-views/", json=_valid_payload("retry me"))
+
+    assert resp.status_code == 201, resp.text
+    # More than one attempt occurred: the first watch conflicted and
+    # triggered a retry, the second succeeded uncontested.
+    assert watch_calls["count"] >= 2
+
+    stored = json.loads(fake_redis.store[key])
+    # The retry must have re-read post-conflict state (the intruder's
+    # write) rather than clobbering it — both entries are present.
+    assert len(stored) == 2
+    ids = {v["id"] for v in stored}
+    assert "intruder" in ids
+
+
+def test_retry_exhaustion_returns_409(client, fake_redis):
+    signing_client, user_id = client
+    key = saved_views._redis_key(user_id)
+    fake_redis.set(key, json.dumps([]))
+
+    watch_calls = {"count": 0}
+
+    def always_conflict(watched_key: str) -> None:
+        if watched_key == key:
+            watch_calls["count"] += 1
+            # Bump the version on every single watch so every attempt
+            # conflicts — the loop must exhaust MAX_LOCK_RETRIES and 409,
+            # never loop forever and never spuriously succeed.
+            fake_redis.set(key, json.dumps([]))
+
+    fake_redis.on_watch = always_conflict
+
+    resp = signing_client.post("/api/saved-views/", json=_valid_payload("never succeeds"))
+
+    assert resp.status_code == 409, resp.text
+    assert watch_calls["count"] == saved_views.MAX_LOCK_RETRIES
+
+    # The write must never have gone through.
+    stored = json.loads(fake_redis.store[key])
+    assert stored == []
 
 
 # ---------------------------------------------------------------------------
