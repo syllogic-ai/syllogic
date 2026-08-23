@@ -36,6 +36,12 @@ struct SyllogicWidgetView: View {
                 } else {
                     message("Open Syllogic to pick accounts")
                 }
+            } else if entry.rows.isEmpty {
+                // Unreachable today — `BalanceProvider` forces `.noSelection`
+                // when rows are empty — but kept in sync with the small
+                // family so an empty `.ready` state never renders a blank
+                // card if that invariant is ever loosened.
+                message("Open Syllogic to pick accounts")
             } else {
                 VStack(spacing: 14) {
                     ForEach(entry.rows) { row in
