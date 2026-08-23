@@ -56,6 +56,7 @@ def test_account_balances_includes_logo_url(db_session, make_user):
             is_active=True,
             functional_balance=Decimal("7425.00"),
             logo_id=logo.id,
+            institution="ING",
         )
         db_session.add(account)
         db_session.commit()
@@ -81,6 +82,7 @@ def test_account_balances_includes_logo_url(db_session, make_user):
         row = next(r for r in rows if r["account_id"] == str(account.id))
 
         assert row["logo_url"] == "https://logo.example/ing.png"
+        assert row["institution"] == "ING"
     finally:
         # `company_logos.domain` is unique, so the logo row must always be
         # cleaned up (even on assertion failure) or a re-run collides on it.
@@ -118,3 +120,4 @@ def test_account_balances_logo_url_is_none_without_logo(db_session, make_user):
     row = next(r for r in rows if r["account_id"] == str(account.id))
 
     assert row["logo_url"] is None
+    assert row["institution"] is None

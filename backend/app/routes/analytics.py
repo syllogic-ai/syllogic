@@ -387,6 +387,7 @@ def get_account_balances(
             "currency": account.currency,
             "account_type": account.account_type,
             "logo_url": account.logo.logo_url if account.logo else None,
+            "institution": account.institution,
         })
     
     return result
