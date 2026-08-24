@@ -8,7 +8,13 @@ type Person = {
   avatarUrl?: string | null;
 };
 
-export function HouseholdTab({ people }: { people: Person[] }) {
+export function HouseholdTab({
+  people,
+  isDemoUser = false,
+}: {
+  people: Person[];
+  isDemoUser?: boolean;
+}) {
   return (
     <div className="max-w-2xl space-y-6">
       <div>
@@ -17,7 +23,7 @@ export function HouseholdTab({ people }: { people: Person[] }) {
           Track who owns what — useful for joint accounts and household-level reports.
         </p>
       </div>
-      <PeopleList initialPeople={people} />
+      <PeopleList initialPeople={people} readOnly={isDemoUser} />
     </div>
   );
 }

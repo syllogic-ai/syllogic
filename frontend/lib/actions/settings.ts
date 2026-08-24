@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { users, categories, transactions, accounts, type User } from "@/lib/db/schema";
-import { getAuthenticatedSession, requireAuth } from "@/lib/auth-helpers";
+import { getAuthenticatedSession, isDemoRestrictedSession, requireAuth } from "@/lib/auth-helpers";
+import { isDemoRestrictedUserEmail, DEMO_RESTRICTED_ACTION_ERROR } from "@/lib/demo-access";
 import { storage } from "@/lib/storage";
 
 /**
@@ -42,6 +43,10 @@ export async function updateUserProfile(
 
   if (!session?.user?.id) {
     return { success: false, error: "Not authenticated" };
+  }
+
+  if (isDemoRestrictedUserEmail(session.user.email)) {
+    return { success: false, error: DEMO_RESTRICTED_ACTION_ERROR };
   }
 
   try {
@@ -102,6 +107,10 @@ export async function deleteAllTransactionsAndResetBalances(): Promise<{
 
   if (!userId) {
     return { success: false, error: "Not authenticated" };
+  }
+
+  if (await isDemoRestrictedSession()) {
+    return { success: false, error: DEMO_RESTRICTED_ACTION_ERROR };
   }
 
   try {

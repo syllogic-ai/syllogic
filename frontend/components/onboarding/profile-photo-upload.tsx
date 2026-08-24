@@ -11,6 +11,7 @@ interface ProfilePhotoUploadProps {
   onChange: (file: File | null) => void;
   defaultImage?: string | null;
   name?: string;
+  disabled?: boolean;
 }
 
 export function ProfilePhotoUpload({
@@ -18,6 +19,7 @@ export function ProfilePhotoUpload({
   onChange,
   defaultImage,
   name,
+  disabled = false,
 }: ProfilePhotoUploadProps) {
   const [preview, setPreview] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -90,13 +92,14 @@ export function ProfilePhotoUpload({
     <div className="flex flex-col items-start gap-4">
       <div
         className={cn(
-          "relative cursor-pointer transition-all",
+          "relative transition-all",
+          disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer",
           isDragging && "ring-2 ring-primary ring-offset-2"
         )}
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onClick={() => inputRef.current?.click()}
+        onDrop={disabled ? undefined : handleDrop}
+        onDragOver={disabled ? undefined : handleDragOver}
+        onDragLeave={disabled ? undefined : handleDragLeave}
+        onClick={disabled ? undefined : () => inputRef.current?.click()}
       >
         <Avatar className="h-24 w-24">
           {displayImage ? (
@@ -105,10 +108,12 @@ export function ProfilePhotoUpload({
             <AvatarFallback className="text-2xl">{getInitials(name)}</AvatarFallback>
           )}
         </Avatar>
-        <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity hover:opacity-100">
-          <RiCameraLine className="h-6 w-6 text-white" />
-        </div>
-        {displayImage && (
+        {!disabled && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity hover:opacity-100">
+            <RiCameraLine className="h-6 w-6 text-white" />
+          </div>
+        )}
+        {displayImage && !disabled && (
           <Button
             type="button"
             variant="destructive"
@@ -129,6 +134,7 @@ export function ProfilePhotoUpload({
         accept="image/*"
         className="hidden"
         onChange={handleInputChange}
+        disabled={disabled}
       />
     </div>
   );
