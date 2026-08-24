@@ -87,7 +87,12 @@ class _Adapter(BankAdapter):
         raise NotImplementedError
 
 
-def _account(external_id: str, iban: Optional[str], name: str = "Current Account") -> AccountData:
+def _account(
+    external_id: str,
+    iban: Optional[str],
+    name: str = "Current Account",
+    balance_available: Optional[Decimal] = Decimal("10.00"),
+) -> AccountData:
     return AccountData(
         external_id=external_id,
         name=name,
@@ -95,7 +100,7 @@ def _account(external_id: str, iban: Optional[str], name: str = "Current Account
         institution="Test Bank",
         currency="EUR",
         iban=iban,
-        balance_available=Decimal("10.00"),
+        balance_available=balance_available,
     )
 
 
@@ -148,6 +153,55 @@ def test_reconsent_with_new_external_id_reuses_account_via_iban():
         )
         # The stale uid must be refreshed so later syncs match on external_id again.
         assert rows[0].external_id == "eb-uid-second"
+    finally:
+        if user_id:
+            _cleanup(db, user_id)
+        db.close()
+        _restore_encryption_env(_prev_env)
+
+
+def test_resync_without_balance_keeps_existing_balance():
+    """A sync that carries no balance must not null the stored one.
+
+    None in AccountData.balance_available means "not provided", never
+    "clear". The live sync_accounts caller (the Revolut CSV import via
+    sync_all) never sets a balance, so before the guard every re-import
+    wiped the stored value; adapters that fetch balances separately
+    (e.g. Enable Banking) rely on the same contract.
+    """
+    _prev_env = _set_encryption_env()
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    user_id = None
+    try:
+        user_id = str(get_or_create_system_user(db).id)
+        _cleanup(db, user_id)
+
+        iban = f"NL91ABNA{uuid.uuid4().hex[:10].upper()}"
+
+        _sync(db, user_id, [_account("uid-bal", iban, balance_available=Decimal("42.50"))])
+        rows = _rows(db, user_id)
+        assert len(rows) == 1 and rows[0].balance_available == Decimal("42.50")
+
+        # Re-sync with no balance in the payload.
+        _sync(db, user_id, [_account("uid-bal", iban, balance_available=None)])
+        rows = _rows(db, user_id)
+        assert len(rows) == 1
+        assert rows[0].balance_available == Decimal("42.50"), (
+            "sync_accounts nulled balance_available when the adapter "
+            "provided no balance; it must keep the stored value."
+        )
+
+        # A sync that does carry a balance still updates it.
+        _sync(db, user_id, [_account("uid-bal", iban, balance_available=Decimal("13.37"))])
+        rows = _rows(db, user_id)
+        assert len(rows) == 1 and rows[0].balance_available == Decimal("13.37")
+
+        # A genuine zero is an update too — pins `is not None` against a
+        # truthiness refactor, which would silently keep the stale 13.37.
+        _sync(db, user_id, [_account("uid-bal", iban, balance_available=Decimal("0.00"))])
+        rows = _rows(db, user_id)
+        assert len(rows) == 1 and rows[0].balance_available == Decimal("0.00")
     finally:
         if user_id:
             _cleanup(db, user_id)
