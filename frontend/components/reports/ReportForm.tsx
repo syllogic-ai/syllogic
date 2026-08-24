@@ -101,8 +101,10 @@ export function ReportForm({
     try {
       // The backend renders the test from the SAVED report, so unsaved edits
       // would silently send the old config. Persist first.
+      // schema.parse, not getValues(): getValues is uncoerced, so number
+      // fields would go out as strings — unlike the normal save path.
       if (!(await trigger())) return;
-      await updateReport(report.id, getValues());
+      await updateReport(report.id, schema.parse(getValues()));
       await sendTestReport(report.id);
       setSendTestSuccess(true);
     } catch (err) {
