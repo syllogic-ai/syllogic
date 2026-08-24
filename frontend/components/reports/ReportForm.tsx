@@ -66,6 +66,8 @@ export function ReportForm({
     handleSubmit,
     watch,
     setValue,
+    getValues,
+    trigger,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -97,6 +99,10 @@ export function ReportForm({
     setSendTestError(null);
     setSendTestSuccess(false);
     try {
+      // The backend renders the test from the SAVED report, so unsaved edits
+      // would silently send the old config. Persist first.
+      if (!(await trigger())) return;
+      await updateReport(report.id, getValues());
       await sendTestReport(report.id);
       setSendTestSuccess(true);
     } catch (err) {
