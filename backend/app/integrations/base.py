@@ -16,7 +16,7 @@ class AccountData(BaseModel):
     institution: str
     currency: str
     iban: Optional[str] = None  # IBAN of this account (stripped, upper-cased; None if not IBAN-based)
-    balance_available: Optional[Decimal] = None
+    balance_available: Optional[Decimal] = None  # None = adapter has no balance (NOT zero); sync keeps the stored value
     metadata: dict = {}
 
 

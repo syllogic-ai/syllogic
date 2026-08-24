@@ -206,8 +206,9 @@ class SyncService:
                 existing_account.account_type = account_data.account_type
                 existing_account.institution = account_data.institution
                 existing_account.currency = account_data.currency
-                # Only update balance if provided from CSV (not None), otherwise keep existing or calculate later
-                # balance_current removed - use functional_balance instead
+                # Keep the stored balance when the adapter carries none: None means
+                # "not provided", never "clear". The live caller (Revolut CSV via
+                # sync_all) never sets it — its balance comes from functional_balance.
                 if account_data.balance_available is not None:
                     existing_account.balance_available = account_data.balance_available
                 self._set_account_external_id_fields(existing_account, account_data.external_id)
