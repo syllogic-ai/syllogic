@@ -208,7 +208,8 @@ class SyncService:
                 existing_account.currency = account_data.currency
                 # Only update balance if provided from CSV (not None), otherwise keep existing or calculate later
                 # balance_current removed - use functional_balance instead
-                existing_account.balance_available = account_data.balance_available
+                if account_data.balance_available is not None:
+                    existing_account.balance_available = account_data.balance_available
                 self._set_account_external_id_fields(existing_account, account_data.external_id)
                 self._set_account_iban_fields(existing_account, account_data.iban)
                 existing_account.is_active = True
