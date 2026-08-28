@@ -63,6 +63,8 @@ services:
       DATA_ENCRYPTION_KEY_CURRENT: ${DATA_ENCRYPTION_KEY_CURRENT:-}
       DATA_ENCRYPTION_KEY_PREVIOUS: ${DATA_ENCRYPTION_KEY_PREVIOUS:-}
       DATA_ENCRYPTION_KEY_ID: ${DATA_ENCRYPTION_KEY_ID:-k1}
+      # Broker credential encryption
+      SYLLOGIC_SECRET_KEY: ${SYLLOGIC_SECRET_KEY:-}
       # Optional integrations / features
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
@@ -122,6 +124,8 @@ services:
       DATA_ENCRYPTION_KEY_CURRENT: ${DATA_ENCRYPTION_KEY_CURRENT:-}
       DATA_ENCRYPTION_KEY_PREVIOUS: ${DATA_ENCRYPTION_KEY_PREVIOUS:-}
       DATA_ENCRYPTION_KEY_ID: ${DATA_ENCRYPTION_KEY_ID:-k1}
+      # Broker credential encryption
+      SYLLOGIC_SECRET_KEY: ${SYLLOGIC_SECRET_KEY:-}
       # Optional integrations / features
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
