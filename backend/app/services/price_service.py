@@ -59,15 +59,12 @@ class PriceService:
                 # before `on`'s own market close (or over a weekend), and
                 # storing under quote.date would make `on` a permanent
                 # cache-miss, forcing a re-fetch on every call for that day.
-                stmt = (
-                    pg_insert(PriceSnapshot)
-                    .values(
-                        symbol=quote.symbol,
-                        currency=quote.currency,
-                        date=on,
-                        close=quote.close,
-                        provider=self.provider.name,
-                    )
+                stmt = pg_insert(PriceSnapshot).values(
+                    symbol=quote.symbol,
+                    currency=quote.currency,
+                    date=on,
+                    close=quote.close,
+                    provider=self.provider.name,
                 )
                 stmt = stmt.on_conflict_do_update(
                     index_elements=["symbol", "date"],

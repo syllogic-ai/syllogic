@@ -411,7 +411,11 @@ class MerchantExtractor:
         Returns:
             MerchantExtractionResult with extracted merchant, confidence, and method
         """
-        alias_source = existing_merchant.strip() if existing_merchant and existing_merchant.strip() else description
+        alias_source = (
+            existing_merchant.strip()
+            if existing_merchant and existing_merchant.strip()
+            else description
+        )
         alias_hint = self._find_alias(alias_source) if alias_source else None
         if alias_hint:
             return MerchantExtractionResult(

@@ -486,17 +486,56 @@ class CreateLinkGroupFromSelectionRequest(BaseModel):
 
 
 # Receipt Scan Schemas
-class ReceiptScanExtractRequest(BaseModel):
-    account_id: UUID
-    file_base64: str
-    content_type: str = "image/jpeg"
-
-
 class ReceiptLineItemSchema(BaseModel):
-    description: str
-    amount: Decimal
+    id: Optional[UUID] = None
+    line_ref: Optional[str] = None
+    position: Optional[int] = None
+    raw_text: Optional[str] = None
+    name: Optional[str] = None
+    quantity: Optional[Decimal] = None
+    gross_amount: Optional[Decimal] = None
+    discount_amount: Optional[Decimal] = None
+    net_amount: Optional[Decimal] = None
+    kind: Optional[str] = None
+    parent_line_ref: Optional[str] = None
     category_id: Optional[UUID] = None
     category_name: Optional[str] = None
+    category_confidence: Optional[str] = None
+    category_reason: Optional[str] = None
+    user_edited: Optional[bool] = None
+
+    # Legacy fields. `description`/`amount` are what the frontend's
+    # toReceiptLineItem (actions.ts) still reads pre-Phase-4.5. Kept as
+    # aliases of name/net_amount for one release -- Phase 4 extraction
+    # (receipt_extract.py, replacing the deleted receipt_ocr.py) writes
+    # name/net_amount, and the validator below mirrors them onto
+    # description/amount so the response contract doesn't change out from
+    # under the frontend. Do not remove until the frontend reads
+    # name/net_amount directly.
+    description: Optional[str] = None
+    amount: Optional[Decimal] = None
+
+    @model_validator(mode="after")
+    def _sync_legacy_amount_aliases(self) -> "ReceiptLineItemSchema":
+        if self.description is None and self.name is not None:
+            self.description = self.name
+        elif self.name is None and self.description is not None:
+            self.name = self.description
+        if self.amount is None and self.net_amount is not None:
+            self.amount = self.net_amount
+        elif self.net_amount is None and self.amount is not None:
+            self.net_amount = self.amount
+        return self
+
+
+class ReceiptValidationErrorSchema(BaseModel):
+    """Mirrors `app.services.receipt_validate.ValidationError` -- one
+    reconcile failure the review UI highlights against the stored image
+    (spec 1.2 / implementation 4.2)."""
+
+    code: str
+    message: str
+    line_refs: List[str] = Field(default_factory=list)
 
 
 class ReceiptScanExtractResponse(BaseModel):
@@ -505,19 +544,120 @@ class ReceiptScanExtractResponse(BaseModel):
     merchant_name: Optional[str] = None
     receipt_date: Optional[datetime] = None
     receipt_total: Optional[Decimal] = None
+    currency: Optional[str] = None
     items: List[ReceiptLineItemSchema] = Field(default_factory=list)
+    validation_errors: List[ReceiptValidationErrorSchema] = Field(default_factory=list)
+    error_message: Optional[str] = None
 
 
-class ReceiptConfirmItem(BaseModel):
-    description: str
-    amount: Decimal
+class ReceiptConfirmGroup(BaseModel):
+    """One row of the confirm request -- what `receipt_resolve.resolve`
+    calls a `TransactionGroup`, submitted by the review UI after the user
+    has edited per-line categories (`frontend/features/receipt-scan/
+    domain/contracts.ts`'s `ReceiptLineItem[]` stays the edit surface; this
+    is its grouped-by-category projection). `line_refs` names the
+    `ReceiptLineItem.line_ref`s folded into this group -- the server
+    re-applies `category_id` onto those lines and re-runs `resolve` itself
+    rather than trusting `amount`/`category_id` at face value (spec 6.2 /
+    implementation 6.2)."""
+
     category_id: Optional[UUID] = None
+    amount: Decimal
+    description: str
+    line_refs: List[str] = Field(default_factory=list)
     transaction_type: str = "debit"
 
 
 class ReceiptScanConfirmRequest(BaseModel):
-    items: List[ReceiptConfirmItem]
-    booked_at: datetime
+    groups: List[ReceiptConfirmGroup]
+    # Defaults to `scan.booked_at`/`scan.receipt_date` server-side when
+    # omitted (spec 6.2) -- required in the pre-Phase-6 contract, now
+    # optional so the user can still override it.
+    booked_at: Optional[datetime] = None
+
+
+class ReceiptLineEditSchema(BaseModel):
+    """One correction to an already-persisted line (Phase 6.5,
+    `PATCH /{id}/lines`). Only the fields actually provided are applied --
+    `None` means "leave unchanged", not "clear this field". If `net_amount`
+    is corrected without also correcting `gross_amount`, `gross_amount` is
+    recomputed server-side as `net_amount + discount_amount` so
+    `gross - discount == net` keeps holding automatically -- the common
+    correction is the user disagreeing with the charged price, not
+    re-deriving gross/discount by hand for every edit."""
+
+    line_ref: str
+    name: Optional[str] = None
+    gross_amount: Optional[Decimal] = None
+    discount_amount: Optional[Decimal] = None
+    net_amount: Optional[Decimal] = None
+
+
+class ReceiptLineInsertSchema(BaseModel):
+    """A line missing from extraction entirely (a hallucinated total, a
+    misread that dropped a line) -- the server assigns `line_ref`, never the
+    client (spec 6.5 requirement 1)."""
+
+    name: Optional[str] = None
+    gross_amount: Optional[Decimal] = None
+    discount_amount: Optional[Decimal] = None
+    net_amount: Decimal
+    kind: str = "item"  # item | deposit
+    # If set, must resolve to a surviving ("item") line -- either an
+    # already-persisted line not being deleted in this same request, or
+    # another "item" line inserted earlier in this same `inserts` list.
+    parent_line_ref: Optional[str] = None
+
+
+class ReceiptLineCorrectionRequest(BaseModel):
+    """Body of `PATCH /{id}/lines` (Phase 6.5). `edits`/`inserts`/`deletes`
+    are all optional and independent -- a caller only sends what actually
+    changed, not the full line set."""
+
+    edits: List[ReceiptLineEditSchema] = Field(default_factory=list)
+    inserts: List[ReceiptLineInsertSchema] = Field(default_factory=list)
+    deletes: List[str] = Field(default_factory=list)
+
+
+class ReceiptResolvedGroupSchema(BaseModel):
+    """One group as `receipt_resolve.resolve` computed it -- returned by the
+    `/resolve` preview endpoint (uncollapsed and resolved side by side, so
+    the review UI can show both without reimplementing the collapse policy
+    in TypeScript) and echoed in the 409 the confirm endpoint raises when a
+    submitted grouping doesn't match."""
+
+    category_id: Optional[UUID] = None
+    category_name: Optional[str] = None
+    amount: Decimal
+    line_refs: List[str] = Field(default_factory=list)
+
+
+class ReceiptResolvePreviewLineOverride(BaseModel):
+    """An in-progress (not-yet-saved) category edit the review UI wants
+    reflected in a `/resolve` preview -- lines not named here use their
+    currently-persisted `category_id`."""
+
+    line_ref: str
+    category_id: Optional[UUID] = None
+
+
+class ReceiptResolvePreviewRequest(BaseModel):
+    overrides: List[ReceiptResolvePreviewLineOverride] = Field(default_factory=list)
+
+
+class ReceiptResolvePreviewResponse(BaseModel):
+    uncollapsed: List[ReceiptResolvedGroupSchema]
+    resolved: List[ReceiptResolvedGroupSchema]
+
+
+class ReceiptConfirmResponse(BaseModel):
+    """Response of `POST /{id}/confirm`. `already_booked=True` means the
+    idempotency check (spec 6.3) found this exact receipt already booked on
+    this account -- `transactions` is then the previously-created rows, not
+    a fresh duplicate set."""
+
+    transactions: List[TransactionWithDetails]
+    already_booked: bool = False
 
 
 # Analytics Schemas

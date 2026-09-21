@@ -12,25 +12,14 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
-import os
-
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
-
-from app.database import Base, get_db
+from app.database import get_db
+from app.db_helpers import get_current_user_id
 from app.main import app
 from app.models import Account, AccountBalance, Category, RecurringTransaction, Transaction, User
 
 INTERNAL_AUTH_SECRET = "test-internal-secret"
-
-# Account/RecurringTransaction/Transaction use Postgres-only column types
-# (JSONB with `::jsonb` server defaults), which SQLite can't render — so
-# unlike test_investments_routes.py's in-memory SQLite fixture, this needs a
-# real Postgres. Point at FORECAST_TEST_DATABASE_URL if set (e.g. a
-# disposable container), else skip rather than touch the shared dev DB.
-_TEST_DATABASE_URL = os.getenv("FORECAST_TEST_DATABASE_URL")
 
 
 def _signed_headers(
@@ -71,19 +60,16 @@ class SigningClient:
 
 
 @pytest.fixture
-def db():
-    if not _TEST_DATABASE_URL:
-        pytest.skip(
-            "FORECAST_TEST_DATABASE_URL not set - point it at a disposable Postgres "
-            "to run these route tests (they need real JSONB/Postgres DDL support)."
-        )
-    engine = create_engine(_TEST_DATABASE_URL)
-    with engine.begin() as conn:
-        conn.exec_driver_sql("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
-    Base.metadata.create_all(bind=engine)
-    with Session(engine) as session:
-        yield session
-    engine.dispose()
+def db(db_session):
+    """The shared Postgres session from conftest.
+
+    These tests need Postgres-only column types (JSONB with `::jsonb` server
+    defaults) that SQLite cannot render, and used to skip themselves unless
+    FORECAST_TEST_DATABASE_URL named a database they could drop and rebuild.
+    The whole suite now runs against a migrated scratch database that conftest
+    truncates between tests, so they just use it.
+    """
+    return db_session
 
 
 @pytest.fixture
@@ -92,7 +78,9 @@ def client(db, monkeypatch):
     db.add(User(id="u1", email="u@example.com", functional_currency="EUR"))
     db.commit()
     app.dependency_overrides[get_db] = lambda: db
-    monkeypatch.setattr("app.routes.forecast.get_user_id", lambda x=None: "u1")
+    # The route resolves its caller through Depends(get_current_user_id); it
+    # used to be patched by name on the route module, which stopped existing.
+    app.dependency_overrides[get_current_user_id] = lambda: "u1"
     yield SigningClient(TestClient(app))
     app.dependency_overrides.clear()
 
@@ -190,9 +178,7 @@ def test_cashflow_forecast_recurring_income_is_an_inflow(client, db):
         functional_balance=Decimal("1000"),
         is_active=True,
     )
-    income_category = Category(
-        id=uuid4(), user_id="u1", name="Salary", category_type="income"
-    )
+    income_category = Category(id=uuid4(), user_id="u1", name="Salary", category_type="income")
     db.add(account)
     db.add(income_category)
     db.add(

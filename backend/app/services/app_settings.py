@@ -1,6 +1,7 @@
 import json
 import os
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -382,3 +383,255 @@ def clear_ai_summary_enabled(db: Session) -> dict:
     db.query(AppSetting).filter(AppSetting.key == AI_SUMMARY_ENABLED_SETTING).delete()
     db.commit()
     return get_ai_summary_enabled_status(db)
+
+
+# --- Receipt-resolve config (docs/specs/receipt-ingestion-implementation.md
+# 6.1) --------------------------------------------------------------------
+#
+# Three independent settings, each resolved database-override -> env ->
+# default, following the same order as `get_effective_llm_model` above.
+# Deliberately three separate `app_settings` rows rather than one JSON blob:
+# it keeps each field's resolution symmetric with every other setting in
+# this module instead of inventing a second pattern.
+#
+# Kept in config, never in prompt text or a literal in `receipt_resolve.py`:
+# changing the threshold is then a settings edit, and the split stays
+# reproducible instead of a model judgment that could vary between runs on
+# the same photo.
+
+RECEIPT_GROCERY_MERCHANTS_SETTING = "receipt_grocery_merchants"
+RECEIPT_GROCERY_CATEGORY_ID_SETTING = "receipt_grocery_category_id"
+RECEIPT_TREAT_SPLIT_THRESHOLD_SETTING = "receipt_treat_split_threshold"
+
+
+def _env_receipt_grocery_merchants() -> frozenset[str]:
+    raw = os.getenv("RECEIPT_GROCERY_MERCHANTS", "")
+    return frozenset(part.strip().lower() for part in raw.split(",") if part.strip())
+
+
+def get_receipt_grocery_merchants_override(db: Session) -> Optional[list[str]]:
+    setting = (
+        db.query(AppSetting).filter(AppSetting.key == RECEIPT_GROCERY_MERCHANTS_SETTING).first()
+    )
+    if not setting or not setting.value_encrypted:
+        return None
+    try:
+        raw = decrypt_value(setting.value_encrypted)
+    except ValueError:
+        return None
+    if not raw:
+        return None
+    try:
+        merchants = json.loads(raw).get("merchants")
+    except (ValueError, AttributeError):
+        return None
+    if not isinstance(merchants, list):
+        return None
+    return merchants
+
+
+def get_effective_receipt_grocery_merchants(db: Session) -> frozenset[str]:
+    """Return the configured grocery-merchant allowlist, lower-cased.
+    Database override wins over `RECEIPT_GROCERY_MERCHANTS` (comma-separated),
+    which wins over the empty default (no merchant collapses)."""
+    override = get_receipt_grocery_merchants_override(db)
+    if override is not None:
+        return frozenset(str(m).strip().lower() for m in override if str(m).strip())
+    return _env_receipt_grocery_merchants()
+
+
+def set_receipt_grocery_merchants(
+    db: Session, merchants: list[str], updated_by_user_id: Optional[str]
+) -> list[str]:
+    normalized = sorted({str(m).strip().lower() for m in merchants if str(m).strip()})
+    serialized = json.dumps({"merchants": normalized})
+    value_encrypted = encrypt_value(serialized) or serialized
+
+    setting = (
+        db.query(AppSetting).filter(AppSetting.key == RECEIPT_GROCERY_MERCHANTS_SETTING).first()
+    )
+    now = datetime.now(timezone.utc)
+    if setting is None:
+        setting = AppSetting(
+            key=RECEIPT_GROCERY_MERCHANTS_SETTING,
+            value_encrypted=value_encrypted,
+            updated_by_user_id=updated_by_user_id,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(setting)
+    else:
+        setting.value_encrypted = value_encrypted
+        setting.updated_by_user_id = updated_by_user_id
+        setting.updated_at = now
+
+    db.commit()
+    return normalized
+
+
+def clear_receipt_grocery_merchants(db: Session) -> None:
+    db.query(AppSetting).filter(AppSetting.key == RECEIPT_GROCERY_MERCHANTS_SETTING).delete()
+    db.commit()
+
+
+def _env_receipt_grocery_category_id() -> Optional[str]:
+    return _normalize_api_key(os.getenv("RECEIPT_GROCERY_CATEGORY_ID"))
+
+
+def get_receipt_grocery_category_id_override(db: Session) -> Optional[str]:
+    setting = (
+        db.query(AppSetting).filter(AppSetting.key == RECEIPT_GROCERY_CATEGORY_ID_SETTING).first()
+    )
+    if not setting or not setting.value_encrypted:
+        return None
+    try:
+        raw = decrypt_value(setting.value_encrypted)
+    except ValueError:
+        return None
+    if not raw:
+        return None
+    try:
+        category_id = json.loads(raw).get("category_id")
+    except (ValueError, AttributeError):
+        return None
+    return _normalize_api_key(category_id)
+
+
+def get_effective_receipt_grocery_category_id(db: Session) -> Optional[str]:
+    """The category id the merchant/threshold collapse folds everything
+    into. `None` means no collapse category is configured, which -- same as
+    `treat_split_threshold=None` -- disables the collapse regardless of the
+    other two settings (`receipt_resolve.resolve` checks both)."""
+    return get_receipt_grocery_category_id_override(db) or _env_receipt_grocery_category_id()
+
+
+def set_receipt_grocery_category_id(
+    db: Session, category_id: Optional[str], updated_by_user_id: Optional[str]
+) -> Optional[str]:
+    normalized = _normalize_api_key(category_id)
+    serialized = json.dumps({"category_id": normalized})
+    value_encrypted = encrypt_value(serialized) or serialized
+
+    setting = (
+        db.query(AppSetting).filter(AppSetting.key == RECEIPT_GROCERY_CATEGORY_ID_SETTING).first()
+    )
+    now = datetime.now(timezone.utc)
+    if setting is None:
+        setting = AppSetting(
+            key=RECEIPT_GROCERY_CATEGORY_ID_SETTING,
+            value_encrypted=value_encrypted,
+            updated_by_user_id=updated_by_user_id,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(setting)
+    else:
+        setting.value_encrypted = value_encrypted
+        setting.updated_by_user_id = updated_by_user_id
+        setting.updated_at = now
+
+    db.commit()
+    return normalized
+
+
+def clear_receipt_grocery_category_id(db: Session) -> None:
+    db.query(AppSetting).filter(AppSetting.key == RECEIPT_GROCERY_CATEGORY_ID_SETTING).delete()
+    db.commit()
+
+
+def _env_receipt_treat_split_threshold() -> Optional[Decimal]:
+    raw = _normalize_api_key(os.getenv("RECEIPT_TREAT_SPLIT_THRESHOLD"))
+    if raw is None:
+        return None
+    try:
+        return Decimal(raw)
+    except InvalidOperation:
+        return None
+
+
+def get_receipt_treat_split_threshold_override(db: Session) -> Optional[Decimal]:
+    """Returns the database-stored threshold, or `None` if no row exists.
+    Note this is ambiguous with an explicitly-disabled ('null') stored
+    threshold by design -- `get_effective_receipt_treat_split_threshold`
+    below distinguishes the two by checking row presence itself, exactly
+    like `get_effective_llm_model`/`get_log_level_override` do not need to
+    (their settings have no meaningful "explicitly unset" state)."""
+    setting = (
+        db.query(AppSetting).filter(AppSetting.key == RECEIPT_TREAT_SPLIT_THRESHOLD_SETTING).first()
+    )
+    if not setting or not setting.value_encrypted:
+        return None
+    try:
+        raw = decrypt_value(setting.value_encrypted)
+    except ValueError:
+        return None
+    if not raw:
+        return None
+    try:
+        value = json.loads(raw).get("threshold")
+    except (ValueError, AttributeError):
+        return None
+    if value is None:
+        return None
+    try:
+        return Decimal(str(value))
+    except InvalidOperation:
+        return None
+
+
+def get_effective_receipt_treat_split_threshold(db: Session) -> Optional[Decimal]:
+    """Database override (including an explicit `null`, which disables the
+    collapse outright) wins over `RECEIPT_TREAT_SPLIT_THRESHOLD`, which wins
+    over the default of `None` (disabled)."""
+    setting = (
+        db.query(AppSetting).filter(AppSetting.key == RECEIPT_TREAT_SPLIT_THRESHOLD_SETTING).first()
+    )
+    if setting is not None and setting.value_encrypted:
+        return get_receipt_treat_split_threshold_override(db)
+    return _env_receipt_treat_split_threshold()
+
+
+def set_receipt_treat_split_threshold(
+    db: Session, threshold: Optional[Decimal], updated_by_user_id: Optional[str]
+) -> Optional[Decimal]:
+    serialized = json.dumps({"threshold": str(threshold) if threshold is not None else None})
+    value_encrypted = encrypt_value(serialized) or serialized
+
+    setting = (
+        db.query(AppSetting).filter(AppSetting.key == RECEIPT_TREAT_SPLIT_THRESHOLD_SETTING).first()
+    )
+    now = datetime.now(timezone.utc)
+    if setting is None:
+        setting = AppSetting(
+            key=RECEIPT_TREAT_SPLIT_THRESHOLD_SETTING,
+            value_encrypted=value_encrypted,
+            updated_by_user_id=updated_by_user_id,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(setting)
+    else:
+        setting.value_encrypted = value_encrypted
+        setting.updated_by_user_id = updated_by_user_id
+        setting.updated_at = now
+
+    db.commit()
+    return threshold
+
+
+def clear_receipt_treat_split_threshold(db: Session) -> None:
+    db.query(AppSetting).filter(AppSetting.key == RECEIPT_TREAT_SPLIT_THRESHOLD_SETTING).delete()
+    db.commit()
+
+
+def get_effective_receipt_resolve_config(db: Session) -> dict:
+    """Bundles the three effective values for `receipt_resolve.ResolveConfig`.
+    Returns a plain dict (not a `ResolveConfig`) so this module -- which owns
+    DB/env resolution -- doesn't need to import `receipt_resolve`, which
+    stays pure (no DB) per docs/specs/receipt-ingestion-implementation.md 6.1.
+    """
+    return {
+        "grocery_merchants": get_effective_receipt_grocery_merchants(db),
+        "grocery_category_id": get_effective_receipt_grocery_category_id(db),
+        "treat_split_threshold": get_effective_receipt_treat_split_threshold(db),
+    }

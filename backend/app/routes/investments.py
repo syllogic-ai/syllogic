@@ -69,9 +69,7 @@ class _FxAdapter:
         return result if result is not None else amount
 
 
-def _seed_price_snapshot(
-    db: Session, symbol: str, price: Decimal, currency: str, on: date
-) -> None:
+def _seed_price_snapshot(db: Session, symbol: str, price: Decimal, currency: str, on: date) -> None:
     """Record the trade price as `symbol`'s latest cached price, so the
     holding values against it immediately instead of waiting on the next
     background sync's external price fetch. A trade is the freshest price

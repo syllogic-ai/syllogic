@@ -118,7 +118,8 @@ Use null for columns that do not exist or cannot be determined. amountFormat mus
 be AUTO, DOT_DECIMAL, or COMMA_DECIMAL. Default dateFormat to DD-MM-YYYY when uncertain."""
 
     last_error: Exception | None = None
-    for client, model, label in providers:
+    for provider in providers:
+        client, model, label = provider.client, provider.model, provider.label
         try:
             response = client.chat.completions.create(
                 model=model,
@@ -168,7 +169,8 @@ def _generate_narrative(prompt: str, db: Session, log_label: str) -> str:
         raise HTTPException(status_code=503, detail="LLM API is not configured.")
 
     last_error: Exception | None = None
-    for client, model, label in providers:
+    for provider in providers:
+        client, model, label = provider.client, provider.model, provider.label
         try:
             response = client.chat.completions.create(
                 model=model,

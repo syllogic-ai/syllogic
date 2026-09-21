@@ -150,9 +150,7 @@ def update_log_level(
 
 
 @router.delete("/log-level", response_model=LogLevelResponse)
-def delete_log_level(
-    admin_user_id: str = Depends(require_admin), db: Session = Depends(get_db)
-):
+def delete_log_level(admin_user_id: str = Depends(require_admin), db: Session = Depends(get_db)):
     status = clear_log_level(db)
     apply_log_level(status["level"])
     return status

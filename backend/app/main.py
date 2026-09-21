@@ -33,6 +33,7 @@ from app.db_helpers import (
 from app.error_reporting import report_exception
 from app.routes import api_router
 from app.security.data_encryption import is_data_encryption_enabled
+from app.services.category_instruction_lint import log_dangling_references
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,11 @@ if _env_bool("AUTO_CREATE_TABLES", default=False):
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     refresh_log_level_from_db(SessionLocal)
+    # Hygiene only: warns when a category's categorization_instructions route
+    # to a name the tree no longer has. One read-only query, and it swallows
+    # its own failures -- see the module docstring for why this never blocks
+    # a boot.
+    log_dangling_references(SessionLocal)
     if not is_data_encryption_enabled():
         logger.error(
             "=" * 78 + "\n"

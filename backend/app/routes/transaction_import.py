@@ -457,7 +457,9 @@ def import_transactions(request: TransactionImportRequest, db: Session = Depends
                         # Mark this external_id as seen in this batch
                         seen_external_ids_in_batch.add(external_id)
 
-                        logger.debug(f"[IMPORT] Transaction {idx} is new (external_id={external_id})")
+                        logger.debug(
+                            f"[IMPORT] Transaction {idx} is new (external_id={external_id})"
+                        )
 
                     # Check 2: By amount, description, and booked_at
                     # Use date comparison (not exact datetime) to handle microsecond differences

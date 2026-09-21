@@ -17,6 +17,7 @@ from sqlalchemy import (
     Integer,
     ForeignKey,
     Index,
+    JSON,
     UniqueConstraint,
     text,
 )
@@ -192,6 +193,7 @@ class Category(Base):
     subscription_suggestions = relationship(
         "SubscriptionSuggestion", back_populates="suggested_category"
     )
+    receipt_line_items = relationship("ReceiptLineItem", back_populates="category")
     budget_categories = relationship("BudgetCategory", back_populates="category")
 
     # Indexes and constraints
@@ -291,6 +293,7 @@ class Transaction(Base):
     receipt_scan = relationship("ReceiptScan", back_populates="transactions")
     internal_transfer = relationship("InternalTransfer", foreign_keys=[internal_transfer_id])
     logo = relationship("CompanyLogo", back_populates="transactions")
+    receipt_line_items = relationship("ReceiptLineItem", back_populates="booked_transaction")
 
     # Indexes and constraints
     __table_args__ = (
@@ -623,12 +626,35 @@ class ReceiptScan(Base):
     )
     file_path = Column(Text, nullable=True)
     file_path_ciphertext = Column(Text, nullable=True)
-    status = Column(String(20), default="pending")  # pending, processed, completed, failed
+    status = Column(
+        String(20), default="pending"
+    )  # pending, processed, completed, failed, needs_review
     raw_ocr_text = Column(Text, nullable=True)
     merchant_name = Column(String(255), nullable=True)
     receipt_total = Column(Numeric(15, 2), nullable=True)
     receipt_date = Column(DateTime(timezone=True), nullable=True)
     error_message = Column(Text, nullable=True)
+    # Receipt currency; may differ from the account's.
+    currency = Column(String(3), nullable=True)
+    # Replaces receipt_total; "printed" names the contract -- copied, not
+    # computed. receipt_total is kept for one more release since the extract
+    # and get routes still return it (schemas.py, dropped a release later).
+    printed_total = Column(Numeric(15, 2), nullable=True)
+    printed_discount_total = Column(Numeric(15, 2), nullable=True)
+    merchant_legal_name = Column(String(255), nullable=True)
+    merchant_address = Column(Text, nullable=True)
+    receipt_no = Column(String(64), nullable=True)
+    fiscal_code = Column(String(64), nullable=True)
+    vat_id = Column(String(64), nullable=True)
+    payment_method = Column(String(16), nullable=True)  # card | cash | other | unknown
+    card_last4 = Column(String(4), nullable=True)
+    # Extraction cache key (Part 6). Postgres gets a real CHAR(64); SQLite
+    # (route tests) doesn't distinguish, so plain String is used here too.
+    file_sha256 = Column(String(64), nullable=True)
+    # Structured reconcile failures for the review UI. JSON on SQLite (route
+    # tests run in-memory there), JSONB on Postgres -- see plan 2.1.
+    validation_errors = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
+    extraction_model = Column(String(128), nullable=True)
     created_at = Column(DateTime(timezone=True), default=_utcnow)
     completed_at = Column(DateTime(timezone=True), nullable=True)
 
@@ -636,11 +662,80 @@ class ReceiptScan(Base):
     user = relationship("User", back_populates="receipt_scans")
     account = relationship("Account", back_populates="receipt_scans")
     transactions = relationship("Transaction", back_populates="receipt_scan")
+    line_items = relationship(
+        "ReceiptLineItem",
+        back_populates="receipt_scan",
+        cascade="all, delete-orphan",
+        order_by="ReceiptLineItem.position",
+    )
 
     # Indexes and constraints
     __table_args__ = (
         Index("idx_receipt_scans_user", "user_id"),
         Index("idx_receipt_scans_account", "account_id"),
+        Index(
+            "idx_receipt_scans_sha256",
+            "user_id",
+            "file_sha256",
+            postgresql_where=text("file_sha256 IS NOT NULL"),
+        ),
+    )
+
+
+class ReceiptLineItem(Base):
+    """
+    One line of a receipt scan -- an item or a deposit -- resolved into a
+    row so it can carry its own category, be edited, and be linked back to
+    the booked Transaction it was grouped into.
+    """
+
+    __tablename__ = "receipt_line_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    receipt_scan_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("receipt_scans.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # The model's own "L1", "L2", ... reference for this scan. Unique per
+    # scan, which is what makes parent_line_ref resolvable.
+    line_ref = Column(String(8), nullable=False)
+    position = Column(Integer, nullable=False)
+    raw_text = Column(Text, nullable=True)
+    name = Column(Text, nullable=True)
+    quantity = Column(Numeric(12, 3), nullable=True)
+    gross_amount = Column(Numeric(15, 2), nullable=True)
+    discount_amount = Column(Numeric(15, 2), nullable=True, default=0)
+    net_amount = Column(Numeric(15, 2), nullable=True)
+    kind = Column(String(16), nullable=False, default="item")  # item | deposit
+    # References a sibling's line_ref within the same scan, not `id` -- the
+    # model emits "L3" before any row has an id, and a self-FK would force a
+    # two-pass insert to buy nothing (plan 2.3).
+    parent_line_ref = Column(String(8), nullable=True)
+    # No ON DELETE clause, matching Transaction.category_id -- deleting a
+    # category with receipt lines attached raises rather than silently
+    # nulling them.
+    category_id = Column(UUID(as_uuid=True), ForeignKey("categories.id"), nullable=True)
+    category_confidence = Column(String(8), nullable=True)  # high | medium | low
+    category_reason = Column(Text, nullable=True)
+    user_edited = Column(Boolean, nullable=False, default=False)
+    booked_transaction_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("transactions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at = Column(DateTime(timezone=True), default=_utcnow)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+    # Relationships
+    receipt_scan = relationship("ReceiptScan", back_populates="line_items")
+    category = relationship("Category", back_populates="receipt_line_items")
+    booked_transaction = relationship("Transaction", back_populates="receipt_line_items")
+
+    __table_args__ = (
+        UniqueConstraint("receipt_scan_id", "line_ref", name="receipt_line_items_scan_ref_uq"),
+        Index("idx_receipt_line_items_scan", "receipt_scan_id"),
+        Index("idx_receipt_line_items_txn", "booked_transaction_id"),
     )
 
 
@@ -1015,6 +1110,10 @@ class User(Base):
         String(3), default="EUR"
     )  # User's functional currency for reporting
     profile_photo_path = Column(Text, nullable=True)
+    # Drizzle declares this with a foreign key to accounts.id; it is mapped
+    # here as a plain column so that users and accounts do not become a
+    # mutually dependent pair in Base.metadata, which SQLAlchemy cannot sort.
+    default_account_id = Column(UUID(as_uuid=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=_utcnow)
     updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
 
@@ -1141,6 +1240,7 @@ class BrokerTrade(Base):
     side = Column(String(10), nullable=False)
     quantity = Column(Numeric(28, 8), nullable=False)
     price = Column(Numeric(28, 8), nullable=False)
+    fees = Column(Numeric(28, 8), nullable=False, server_default="0", default=0)
     currency = Column(String(3), nullable=False)
     external_id = Column(String(255), nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
@@ -1269,7 +1369,5 @@ class MCPIdempotencyKey(Base):
     created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False, index=True)
 
     __table_args__ = (
-        UniqueConstraint(
-            "user_id", "tool_name", "idempotency_key", name="mcp_idempotency_unique"
-        ),
+        UniqueConstraint("user_id", "tool_name", "idempotency_key", name="mcp_idempotency_unique"),
     )

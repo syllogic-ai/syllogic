@@ -3,26 +3,27 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
 
 from app.models import (
     User,
     Account,
     Holding,
     HoldingValuation,
-    AccountBalance,
 )
 from app.mcp.tools import investments as inv_tools
 
 
 @pytest.fixture
-def db():
-    engine = create_engine("sqlite:///:memory:")
-    for model in (User, Account, Holding, HoldingValuation, AccountBalance):
-        model.__table__.create(bind=engine)
-    with Session(engine) as session:
-        yield session
+def db(db_session):
+    """The shared Postgres session from conftest.
+
+    These tests used to build their own in-memory SQLite schema from a
+    hand-picked subset of models. That stopped working once the models grew
+    JSONB and UUID columns SQLite cannot compile, and it tested against a
+    schema that was never the real one. conftest truncates between tests, so
+    the shared session is just as isolated.
+    """
+    return db_session
 
 
 def test_list_holdings_returns_per_account_holdings(db):
@@ -40,7 +41,14 @@ def test_list_holdings_returns_per_account_holdings(db):
         quantity=Decimal("10"),
         source="manual",
     )
-    db.add_all([user, acc, h])
+    # Parents first: these models declare foreign keys but no relationships,
+    # so the flush order is not dependency-sorted for us.
+    db.add(user)
+    db.flush()
+    db.add(acc)
+    db.flush()
+    db.add(h)
+    db.flush()
     db.add(
         HoldingValuation(
             holding_id=h.id,
@@ -96,7 +104,14 @@ def test_get_portfolio_summary_aggregates(db):
         quantity=Decimal("1"),
         source="manual",
     )
-    db.add_all([user, a1, a2, h1, h2])
+    # Parents first: these models declare foreign keys but no relationships,
+    # so the flush order is not dependency-sorted for us.
+    db.add(user)
+    db.flush()
+    db.add_all([a1, a2])
+    db.flush()
+    db.add_all([h1, h2])
+    db.flush()
     db.add(
         HoldingValuation(
             holding_id=h1.id,

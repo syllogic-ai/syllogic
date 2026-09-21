@@ -4,8 +4,6 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
 
 from app.models import (
     Account,
@@ -19,17 +17,16 @@ from app.services.holding_valuation_service import HoldingValuationService
 
 
 @pytest.fixture
-def db():
-    engine = create_engine("sqlite:///:memory:")
-    # Create only tables we need — Base.metadata.create_all chokes on JSONB elsewhere.
-    User.__table__.create(bind=engine)
-    Account.__table__.create(bind=engine)
-    Holding.__table__.create(bind=engine)
-    PriceSnapshot.__table__.create(bind=engine)
-    HoldingValuation.__table__.create(bind=engine)
-    AccountBalance.__table__.create(bind=engine)
-    with Session(engine) as session:
-        yield session
+def db(db_session):
+    """The shared Postgres session from conftest.
+
+    These tests used to build their own in-memory SQLite schema from a
+    hand-picked subset of models. That stopped working once the models grew
+    JSONB and UUID columns SQLite cannot compile, and it tested against a
+    schema that was never the real one. conftest truncates between tests, so
+    the shared session is just as isolated.
+    """
+    return db_session
 
 
 def _make_user(db, currency="EUR"):

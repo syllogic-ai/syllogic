@@ -1005,6 +1005,106 @@ export const vehicleOwners = pgTable(
 );
 
 // ============================================================================
+// Receipt Ingestion
+// ============================================================================
+
+export const receiptScans = pgTable(
+  "receipt_scans",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    accountId: uuid("account_id")
+      .references(() => accounts.id, { onDelete: "cascade" })
+      .notNull(),
+    filePath: text("file_path"),
+    filePathCiphertext: text("file_path_ciphertext"),
+    status: varchar("status", { length: 20 }).default("pending"), // pending, processed, completed, failed, needs_review
+    // Retired once nothing reads it (a release after printedTotal ships);
+    // kept for now, see docs/specs/receipt-ingestion-implementation.md 2.2.
+    rawOcrText: text("raw_ocr_text"),
+    merchantName: varchar("merchant_name", { length: 255 }),
+    // Kept for one release alongside printedTotal -- the extract/get routes
+    // still return it.
+    receiptTotal: numeric("receipt_total", { precision: 15, scale: 2 }),
+    receiptDate: timestamp("receipt_date"),
+    errorMessage: text("error_message"),
+    currency: char("currency", { length: 3 }), // Receipt currency; may differ from the account's
+    printedTotal: numeric("printed_total", { precision: 15, scale: 2 }),
+    printedDiscountTotal: numeric("printed_discount_total", {
+      precision: 15,
+      scale: 2,
+    }),
+    merchantLegalName: varchar("merchant_legal_name", { length: 255 }),
+    merchantAddress: text("merchant_address"),
+    receiptNo: varchar("receipt_no", { length: 64 }),
+    fiscalCode: varchar("fiscal_code", { length: 64 }),
+    vatId: varchar("vat_id", { length: 64 }),
+    paymentMethod: varchar("payment_method", { length: 16 }), // card | cash | other | unknown
+    cardLast4: varchar("card_last4", { length: 4 }),
+    fileSha256: char("file_sha256", { length: 64 }), // Extraction cache key
+    validationErrors: jsonb("validation_errors"), // Structured reconcile failures for the review UI
+    extractionModel: varchar("extraction_model", { length: 128 }),
+    createdAt: timestamp("created_at").defaultNow(),
+    completedAt: timestamp("completed_at"),
+  },
+  (table) => [
+    index("idx_receipt_scans_user").on(table.userId),
+    index("idx_receipt_scans_account").on(table.accountId),
+    index("idx_receipt_scans_sha256")
+      .on(table.userId, table.fileSha256)
+      .where(sql`${table.fileSha256} IS NOT NULL`),
+  ],
+);
+
+export const receiptLineItems = pgTable(
+  "receipt_line_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    receiptScanId: uuid("receipt_scan_id")
+      .references(() => receiptScans.id, { onDelete: "cascade" })
+      .notNull(),
+    // The model's own "L1", "L2", ... reference for this scan -- unique per
+    // scan (see the constraint below), not a self-FK to `id`.
+    lineRef: varchar("line_ref", { length: 8 }).notNull(),
+    position: integer("position").notNull(),
+    rawText: text("raw_text"),
+    name: text("name"),
+    quantity: numeric("quantity", { precision: 12, scale: 3 }),
+    grossAmount: numeric("gross_amount", { precision: 15, scale: 2 }),
+    discountAmount: numeric("discount_amount", {
+      precision: 15,
+      scale: 2,
+    }).default("0"),
+    netAmount: numeric("net_amount", { precision: 15, scale: 2 }),
+    kind: varchar("kind", { length: 16 }).default("item").notNull(), // item | deposit
+    parentLineRef: varchar("parent_line_ref", { length: 8 }),
+    // No onDelete clause, matching transactions.categoryId -- deleting a
+    // category with receipt lines attached fails rather than silently
+    // nulling them.
+    categoryId: uuid("category_id").references(() => categories.id),
+    categoryConfidence: varchar("category_confidence", { length: 8 }), // high | medium | low
+    categoryReason: text("category_reason"),
+    userEdited: boolean("user_edited").default(false).notNull(),
+    bookedTransactionId: uuid("booked_transaction_id").references(
+      () => transactions.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    unique("receipt_line_items_scan_ref_uq").on(
+      table.receiptScanId,
+      table.lineRef,
+    ),
+    index("idx_receipt_line_items_scan").on(table.receiptScanId),
+    index("idx_receipt_line_items_txn").on(table.bookedTransactionId),
+  ],
+);
+
+// ============================================================================
 // Relations
 // ============================================================================
 
@@ -1065,6 +1165,7 @@ export const accountsRelations = relations(accounts, ({ one, many }) => ({
   balances: many(accountBalances),
   recurringTransactions: many(recurringTransactions),
   owners: many(accountOwners),
+  receiptScans: many(receiptScans),
 }));
 
 export const bankConnectionsRelations = relations(
@@ -1102,9 +1203,10 @@ export const categoriesRelations = relations(categories, ({ one, many }) => ({
   transactions: many(transactions),
   categorizationRules: many(categorizationRules),
   budgetCategories: many(budgetCategories),
+  receiptLineItems: many(receiptLineItems),
 }));
 
-export const transactionsRelations = relations(transactions, ({ one }) => ({
+export const transactionsRelations = relations(transactions, ({ one, many }) => ({
   user: one(users, {
     fields: [transactions.userId],
     references: [users.id],
@@ -1144,6 +1246,7 @@ export const transactionsRelations = relations(transactions, ({ one }) => ({
     fields: [transactions.logoId],
     references: [companyLogos.id],
   }),
+  receiptLineItems: many(receiptLineItems),
 }));
 
 export const internalTransfersRelations = relations(
@@ -1343,6 +1446,39 @@ export const vehicleOwnersRelations = relations(vehicleOwners, ({ one }) => ({
   }),
 }));
 
+export const receiptScansRelations = relations(
+  receiptScans,
+  ({ one, many }) => ({
+    user: one(users, {
+      fields: [receiptScans.userId],
+      references: [users.id],
+    }),
+    account: one(accounts, {
+      fields: [receiptScans.accountId],
+      references: [accounts.id],
+    }),
+    lineItems: many(receiptLineItems),
+  }),
+);
+
+export const receiptLineItemsRelations = relations(
+  receiptLineItems,
+  ({ one }) => ({
+    receiptScan: one(receiptScans, {
+      fields: [receiptLineItems.receiptScanId],
+      references: [receiptScans.id],
+    }),
+    category: one(categories, {
+      fields: [receiptLineItems.categoryId],
+      references: [categories.id],
+    }),
+    bookedTransaction: one(transactions, {
+      fields: [receiptLineItems.bookedTransactionId],
+      references: [transactions.id],
+    }),
+  }),
+);
+
 // ============================================================================
 // Newsletter Reports
 // ============================================================================
@@ -1493,3 +1629,9 @@ export type NewReportRun = typeof reportRuns.$inferInsert;
 
 export type RateLimitCounter = typeof rateLimitCounters.$inferSelect;
 export type NewRateLimitCounter = typeof rateLimitCounters.$inferInsert;
+
+export type ReceiptScan = typeof receiptScans.$inferSelect;
+export type NewReceiptScan = typeof receiptScans.$inferInsert;
+
+export type ReceiptLineItem = typeof receiptLineItems.$inferSelect;
+export type NewReceiptLineItem = typeof receiptLineItems.$inferInsert;

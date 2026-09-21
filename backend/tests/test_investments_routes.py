@@ -8,13 +8,10 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
-from sqlalchemy.pool import StaticPool
 
 from app.database import get_db
 from app.main import app
-from app.models import User, Account, Holding, HoldingValuation, AccountBalance, Transaction
+from app.models import User, Account, Holding, Transaction
 
 
 INTERNAL_AUTH_SECRET = "test-internal-secret"
@@ -72,16 +69,16 @@ class SigningClient:
 
 
 @pytest.fixture
-def db():
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    for model in (User, Account, Holding, HoldingValuation, AccountBalance, Transaction):
-        model.__table__.create(bind=engine)
-    with Session(engine) as session:
-        yield session
+def db(db_session):
+    """The shared Postgres session from conftest.
+
+    These tests used to build their own in-memory SQLite schema from a
+    hand-picked subset of models. That stopped working once the models grew
+    JSONB and UUID columns SQLite cannot compile, and it tested against a
+    schema that was never the real one. conftest truncates between tests, so
+    the shared session is just as isolated.
+    """
+    return db_session
 
 
 @pytest.fixture
@@ -177,7 +174,11 @@ def test_delete_holding_only_for_manual(client, db):
         quantity=Decimal("1"),
         source="ibkr_flex",
     )
-    db.add_all([acc, h])
+    # Parents first: these models declare foreign keys but no relationships,
+    # so the flush order is not dependency-sorted for us.
+    db.add(acc)
+    db.flush()
+    db.add(h)
     db.commit()
     r = client.delete(f"/api/investments/holdings/{h.id}")
     assert r.status_code == 400

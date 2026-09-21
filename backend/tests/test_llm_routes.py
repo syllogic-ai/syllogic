@@ -1,6 +1,17 @@
 from types import SimpleNamespace
 
 from app.routes import llm
+from app.services.llm_client import LLMProvider
+
+
+def _provider(client, model, label):
+    return LLMProvider(
+        client=client,
+        model=model,
+        label=label,
+        supports_vision=True,
+        supports_strict_schema=True,
+    )
 
 
 def test_column_mapping_uses_configured_model(monkeypatch):
@@ -23,7 +34,7 @@ def test_column_mapping_uses_configured_model(monkeypatch):
 
     client = SimpleNamespace(chat=SimpleNamespace(completions=StubCompletions()))
     monkeypatch.setattr(
-        llm, "create_llm_clients", lambda db: [(client, "qwen3:8b", "primary")]
+        llm, "create_llm_clients", lambda db: [_provider(client, "qwen3:8b", "primary")]
     )
 
     result = llm.map_csv_columns(
@@ -84,7 +95,10 @@ def test_column_mapping_falls_back_on_quota_error(monkeypatch):
     monkeypatch.setattr(
         llm,
         "create_llm_clients",
-        lambda db: [(primary, "gpt-4o-mini", "primary"), (fallback, "qwen3:8b", "fallback")],
+        lambda db: [
+            _provider(primary, "gpt-4o-mini", "primary"),
+            _provider(fallback, "qwen3:8b", "fallback"),
+        ],
     )
 
     result = llm.map_csv_columns(

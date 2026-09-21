@@ -23,6 +23,7 @@ celery_app = Celery(
         "tasks.report_tasks",
         "tasks.recurring_transaction_tasks",
         "tasks.rate_limit_tasks",
+        "tasks.receipt_tasks",
     ],
     set_as_current=True,
 )

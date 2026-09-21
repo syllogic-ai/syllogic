@@ -21,6 +21,7 @@ from app.db_helpers import set_request_user_id, clear_request_user_id
 from app.models import Transaction, User
 from app.services.exchange_rate_service import ExchangeRateService
 from app.services.account_balance_service import AccountBalanceService
+from app.services.receipt_scan_dedupe import supersede_receipt_duplicates
 from app.services.recurring_transaction_dedupe import supersede_generated_duplicates
 from app.services.subscription_matcher import SubscriptionMatcher
 from app.services.subscription_detector import SubscriptionDetector
@@ -306,6 +307,21 @@ def _reconcile_recurring_placeholders(
     _calculate_timeseries(db, user_id, outcome["account_ids"])
 
 
+def _reconcile_receipt_splits(db, user_id: str, transaction_ids: Optional[List[str]]) -> None:
+    """Drop imported bank rows that receipt splits already account for."""
+    outcome = supersede_receipt_duplicates(db, user_id, transaction_ids=transaction_ids)
+    if not outcome["demoted"]:
+        return
+
+    logger.info(
+        "[POST_IMPORT_PIPELINE] Receipt splits reconciled: %d bank row(s) excluded from analytics",
+        outcome["demoted"],
+    )
+    # No balance recompute, unlike the recurring reconcile above: the bank
+    # row is kept and AccountBalanceService sums Transaction.amount without
+    # consulting include_in_analytics, so nothing steps 5/6 computed moved.
+
+
 def _run_post_import_pipeline(
     user_id: str,
     account_ids: List[str],
@@ -367,6 +383,12 @@ def _run_post_import_pipeline(
         # covered. Runs after step 7 because that is what links the incoming
         # rows to their recurring definition in the first place.
         _reconcile_recurring_placeholders(db, user_id, effective_txn_ids)
+
+        # Step 9: Retire imported bank rows that a photographed receipt has
+        # already booked as categorized splits. Runs last because it only
+        # flips include_in_analytics, which no earlier step's output depends
+        # on.
+        _reconcile_receipt_splits(db, user_id, effective_txn_ids)
 
         logger.info("[POST_IMPORT_PIPELINE] Completed for user=%s", user_id)
 

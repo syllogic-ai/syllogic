@@ -163,7 +163,15 @@ def test_deferred_import_rejects_daily_balances(db, user_id):
     account = _make_account(db, user_id)
     request = _request(
         account,
-        daily_balances=[{"date": datetime.now(timezone.utc).date(), "balance": Decimal("100.00")}],
+        # DailyBalanceImport.date is an ISO string (that is what the CSV
+        # importer sends); a date object fails validation before the route
+        # ever gets to reject the combination under test.
+        daily_balances=[
+            {
+                "date": datetime.now(timezone.utc).date().isoformat(),
+                "balance": Decimal("100.00"),
+            }
+        ],
     )
 
     with pytest.raises(HTTPException) as exc:

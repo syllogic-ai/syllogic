@@ -130,7 +130,10 @@ def project_cash_flow(
 
     series: list[ForecastPoint] = [
         ForecastPoint(
-            day=start, projected_balance=starting_balance, low=starting_balance, high=starting_balance
+            day=start,
+            projected_balance=starting_balance,
+            low=starting_balance,
+            high=starting_balance,
         )
     ]
     balance = starting_balance
@@ -201,4 +204,6 @@ def project_compounding_balance(
         balance = balance * (1 + daily_rate)
         series.append(CompoundingPoint(day=day, balance=balance))
 
-    return CompoundingResult(series=series, starting_balance=starting_balance, balance_at_horizon=balance)
+    return CompoundingResult(
+        series=series, starting_balance=starting_balance, balance_at_horizon=balance
+    )

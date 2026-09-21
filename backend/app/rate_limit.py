@@ -55,9 +55,7 @@ def is_rate_limited(key: str, max_requests: int, window_seconds: int) -> bool:
         # isn't comparable across those scales when pruning old rows.
         window_start = (int(time.time()) // window_seconds) * window_seconds
         with engine.begin() as conn:
-            count = conn.execute(
-                _UPSERT_SQL, {"key": key, "bucket": window_start}
-            ).scalar_one()
+            count = conn.execute(_UPSERT_SQL, {"key": key, "bucket": window_start}).scalar_one()
         return count > max_requests
     except Exception:
         logger.warning(
@@ -67,7 +65,9 @@ def is_rate_limited(key: str, max_requests: int, window_seconds: int) -> bool:
         return False
 
 
-def _parse_networks(raw: Optional[str]) -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]:
+def _parse_networks(
+    raw: Optional[str],
+) -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]:
     """Parse TRUSTED_PROXIES: a comma-separated list of addresses or CIDRs."""
     networks = []
     for part in (raw or "").split(","):
@@ -156,7 +156,9 @@ class IPRateLimitMiddleware:
         self.max_requests = max_requests
         self.window_seconds = window_seconds
         self.exempt_paths = exempt_paths
-        self.trusted_proxies = TRUSTED_PROXIES if trusted_proxies is None else tuple(trusted_proxies)
+        self.trusted_proxies = (
+            TRUSTED_PROXIES if trusted_proxies is None else tuple(trusted_proxies)
+        )
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http" or scope.get("path") in self.exempt_paths:

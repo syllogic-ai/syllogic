@@ -26,9 +26,10 @@ import time
 from typing import Any, Callable
 
 from app.db_helpers import get_mcp_user_id
+from app.mcp.dependencies import get_db
 from app.mcp.tools import accounts as account_tools
-from app.mcp.tools import categories as category_tools
 from app.mcp.tools import people as people_tools
+from app.services import category_tree
 
 
 # (value, expires_at), keyed by (uri, user_id). Per-user because every one of
@@ -198,9 +199,13 @@ def register(mcp) -> None:
         user_id = get_mcp_user_id()
 
         def build() -> str:
-            tree = category_tools.get_category_tree(user_id)
-            _annotate(tree, category_tools.categorization_instructions_map(user_id))
-            return json.dumps(tree, indent=2)
+            with get_db() as db:
+                return category_tree.serialize_for_prompt(
+                    db,
+                    user_id,
+                    types=category_tree.ALL_CATEGORY_TYPES,
+                    leaves_only=False,
+                )
 
         return _cached("syllogic://categories", user_id, CATEGORIES_TTL, build)
 
@@ -217,9 +222,3 @@ def register(mcp) -> None:
             return json.dumps(people_tools.list_people(user_id), indent=2)
 
         return _cached("syllogic://people", user_id, PEOPLE_TTL, build)
-
-
-def _annotate(tree: list[dict], instructions: dict) -> None:
-    for node in tree:
-        node["categorization_instructions"] = instructions.get(node["id"])
-        _annotate(node.get("children") or [], instructions)

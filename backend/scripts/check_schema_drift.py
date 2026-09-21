@@ -19,9 +19,16 @@ SQLAlchemy mirror 100% of the Drizzle schema."
 
 Usage:
     DATABASE_URL=postgresql://... python scripts/check_schema_drift.py
+    DATABASE_URL=postgresql://... python scripts/check_schema_drift.py --ignore-extra-columns
 
 Exit code is non-zero (and CI should fail) only when a table SQLAlchemy
 maps is missing entirely, or its column set doesn't match the database.
+
+`--ignore-extra-columns` narrows that to "everything the models need exists",
+reporting columns the database has but the models don't as informational.
+That is the question scripts/test-backend.sh asks before running the suite:
+a column the models never reference cannot break a test, and gating the test
+run on unrelated pre-existing drift would just stop anyone running tests.
 """
 
 from __future__ import annotations
@@ -38,6 +45,7 @@ import app.models  # noqa: E402, F401 -- registers every table on Base.metadata
 
 
 def main() -> int:
+    ignore_extra_columns = "--ignore-extra-columns" in sys.argv[1:]
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
         print("DATABASE_URL is required", file=sys.stderr)
@@ -69,7 +77,12 @@ def main() -> int:
                 f"table '{table_name}': column(s) {sorted(missing_in_db)} are in app/models.py "
                 "but missing from the database"
             )
-        if missing_in_model:
+        if missing_in_model and ignore_extra_columns:
+            info.append(
+                f"table '{table_name}': column(s) {sorted(missing_in_model)} exist in the database "
+                "but aren't in app/models.py (ignored)"
+            )
+        elif missing_in_model:
             errors.append(
                 f"table '{table_name}': column(s) {sorted(missing_in_model)} exist in the database "
                 "but aren't in app/models.py"

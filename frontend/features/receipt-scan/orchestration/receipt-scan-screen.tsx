@@ -5,8 +5,8 @@ import {
   RiAddLine,
   RiArrowLeftLine,
   RiArrowRightLine,
-  RiDeleteBinLine,
-  RiScissorsCutLine,
+  RiCloseLine,
+  RiLoader4Line,
 } from "@remixicon/react";
 import {
   Card,
@@ -18,13 +18,38 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { normalizeDecimalInput } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 import { CategorySelect } from "@/components/categories/category-select";
 import { AccountSelect } from "@/components/accounts/account-select";
 import { Header } from "@/components/layout/header";
 import { ReceiptUploadDropzone } from "@/components/transactions/receipt-upload-dropzone";
 import { useReceiptScanController } from "../hooks/use-receipt-scan-controller";
+import type { ReceiptGroup } from "../domain/contracts";
+
+function GroupList({ groups }: { groups: ReceiptGroup[] }) {
+  if (groups.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        {translate("computingHowThisReceiptWillBeBooked")}
+      </p>
+    );
+  }
+  return (
+    <ul className="space-y-1">
+      {groups.map((group) => (
+        <li
+          key={`${group.categoryId ?? "uncategorized"}-${group.lineRefs.join(",")}`}
+          className="flex items-center justify-between text-xs"
+        >
+          <span className="truncate pr-2">
+            {group.categoryName ?? translate("noCategory")}
+          </span>
+          <span className="font-medium">{Number(group.amount).toFixed(2)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export default function ReceiptScanScreen() {
   const {
@@ -37,24 +62,32 @@ export default function ReceiptScanScreen() {
     previewUrl,
     isUploading,
     isSubmitting,
+    pollTimedOut,
+    retryPolling,
     selectFile,
     clearFile,
     extract,
     merchantName,
-    receiptTotal,
     items,
     itemsTotal,
-    updateItem,
-    removeItem,
-    splitItem,
+    detectedTotal,
+    canConfirm,
+    validationErrors,
+    flaggedLineRefs,
+    updateItemCategory,
+    updateItemAmount,
+    updateItemDescription,
     addBlankItem,
+    removeItem,
+    saveCorrections,
+    isSavingCorrections,
+    groupPreview,
+    isPreviewing,
     confirm,
     goBack,
   } = useReceiptScanController();
 
-  const detectedTotal = receiptTotal ? Number(receiptTotal) : null;
-  const totalMismatch =
-    detectedTotal !== null && Math.abs(detectedTotal - itemsTotal) > 0.01;
+  const needsReview = step === "needs_review";
 
   if (step === "upload") {
     return (
@@ -122,104 +155,175 @@ export default function ReceiptScanScreen() {
     );
   }
 
+  if (step === "extracting") {
+    return (
+      <>
+        <Header title={translate("processingReceipt")} />
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 p-4 pt-0">
+          <Card className="w-full max-w-2xl">
+            <CardHeader>
+              <CardTitle>{translate("processingReceipt")}</CardTitle>
+              <CardDescription>
+                {pollTimedOut
+                  ? translate("stillWorkingOnItThisIsTakingLongerThanUsual")
+                  : translate(
+                      "weAreExtractingTheDetailsFromYourReceiptThisCanTakeAMoment",
+                    )}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col items-center gap-4 py-8">
+              <RiLoader4Line className="h-8 w-8 animate-spin text-muted-foreground" />
+            </CardContent>
+            <CardFooter className="justify-between">
+              <Button type="button" variant="outline" onClick={goBack}>
+                <RiArrowLeftLine className="mr-2 h-4 w-4" />
+                {translate("back")}
+              </Button>
+              {pollTimedOut && (
+                <Button type="button" onClick={retryPolling}>
+                  {translate("checkAgain")}
+                </Button>
+              )}
+            </CardFooter>
+          </Card>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
-      <Header title={translate("reviewReceiptItems")} />
+      <Header
+        title={
+          needsReview
+            ? translate("reviewFlaggedItems")
+            : translate("reviewReceiptItems")
+        }
+      />
       <div className="flex flex-1 flex-col items-center gap-4 p-4 pt-0">
         <Card className="w-full max-w-3xl">
           <CardHeader>
-            <CardTitle>{translate("reviewReceiptItems")}</CardTitle>
+            <CardTitle>
+              {needsReview
+                ? translate("reviewFlaggedItems")
+                : translate("reviewReceiptItems")}
+            </CardTitle>
             <CardDescription>
-              {merchantName
-                ? translate("editTheItemsDetectedAtMerchant", {
-                    merchant: merchantName,
-                  })
-                : translate("editTheDetectedItemsSplitOrAdjustAsNeeded")}
+              {needsReview
+                ? translate(
+                    "someLinesDidNotAddUpFixTheHighlightedLinesBeforeConfirming",
+                  )
+                : merchantName
+                  ? translate("editTheItemsDetectedAtMerchant", {
+                      merchant: merchantName,
+                    })
+                  : translate("editTheDetectedItemsSplitOrAdjustAsNeeded")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-3">
-              {items.map((item) => (
-                <div
-                  key={item.key}
-                  className="grid grid-cols-1 gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_120px_1fr_auto]"
-                >
-                  <Input
-                    aria-label={translate("description55f8eb")}
-                    placeholder={translate("description55f8eb")}
-                    value={item.description}
-                    onChange={(e) =>
-                      updateItem(item.key, { description: e.target.value })
-                    }
-                  />
-                  <Input
-                    aria-label={translate("amount")}
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="0.00"
-                    value={item.amount}
-                    onChange={(e) =>
-                      updateItem(item.key, {
-                        amount: normalizeDecimalInput(e.target.value),
-                      })
-                    }
-                  />
-                  <CategorySelect
-                    categories={categories}
-                    value={item.categoryId ?? ""}
-                    onChange={(v) =>
-                      updateItem(item.key, {
-                        categoryId: v || null,
-                        categoryName:
-                          categories.find((c) => c.id === v)?.name ?? null,
-                      })
-                    }
-                    noneLabel={translate("noCategory")}
-                    placeholder={translate("selectACategory")}
-                    fallbackColor="#666"
-                  />
-                  <div className="flex items-center gap-1 justify-self-end">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      title={translate("splitThisItem")}
-                      onClick={() => splitItem(item.key)}
-                    >
-                      <RiScissorsCutLine className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      title={translate("removeThisItem")}
-                      onClick={() => removeItem(item.key)}
-                      disabled={items.length === 1}
-                    >
-                      <RiDeleteBinLine className="h-4 w-4" />
-                    </Button>
+              {items.map((item) => {
+                const isFlagged =
+                  !!item.lineRef && flaggedLineRefs.has(item.lineRef);
+                return (
+                  <div
+                    key={item.key}
+                    className={`grid grid-cols-1 gap-2 rounded-lg border p-3 ${
+                      needsReview
+                        ? "sm:grid-cols-[1fr_100px_auto]"
+                        : "sm:grid-cols-[1fr_100px_1fr]"
+                    } ${isFlagged ? "border-destructive/50 bg-destructive/10" : ""}`}
+                  >
+                    {isFlagged && (
+                      <span className="text-xs font-medium text-destructive sm:col-span-3">
+                        {translate("flagged")}
+                      </span>
+                    )}
+                    {needsReview ? (
+                      <div className="flex flex-col justify-center gap-1">
+                        <Input
+                          value={item.description}
+                          onChange={(e) =>
+                            updateItemDescription(item.key, e.target.value)
+                          }
+                          className="h-8 text-sm"
+                        />
+                        {item.categoryReason && (
+                          <span className="text-xs text-muted-foreground">
+                            {item.categoryReason}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col justify-center">
+                        <span className="text-sm">{item.description}</span>
+                        {item.categoryReason && (
+                          <span className="text-xs text-muted-foreground">
+                            {item.categoryReason}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {needsReview ? (
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={item.amount}
+                        onChange={(e) =>
+                          updateItemAmount(item.key, e.target.value)
+                        }
+                        className="h-8 text-right text-sm"
+                      />
+                    ) : (
+                      <div className="flex items-center text-sm font-medium sm:justify-end">
+                        {Number(item.amount || 0).toFixed(2)}
+                      </div>
+                    )}
+                    {needsReview ? (
+                      <div className="flex items-center justify-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={translate("removeLine")}
+                          onClick={() => removeItem(item.key)}
+                        >
+                          <RiCloseLine className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <CategorySelect
+                        categories={categories}
+                        value={item.categoryId ?? ""}
+                        onChange={(v) =>
+                          updateItemCategory(
+                            item.key,
+                            v || null,
+                            categories.find((c) => c.id === v)?.name ?? null,
+                          )
+                        }
+                        noneLabel={translate("noCategory")}
+                        placeholder={translate("selectACategory")}
+                        fallbackColor="#666"
+                      />
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
+              {needsReview && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addBlankItem}
+                >
+                  <RiAddLine className="mr-2 h-4 w-4" />
+                  {translate("addItem")}
+                </Button>
+              )}
             </div>
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={addBlankItem}
-            >
-              <RiAddLine className="mr-2 h-4 w-4" />
-              {translate("addItem")}
-            </Button>
-
-            <div
-              className={`rounded-none border p-3 text-xs ${
-                totalMismatch
-                  ? "border-warning/50 bg-warning/10 text-warning"
-                  : "border-muted bg-muted/40"
-              }`}
-            >
+            <div className="rounded-none border p-3 text-xs border-muted bg-muted/40">
               <div className="flex items-center justify-between">
                 <span>{translate("itemsTotal")}</span>
                 <span className="font-medium">{itemsTotal.toFixed(2)}</span>
@@ -231,17 +335,60 @@ export default function ReceiptScanScreen() {
                 </div>
               )}
             </div>
+
+            {!needsReview && (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="rounded-none border p-3">
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">
+                    {translate("perLineCategoryUncollapsed")}
+                  </p>
+                  {isPreviewing ? (
+                    <RiLoader4Line className="h-4 w-4 animate-spin text-muted-foreground" />
+                  ) : (
+                    <GroupList groups={groupPreview?.uncollapsed ?? []} />
+                  )}
+                </div>
+                <div className="rounded-none border p-3">
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">
+                    {translate("whatWillActuallyBeBooked")}
+                  </p>
+                  {isPreviewing ? (
+                    <RiLoader4Line className="h-4 w-4 animate-spin text-muted-foreground" />
+                  ) : (
+                    <GroupList groups={groupPreview?.resolved ?? []} />
+                  )}
+                </div>
+              </div>
+            )}
+
+            {validationErrors.length > 0 && (
+              <ul className="space-y-1 text-xs text-destructive">
+                {validationErrors.map((error) => (
+                  <li key={error.code + error.lineRefs.join(",")}>
+                    {error.message}
+                  </li>
+                ))}
+              </ul>
+            )}
           </CardContent>
           <CardFooter className="justify-between">
             <Button type="button" variant="outline" onClick={goBack}>
               <RiArrowLeftLine className="mr-2 h-4 w-4" />
               {translate("back")}
             </Button>
-            <Button onClick={confirm} disabled={isSubmitting}>
-              {isSubmitting
-                ? translate("saving")
-                : translate("createTransactions")}
-            </Button>
+            {needsReview ? (
+              <Button onClick={saveCorrections} disabled={isSavingCorrections}>
+                {isSavingCorrections
+                  ? translate("saving")
+                  : translate("saveCorrections")}
+              </Button>
+            ) : (
+              <Button onClick={confirm} disabled={isSubmitting || !canConfirm}>
+                {isSubmitting
+                  ? translate("saving")
+                  : translate("createTransactions")}
+              </Button>
+            )}
           </CardFooter>
         </Card>
       </div>

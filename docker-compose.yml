@@ -91,6 +91,7 @@ services:
       - ./backend:/app
       - ./frontend:/frontend:ro
       - frontend_node_modules:/frontend/node_modules:ro
+      - frontend_uploads:/app/uploads
     environment:
       - DATABASE_URL=postgresql+psycopg://financeuser:financepass@db:5432/finance_db
       - REDIS_URL=redis://redis:6379/0
@@ -108,7 +109,9 @@ services:
       - LLM_BASE_URL=${LLM_BASE_URL:-}
       - LLM_MODEL=${LLM_MODEL:-}
       - CATEGORIZATION_LLM_MODEL=${CATEGORIZATION_LLM_MODEL:-}
+      - RECEIPT_EXTRACTION_ENGINE=${RECEIPT_EXTRACTION_ENGINE:-tesseract}
       - FRONTEND_EMAILS_DIR=/frontend/emails
+      - LOCAL_STORAGE_PATH=/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -135,6 +138,7 @@ services:
       - ./backend:/app
       - ./frontend:/frontend:ro
       - frontend_node_modules:/frontend/node_modules:ro
+      - frontend_uploads:/app/uploads
     environment:
       - DATABASE_URL=postgresql+psycopg://financeuser:financepass@db:5432/finance_db
       - REDIS_URL=redis://redis:6379/0
@@ -152,7 +156,9 @@ services:
       - LLM_BASE_URL=${LLM_BASE_URL:-}
       - LLM_MODEL=${LLM_MODEL:-}
       - CATEGORIZATION_LLM_MODEL=${CATEGORIZATION_LLM_MODEL:-}
+      - RECEIPT_EXTRACTION_ENGINE=${RECEIPT_EXTRACTION_ENGINE:-tesseract}
       - FRONTEND_EMAILS_DIR=/frontend/emails
+      - LOCAL_STORAGE_PATH=/app/uploads
     depends_on:
       db:
         condition: service_healthy

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import contextlib
 import logging
-import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
@@ -59,6 +58,21 @@ class _FakeSessionFactory:
             all_result=[self.record] if self.record else [],
         )
         return session
+
+
+def _clock_at(moment):
+    """A `datetime` stand-in whose `now()` is fixed at `moment`.
+
+    A subclass rather than a MagicMock so that instances are still real
+    datetimes and comparisons against them behave normally.
+    """
+
+    class _FrozenDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return moment if tz else moment.replace(tzinfo=None)
+
+    return _FrozenDatetime
 
 
 def _make_record(expires_at=None, user_id="user_123"):
@@ -185,7 +199,11 @@ class TestCacheExpiry:
 
     def test_key_expiring_mid_ttl_is_rejected_without_reverifying(self, fake_engine):
         # Valid when first verified, lapsed by the time it is used again.
-        expires_at = datetime.now(timezone.utc) + timedelta(milliseconds=50)
+        # The lapse is produced by moving the clock rather than by sleeping
+        # past a short real expiry: a real-time window small enough to keep
+        # the suite fast is also small enough for a loaded machine to blow
+        # through during the first call, which made this test fail at random.
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=30)
         factory = _FakeSessionFactory(_make_record(expires_at=expires_at))
         fake_engine.row = (expires_at,)
 
@@ -196,8 +214,11 @@ class TestCacheExpiry:
             assert validate_api_key(VALID_KEY) == "user_123"
             assert factory.session_count == 1
 
-            time.sleep(0.1)
-            assert validate_api_key(VALID_KEY) is None
+            # Still inside the cache TTL, but past the key's own expiry.
+            with patch.object(
+                auth_module, "datetime", _clock_at(expires_at + timedelta(seconds=1))
+            ):
+                assert validate_api_key(VALID_KEY) is None
 
         # Rejected without a second bcrypt comparison: the key was never
         # re-verified, only re-read.

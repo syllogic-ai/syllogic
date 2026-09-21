@@ -112,6 +112,12 @@ jobs:
         DATABASE_URL: postgresql://financeuser:financepass@localhost:5432/finance_db
       run: node scripts/migrate.js
 
+    - name: Run backend schema migrations
+      working-directory: ./backend
+      env:
+        DATABASE_URL: postgresql+psycopg://financeuser:financepass@localhost:5432/finance_db
+      run: python postgres_migration/run_all.py
+
     - name: Check backend/frontend schema drift
       working-directory: ./backend
       env:
@@ -150,20 +156,7 @@ jobs:
         DATABASE_URL: postgresql+psycopg://financeuser:financepass@localhost:5432/finance_db
         REDIS_URL: redis://localhost:6379/0
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'test-key' }}
-      run: |
-        # These 6 files use an in-memory SQLite fixture that predates this
-        # workflow and can't compile the JSONB columns the schema now uses
-        # (accounts.alias_patterns, holdings.*, etc.) -- a pre-existing,
-        # unrelated bug in the fixture itself, not in the code it tests.
-        # Tracked separately; excluded here so the rest of the suite (366+
-        # tests) actually gates the build instead of being blocked by it.
-        pytest tests/ -v --timeout=120 \
-          --ignore=tests/test_holding_valuation_service.py \
-          --ignore=tests/test_investment_sync_service.py \
-          --ignore=tests/test_investment_tasks.py \
-          --ignore=tests/test_investments_routes.py \
-          --ignore=tests/test_mcp_investments_tools.py \
-          --ignore=tests/test_receipt_scan_routes.py
+      run: pytest tests/ -v --timeout=120
 
     - name: Test Summary
       if: always()

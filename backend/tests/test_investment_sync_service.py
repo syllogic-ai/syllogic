@@ -1,42 +1,38 @@
-from datetime import date, datetime
+from datetime import date
 from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
 
 from app.models import (
     Account,
     Holding,
-    PriceSnapshot,
-    HoldingValuation,
-    AccountBalance,
     User,
 )
 from app.services.investment_sync_service import InvestmentSyncService
 
 
 @pytest.fixture
-def db():
-    engine = create_engine("sqlite:///:memory:")
-    for model in (
-        User,
-        Account,
-        Holding,
-        PriceSnapshot,
-        HoldingValuation,
-        AccountBalance,
-    ):
-        model.__table__.create(bind=engine)
-    with Session(engine) as session:
-        yield session
+def db(db_session):
+    """The shared Postgres session from conftest.
+
+    These tests used to build their own in-memory SQLite schema from a
+    hand-picked subset of models. That stopped working once the models grew
+    JSONB and UUID columns SQLite cannot compile, and it tested against a
+    schema that was never the real one. conftest truncates between tests, so
+    the shared session is just as isolated.
+    """
+    return db_session
 
 
 def test_sync_manual_prices_and_revalues_holdings(db):
     user = User(id="u1", email="u@example.com", functional_currency="EUR")
     acc = Account(
-        id=uuid4(), user_id="u1", name="My Investments", account_type="investment_manual", currency="EUR"
+        id=uuid4(),
+        user_id="u1",
+        name="My Investments",
+        account_type="investment_manual",
+        currency="EUR",
     )
     holding = Holding(
         id=uuid4(),
@@ -49,7 +45,13 @@ def test_sync_manual_prices_and_revalues_holdings(db):
         avg_cost="150",
         source="manual",
     )
-    db.add_all([user, acc, holding])
+    # Parents first: these models declare foreign keys but no relationships,
+    # so the flush order is not dependency-sorted for us.
+    db.add(user)
+    db.flush()
+    db.add(acc)
+    db.flush()
+    db.add(holding)
     db.commit()
 
     fx = MagicMock()
@@ -77,10 +79,16 @@ def test_sync_rejects_non_manual_account(db):
     acc = Account(
         id=uuid4(), user_id="u1", name="Checking", account_type="checking", currency="EUR"
     )
-    db.add_all([user, acc])
+    # Parents first: these models declare foreign keys but no relationships,
+    # so the flush order is not dependency-sorted for us.
+    db.add(user)
+    db.flush()
+    db.add(acc)
     db.commit()
 
     fx = MagicMock()
-    svc = InvestmentSyncService(db=db, fx=fx, price_service=MagicMock(), valuation_service=MagicMock())
+    svc = InvestmentSyncService(
+        db=db, fx=fx, price_service=MagicMock(), valuation_service=MagicMock()
+    )
     with pytest.raises(ValueError):
         svc.sync_account(acc.id, on=date(2026, 4, 18))

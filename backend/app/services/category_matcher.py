@@ -22,7 +22,7 @@ from app.services.app_settings import (
     get_llm_model,
     get_openai_api_key,
 )
-from app.services.llm_client import create_llm_clients, is_fallback_worthy_error
+from app.services.llm_client import LLMProvider, create_llm_clients, is_fallback_worthy_error
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -141,7 +141,7 @@ class CategoryMatcher:
         self.user_id = user_id if user_id else get_user_id(user_id)
         self._category_cache: Optional[Dict[str, Category]] = None
         self._keyword_rules: Optional[Dict[str, List[str]]] = None
-        self._llm_providers: Optional[List[Tuple[object, str, str]]] = None
+        self._llm_providers: Optional[List[LLMProvider]] = None
         self._openai_api_key: Optional[str] = None
         self._category_instructions_cache: Optional[List[str]] = None
         self._account_cache: Optional[list] = None
@@ -649,14 +649,15 @@ class CategoryMatcher:
             }
         return self._keyword_rules
 
-    def _get_llm_providers(self) -> List[Tuple[object, str, str]]:
+    def _get_llm_providers(self) -> List[LLMProvider]:
         """
         Get or create the ordered list of configured LLM providers (cached).
 
-        Returns (client, model, label) tuples: the primary (user/env-configured)
+        Returns `LLMProvider` entries: the primary (user/env-configured)
         provider first, followed by the deployment's fallback provider
         (LLM_FALLBACK_BASE_URL) if one is configured. Empty list if neither
-        is available.
+        is available. No capability filtering — this call site's behaviour is
+        unchanged from before `requires` existed.
         """
         if self._llm_providers is None:
             try:
@@ -664,7 +665,10 @@ class CategoryMatcher:
                 if self._llm_providers:
                     logger.info(
                         "LLM providers available: %s",
-                        ", ".join(f"{label}({model})" for _, model, label in self._llm_providers),
+                        ", ".join(
+                            f"{provider.label}({provider.model})"
+                            for provider in self._llm_providers
+                        ),
                     )
                 else:
                     logger.warning(
@@ -699,7 +703,8 @@ class CategoryMatcher:
         max_retries = retries if retries is not None else self.LLM_MAX_RETRIES
         last_error: Optional[Exception] = None
 
-        for client, model, label in providers:
+        for provider in providers:
+            client, model, label = provider.client, provider.model, provider.label
             for attempt in range(max_retries):
                 try:
                     kwargs = {"timeout": timeout} if timeout is not None else {}
@@ -811,9 +816,7 @@ class CategoryMatcher:
         from app.models import MerchantAlias
 
         merchant_lower = merchant.lower()
-        aliases = (
-            self.db.query(MerchantAlias).filter(MerchantAlias.category_id.isnot(None)).all()
-        )
+        aliases = self.db.query(MerchantAlias).filter(MerchantAlias.category_id.isnot(None)).all()
         for alias in aliases:
             if re.search(rf"\b{re.escape(alias.pattern.lower())}\b", merchant_lower):
                 category = self.db.query(Category).filter(Category.id == alias.category_id).first()

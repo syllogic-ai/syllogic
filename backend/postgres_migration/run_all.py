@@ -30,6 +30,7 @@ from postgres_migration import (
     add_mcp_idempotency_keys,
     add_merchant_aliases_table,
     add_receipt_scans,
+    add_receipt_ingestion_columns,
     add_transaction_logo_id,
 )
 
@@ -37,6 +38,7 @@ MIGRATIONS = [
     add_account_alias_patterns,
     add_broker_trades_fees,
     add_receipt_scans,
+    add_receipt_ingestion_columns,
     add_transaction_logo_id,
     add_merchant_aliases_table,
     add_mcp_idempotency_keys,

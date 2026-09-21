@@ -8,6 +8,7 @@ from app.mcp.dependencies import get_db, require_uuid, validate_uuid
 from app.mcp.errors import missing_argument, not_found, raise_database_error
 from app.mcp.tools._writes import mutation_result, preview_or_commit, snapshot
 from app.models import Category
+from app.services import category_instruction_lint
 
 
 # The fields update_category can actually change. Snapshotted before and
@@ -33,6 +34,22 @@ def _serialize_category(category) -> dict:
         "is_system": category.is_system,
         "created_at": category.created_at.isoformat() if category.created_at else None,
     }
+
+
+def _instruction_warnings(db, user_id: str, category) -> dict:
+    """`{"instruction_warnings": [...]}` when the instructions name a
+    category that does not resolve, `{}` otherwise.
+
+    Spread into `mutation_result`, so a clean write is shaped exactly as it
+    was before this check existed. The lint itself never raises (see
+    `app/services/category_instruction_lint.py`): instructions that route to
+    a name the tree no longer has are worth flagging, and are never worth
+    refusing a write the user asked for.
+    """
+    findings = category_instruction_lint.lint_category(db, user_id, category)
+    if not findings:
+        return {}
+    return {"instruction_warnings": category_instruction_lint.warning_messages(findings)}
 
 
 def categorization_instructions_map(user_id: str) -> dict[str, str | None]:
@@ -160,6 +177,14 @@ def update_category(
         serialized `category`. `changed` is False when the values were
         already what was asked for. Raises ToolError on invalid input or an
         unknown category_id.
+
+        Carries `instruction_warnings` **only when the new instructions name
+        a category that does not exist** -- a renamed or deleted target the
+        instructions still route to, which degrades every categorization
+        that reads them and is otherwise invisible. The check is a heuristic
+        over prose (see `category_instruction_lint`), so it warns and the
+        write goes through regardless; the key is absent on a clean write so
+        the usual response stays lean.
     """
     if description is None and categorization_instructions is None:
         raise missing_argument(
@@ -202,6 +227,11 @@ def update_category(
                     before,
                     snapshot(category, EDITABLE_FIELDS),
                     category=_serialize_category(category),
+                    # Built inside the response callback so the lint reads
+                    # the instructions this call just set (and resolves them
+                    # against the tree as it stands now), on a preview as
+                    # well as on a commit.
+                    **_instruction_warnings(db, user_id, category),
                 ),
             )
         except Exception as e:

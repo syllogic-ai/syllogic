@@ -1,6 +1,17 @@
 """Verify that with an alias-matched account, the LLM prompt steers toward the transfer category."""
 
 from app.services.category_matcher import CategoryMatcher
+from app.services.llm_client import LLMProvider
+
+
+def _stub_provider(client, model="test-model", label="primary"):
+    return LLMProvider(
+        client=client,
+        model=model,
+        label=label,
+        supports_vision=True,
+        supports_strict_schema=True,
+    )
 
 
 class FakeCategory:
@@ -50,7 +61,7 @@ def test_llm_selects_transfers_when_alias_matches(monkeypatch, db_session):
                     )
 
     m = CategoryMatcher(db=db_session, user_id="llm-user")
-    monkeypatch.setattr(m, "_get_llm_providers", lambda: [(StubClient(), "test-model", "primary")])
+    monkeypatch.setattr(m, "_get_llm_providers", lambda: [_stub_provider(StubClient())])
     monkeypatch.setattr(m, "_load_categories", lambda: {})
     m._account_cache = [FakeAccount("Revolut Pro", alias_patterns=["Apple Pay Top-Up by *1234"])]
     cats = [FakeCategory("Transfers", category_type="transfer"), FakeCategory("Food & Dining")]

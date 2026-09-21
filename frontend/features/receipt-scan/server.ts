@@ -1,3 +1,9 @@
 import "server-only";
 
-export { confirmReceiptScan, uploadAndExtractReceipt } from "./server/actions";
+export {
+  confirmReceiptScan,
+  correctReceiptScanLines,
+  getReceiptScanStatus,
+  previewReceiptScanGroups,
+  uploadAndExtractReceipt,
+} from "./server/actions";
