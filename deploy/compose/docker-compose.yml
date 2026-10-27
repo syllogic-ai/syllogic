@@ -90,7 +90,7 @@ services:
   mcp:
     image: ghcr.io/syllogic-ai/syllogic-backend:${APP_VERSION:-edge}
     container_name: syllogic-mcp
-    command: uvicorn mcp_server:app --host 0.0.0.0 --port 8001
+    command: uvicorn mcp_server:app --host 0.0.0.0 --port 8001 --proxy-headers --forwarded-allow-ips '*'
     environment:
       PROCESS_TYPE: mcp
       PORT: "8001"
