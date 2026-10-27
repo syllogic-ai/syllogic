@@ -56,7 +56,10 @@ export const auth = betterAuth({
       },
     }),
     oauthProvider({
-      scopes: ["mcp:access"],
+      // `offline_access` is what earns a refresh token. A client that registers or authorizes
+      // without naming scopes (Composio's DCR_OAUTH, see lib/auth-oauth.test.ts) gets this whole
+      // list, so it can refresh instead of re-authorizing when the access token expires.
+      scopes: ["mcp:access", "offline_access"],
       accessTokenExpiresIn: 60 * 60 * 24 * 30, // 30 days
       refreshTokenExpiresIn: 60 * 60 * 24 * 90, // 90 days
       allowDynamicClientRegistration: true,

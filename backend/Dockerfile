@@ -105,4 +105,4 @@ USER app
 EXPOSE 8000
 
 # Use PROCESS_TYPE to run API, MCP, Celery worker, or Celery beat from the same image.
-CMD ["sh", "-c", "if [ \"$PROCESS_TYPE\" = \"worker\" ]; then exec celery -A celery_app worker --loglevel=info --concurrency=4; elif [ \"$PROCESS_TYPE\" = \"beat\" ]; then exec celery -A celery_app beat --loglevel=info; elif [ \"$PROCESS_TYPE\" = \"mcp\" ]; then exec uvicorn mcp_server:app --host 0.0.0.0 --port ${PORT:-8001}; else exec gunicorn -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:${PORT:-8000} --workers 2 --timeout 120; fi"]
+CMD ["sh", "-c", "if [ \"$PROCESS_TYPE\" = \"worker\" ]; then exec celery -A celery_app worker --loglevel=info --concurrency=4; elif [ \"$PROCESS_TYPE\" = \"beat\" ]; then exec celery -A celery_app beat --loglevel=info; elif [ \"$PROCESS_TYPE\" = \"mcp\" ]; then exec uvicorn mcp_server:app --host 0.0.0.0 --port ${PORT:-8001} --proxy-headers --forwarded-allow-ips '*'; else exec gunicorn -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:${PORT:-8000} --workers 2 --timeout 120; fi"]

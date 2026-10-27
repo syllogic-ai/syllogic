@@ -17,6 +17,8 @@ type SearchParams = {
 const SCOPE_DESCRIPTIONS: Record<string, string> = {
   "mcp:access":
     "View and update your financial data via the Syllogic MCP server",
+  offline_access:
+    "Stay connected without signing in again (a refresh token)",
 };
 
 export default async function ConsentPage({
