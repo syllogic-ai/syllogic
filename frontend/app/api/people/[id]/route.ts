@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { updatePerson, deletePerson, getPeople } from "@/lib/people";
 import { uploadPersonAvatar, deletePersonAvatar, avatarUrl } from "@/lib/people/avatars";
-import { requireAuth } from "@/lib/auth-helpers";
+import { isDemoRestrictedSession, requireAuth } from "@/lib/auth-helpers";
+import { DEMO_RESTRICTED_ACTION_ERROR } from "@/lib/demo-access";
 
 const patchSchema = z.object({
   name: z.string().min(1).max(255).optional(),
@@ -17,6 +18,9 @@ const patchSchema = z.object({
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const userId = await requireAuth();
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (await isDemoRestrictedSession()) {
+    return NextResponse.json({ error: DEMO_RESTRICTED_ACTION_ERROR }, { status: 403 });
+  }
   const { id } = await ctx.params;
   const form = await req.formData();
   const parsed = patchSchema.safeParse({
@@ -68,6 +72,9 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const userId = await requireAuth();
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (await isDemoRestrictedSession()) {
+    return NextResponse.json({ error: DEMO_RESTRICTED_ACTION_ERROR }, { status: 403 });
+  }
   const { id } = await ctx.params;
   try {
     // Capture the avatar path before deletion to clean up.

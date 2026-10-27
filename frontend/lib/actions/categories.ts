@@ -4,7 +4,8 @@ import { revalidatePath, updateTag } from "next/cache";
 import { eq, and, count } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { categories, transactions, type Category, type NewCategory } from "@/lib/db/schema";
-import { requireAuth } from "@/lib/auth-helpers";
+import { isDemoRestrictedSession, requireAuth } from "@/lib/auth-helpers";
+import { DEMO_RESTRICTED_ACTION_ERROR } from "@/lib/demo-access";
 import { getCachedUserCategories, CACHE_TAGS } from "@/lib/data/cached";
 
 export interface CategoryCreateInput {
@@ -42,6 +43,10 @@ export async function createCategory(
 
   if (!userId) {
     return { success: false, error: "Not authenticated" };
+  }
+
+  if (await isDemoRestrictedSession()) {
+    return { success: false, error: DEMO_RESTRICTED_ACTION_ERROR };
   }
 
   try {
@@ -89,6 +94,10 @@ export async function updateCategory(
 
   if (!userId) {
     return { success: false, error: "Not authenticated" };
+  }
+
+  if (await isDemoRestrictedSession()) {
+    return { success: false, error: DEMO_RESTRICTED_ACTION_ERROR };
   }
 
   try {
@@ -319,6 +328,10 @@ export async function deleteCategoryWithReassignment(
 
   if (!userId) {
     return { success: false, error: "Not authenticated" };
+  }
+
+  if (await isDemoRestrictedSession()) {
+    return { success: false, error: DEMO_RESTRICTED_ACTION_ERROR };
   }
 
   try {

@@ -82,12 +82,10 @@ export function SettingsTabs({
           <RiUploadLine className="mr-1.5 h-4 w-4" />
           Import History
         </TabsTrigger>
-        {!isDemoUser && (
-          <TabsTrigger value="bank-connections">
-            <RiBankLine className="mr-1.5 h-4 w-4" />
-            Bank Connections
-          </TabsTrigger>
-        )}
+        <TabsTrigger value="bank-connections">
+          <RiBankLine className="mr-1.5 h-4 w-4" />
+          Bank Connections
+        </TabsTrigger>
         <TabsTrigger value="household">
           <RiGroupLine className="mr-1.5 h-4 w-4" />
           Household
@@ -95,11 +93,11 @@ export function SettingsTabs({
       </TabsList>
 
       <TabsContent value="profile">
-        <ProfileEditor user={user} />
+        <ProfileEditor user={user} isDemoUser={isDemoUser} />
       </TabsContent>
 
       <TabsContent value="categories">
-        <CategoryManager initialCategories={categories} />
+        <CategoryManager initialCategories={categories} isDemoUser={isDemoUser} />
       </TabsContent>
 
       <TabsContent value="api-keys">
@@ -114,14 +112,12 @@ export function SettingsTabs({
         <ImportHistoryManager initialImports={csvImports} canDelete={canDelete} />
       </TabsContent>
 
-      {!isDemoUser && (
-        <TabsContent value="bank-connections">
-          <BankConnectionsManager connections={bankConnections} />
-        </TabsContent>
-      )}
+      <TabsContent value="bank-connections">
+        <BankConnectionsManager connections={bankConnections} isDemoUser={isDemoUser} />
+      </TabsContent>
 
       <TabsContent value="household">
-        <HouseholdTab people={people} />
+        <HouseholdTab people={people} isDemoUser={isDemoUser} />
       </TabsContent>
     </Tabs>
   );

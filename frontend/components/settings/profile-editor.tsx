@@ -15,14 +15,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProfilePhotoUpload } from "@/components/onboarding/profile-photo-upload";
+import { DemoReadOnlyNotice } from "@/components/settings/demo-readonly-notice";
 import { updateUserProfile } from "@/lib/actions/settings";
 import type { User } from "@/lib/db/schema";
 
 interface ProfileEditorProps {
   user: User;
+  isDemoUser?: boolean;
 }
 
-export function ProfileEditor({ user }: ProfileEditorProps) {
+export function ProfileEditor({ user, isDemoUser = false }: ProfileEditorProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [name, setName] = useState(user.name || "");
@@ -30,6 +32,8 @@ export function ProfileEditor({ user }: ProfileEditorProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isDemoUser) return;
 
     if (!name.trim()) {
       toast.error("Please enter your name");
@@ -71,11 +75,13 @@ export function ProfileEditor({ user }: ProfileEditorProps) {
       </CardHeader>
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-6 pb-6">
+          {isDemoUser && <DemoReadOnlyNotice />}
           <ProfilePhotoUpload
             value={profilePhoto}
             onChange={setProfilePhoto}
             defaultImage={user.profilePhotoPath || user.image}
             name={name}
+            disabled={isDemoUser}
           />
 
           <div className="space-y-2">
@@ -86,6 +92,7 @@ export function ProfileEditor({ user }: ProfileEditorProps) {
               onChange={(e) => setName(e.target.value)}
               placeholder="Your name"
               className="w-fit min-w-[200px]"
+              disabled={isDemoUser}
             />
           </div>
 
@@ -116,7 +123,7 @@ export function ProfileEditor({ user }: ProfileEditorProps) {
           </div>
         </CardContent>
         <CardFooter>
-          <Button type="submit" disabled={isLoading}>
+          <Button type="submit" disabled={isLoading || isDemoUser}>
             {isLoading ? "Saving..." : "Save Changes"}
           </Button>
         </CardFooter>

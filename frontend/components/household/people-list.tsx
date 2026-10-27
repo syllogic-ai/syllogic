@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { PersonForm, type PersonFormValues } from "./person-form";
 import { PersonAvatar } from "./person-avatar";
 import { clearOwnerBadgesCache } from "./owner-badges";
+import { DemoReadOnlyNotice } from "@/components/settings/demo-readonly-notice";
 
 type Person = {
   id: string;
@@ -23,7 +24,8 @@ function buildFormData(values: PersonFormValues): FormData {
   return fd;
 }
 
-export function PeopleList(props: { initialPeople: Person[] }) {
+export function PeopleList(props: { initialPeople: Person[]; readOnly?: boolean }) {
+  const readOnly = props.readOnly ?? false;
   const [people, setPeople] = useState(props.initialPeople);
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -63,6 +65,7 @@ export function PeopleList(props: { initialPeople: Person[] }) {
 
   return (
     <div className="space-y-4">
+      {readOnly && <DemoReadOnlyNotice />}
       <ul className="divide-y rounded-md border">
         {people.map((p) => (
           <li key={p.id} className="flex items-center gap-3 p-3">
@@ -71,10 +74,12 @@ export function PeopleList(props: { initialPeople: Person[] }) {
             {p.kind === "self" && (
               <span className="text-xs text-muted-foreground">you</span>
             )}
-            <Button variant="ghost" size="sm" onClick={() => setEditingId(p.id)}>
-              Edit
-            </Button>
-            {p.kind !== "self" && (
+            {!readOnly && (
+              <Button variant="ghost" size="sm" onClick={() => setEditingId(p.id)}>
+                Edit
+              </Button>
+            )}
+            {!readOnly && p.kind !== "self" && (
               <Button variant="ghost" size="sm" onClick={() => remove(p.id)}>
                 Delete
               </Button>
@@ -101,20 +106,21 @@ export function PeopleList(props: { initialPeople: Person[] }) {
         </div>
       )}
 
-      {adding ? (
-        <div className="rounded-md border p-4">
-          <h2 className="mb-3 font-medium">Add person</h2>
-          <PersonForm
-            submitLabel="Add person"
-            onSubmit={create}
-            onCancel={() => setAdding(false)}
-          />
-        </div>
-      ) : (
-        <Button variant="outline" onClick={() => setAdding(true)}>
-          Add person
-        </Button>
-      )}
+      {!readOnly &&
+        (adding ? (
+          <div className="rounded-md border p-4">
+            <h2 className="mb-3 font-medium">Add person</h2>
+            <PersonForm
+              submitLabel="Add person"
+              onSubmit={create}
+              onCancel={() => setAdding(false)}
+            />
+          </div>
+        ) : (
+          <Button variant="outline" onClick={() => setAdding(true)}>
+            Add person
+          </Button>
+        ))}
     </div>
   );
 }
